@@ -14,6 +14,7 @@ export function SidebarMenu() {
     { label: "Pedidos", href: "/crm/pedidos", icon: "🛍️" },
     { label: "Financeiro", href: "/crm/financeiro", icon: "💰" },
     { label: "Produtos", href: "/crm/produtos", icon: "🧴" },
+    { label: "Relatórios", href: "/crm/relatorios", icon: "📈" },
   ];
 
   return (
