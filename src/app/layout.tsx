@@ -3,8 +3,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Maison Noor CRM",
-  description: "CRM premium (preto & bronze)",
+  title: "Maison Noor Parfums | Perfumes Árabes Premium",
+  description: "Perfumes árabes originais com curadoria premium. Entrega rápida e fragrâncias exclusivas.",
 };
 
 export default function RootLayout({
