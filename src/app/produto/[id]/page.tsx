@@ -442,9 +442,16 @@ export default function ProdutoPage() {
     if (!produtoPronto || produtoPronto.disponivel <= 0) return;
     adicionarSacola();
 
+    const mensagem = encodeURIComponent(`Olá! Tenho interesse no perfume ${produtoPronto.nome} 😍
+
+Vi no site e fiquei interessado.
+Valor: ${formatarMoeda(produtoPronto.precoFinal)}
+
+Pode me passar mais detalhes e as opções de pagamento?`);
+
     if (typeof window !== "undefined") {
       window.setTimeout(() => {
-        window.location.href = "/sacola";
+        window.open(`https://wa.me/5512982627108?text=${mensagem}`, "_blank");
       }, 180);
     }
   }
