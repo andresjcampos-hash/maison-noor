@@ -514,8 +514,8 @@ export default function HomePage() {
       <header
         style={{
           ...styles.headerShell,
-          top: isMobile ? "10px" : scrolled ? "10px" : "14px",
-          padding: isMobile ? "0 10px" : "0 18px",
+          top: isMobile ? "8px" : scrolled ? "10px" : "14px",
+          padding: isMobile ? "0 8px" : "0 18px",
         }}
       >
         <div
@@ -524,7 +524,7 @@ export default function HomePage() {
             ...styles.header,
             ...(scrolled ? styles.headerScrolled : styles.headerAtTop),
             padding: isMobile
-              ? "12px 12px 12px"
+              ? "10px 10px 10px"
               : isTablet
               ? scrolled
                 ? "12px 16px 12px"
@@ -538,7 +538,7 @@ export default function HomePage() {
             style={{
               ...styles.headerTopRow,
               gridTemplateColumns: isMobile ? "1fr auto" : "auto 1fr auto",
-              gap: isMobile ? "12px" : "18px",
+              gap: isMobile ? "10px" : "18px",
             }}
           >
             <div
@@ -553,8 +553,8 @@ export default function HomePage() {
                 alt="Maison Noor"
                 style={{
                   ...styles.logoImage,
-                  height: isMobile ? "62px" : scrolled ? "72px" : "82px",
-                  width: isMobile ? "62px" : scrolled ? "72px" : "82px",
+                  height: isMobile ? "54px" : scrolled ? "72px" : "82px",
+                  width: isMobile ? "54px" : scrolled ? "72px" : "82px",
                 }}
               />
 
@@ -563,7 +563,7 @@ export default function HomePage() {
                 <span
                   style={{
                     ...styles.brandTitle,
-                    fontSize: isMobile ? "20px" : scrolled ? "22px" : "25px",
+                    fontSize: isMobile ? "17px" : scrolled ? "22px" : "25px",
                   }}
                 >
                   Parfums
@@ -704,7 +704,7 @@ export default function HomePage() {
             style={{
               ...styles.searchWrap,
               ...(scrolled && !isMobile ? styles.searchWrapCollapsed : {}),
-              marginTop: isMobile ? "12px" : scrolled ? "6px" : "14px",
+              marginTop: isMobile ? "10px" : scrolled ? "6px" : "14px",
             }}
           >
             <input
@@ -714,8 +714,8 @@ export default function HomePage() {
               onChange={(e) => setBusca(e.target.value)}
               style={{
                 ...styles.searchInput,
-                fontSize: isMobile ? "15px" : "16px",
-                height: scrolled && !isMobile ? "50px" : "54px",
+                fontSize: isMobile ? "14px" : "16px",
+                height: isMobile ? "48px" : scrolled ? "50px" : "54px",
               }}
             />
             <span style={styles.searchIcon}>⌕</span>
@@ -793,9 +793,16 @@ export default function HomePage() {
                 >
                   WhatsApp
                 </a>
-                <a href="/login" style={styles.mobileSocialLink}>
-                  CRM
-                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    scrollToSection("produtos");
+                    setMobileMenuOpen(false);
+                  }}
+                  style={{ ...styles.mobileSocialLink, border: "1px solid #E3D3BF", cursor: "pointer" }}
+                >
+                  Produtos
+                </button>
               </div>
             </div>
           )}
@@ -806,7 +813,7 @@ export default function HomePage() {
         style={{
           ...styles.heroSection,
           padding: isMobile
-            ? "188px 14px 18px"
+            ? "146px 12px 14px"
             : isTablet
             ? "214px 20px 22px"
             : scrolled
@@ -837,7 +844,7 @@ export default function HomePage() {
           <div
             style={{
               ...styles.heroBanner,
-              minHeight: isMobile ? "260px" : "360px",
+              minHeight: isMobile ? "190px" : "360px",
               alignItems: heroAtual?.align === "center" ? "center" : "flex-start",
               textAlign: heroAtual?.align === "center" ? "center" : "left",
               justifyContent: "flex-start",
@@ -859,7 +866,7 @@ export default function HomePage() {
               <h1
                 style={{
                   ...styles.heroTitle,
-                  fontSize: isMobile ? "28px" : isTablet ? "34px" : "42px",
+                  fontSize: isMobile ? "22px" : isTablet ? "34px" : "42px",
                   maxWidth: isMobile ? "100%" : "620px",
                   lineHeight: 1.06,
                 }}
@@ -874,7 +881,7 @@ export default function HomePage() {
               <p
                 style={{
                   ...styles.heroSubtitle,
-                  fontSize: isMobile ? "13px" : "15px",
+                  fontSize: isMobile ? "12px" : "15px",
                   maxWidth: isMobile ? "100%" : "520px",
                   marginTop: "8px",
                 }}
@@ -969,7 +976,7 @@ export default function HomePage() {
                 : isTablet
                 ? "repeat(2, 1fr)"
                 : "repeat(5, 1fr)",
-              gap: isMobile ? "16px" : "22px",
+              gap: isMobile ? "14px" : "22px",
             }}
           >
             {produtosFiltrados.map((produto, index) => {
@@ -1014,7 +1021,7 @@ export default function HomePage() {
                     <div
                       style={{
                         ...styles.cardImageWrap,
-                        height: isMobile ? "180px" : "170px",
+                        height: isMobile ? "168px" : "170px",
                       }}
                     >
                       {getBadgeProduto(produto, index) ? (
@@ -1044,7 +1051,7 @@ export default function HomePage() {
                         <h3
                           style={{
                             ...styles.cardTitle,
-                            fontSize: isMobile ? "18px" : "16px",
+                            fontSize: isMobile ? "17px" : "16px",
                             minHeight: isMobile ? "auto" : "50px",
                           }}
                         >
@@ -1110,7 +1117,7 @@ Pode me passar as opções de pagamento?`
                           ...(produto.indisponivel ? styles.unavailableWhatsButton : {}),
                         }}
                       >
-                        {produto.indisponivel ? "Consultar disponibilidade" : "Comprar com atendimento"}
+                        {produto.indisponivel ? "Consultar disponibilidade" : "Comprar no WhatsApp"}
                       </a>
                     </div>
                   </div>
@@ -1128,7 +1135,7 @@ Pode me passar as opções de pagamento?`
       <section
         style={{
           ...styles.recommendSection,
-          padding: isMobile ? "0 14px 34px" : isTablet ? "0 20px 38px" : "0 28px 42px",
+          padding: isMobile ? "0 12px 28px" : isTablet ? "0 20px 38px" : "0 28px 42px",
         }}
       >
         <div style={styles.recommendHeader}>
@@ -1180,7 +1187,7 @@ Pode me passar as opções de pagamento?`
       <section
         style={{
           ...styles.testimonialSection,
-          padding: isMobile ? "0 14px 34px" : isTablet ? "0 20px 38px" : "0 28px 42px",
+          padding: isMobile ? "0 12px 28px" : isTablet ? "0 20px 38px" : "0 28px 42px",
         }}
       >
         <div style={styles.testimonialCard}>
@@ -1227,7 +1234,7 @@ Pode me passar as opções de pagamento?`
         id="maison-noor"
         style={{
           ...styles.aboutSection,
-          padding: isMobile ? "0 14px 34px" : isTablet ? "0 20px 38px" : "0 28px 40px",
+          padding: isMobile ? "0 12px 28px" : isTablet ? "0 20px 38px" : "0 28px 40px",
         }}
       >
         <div
@@ -1255,7 +1262,7 @@ Pode me passar as opções de pagamento?`
       <section
         style={{
           ...styles.footerHighlights,
-          padding: isMobile ? "0 14px 20px" : isTablet ? "0 20px 22px" : "0 28px 24px",
+          padding: isMobile ? "0 12px 16px" : isTablet ? "0 20px 22px" : "0 28px 24px",
         }}
       >
         <div
@@ -1299,7 +1306,7 @@ Pode me passar as opções de pagamento?`
         <div
           style={{
             ...styles.footerInner,
-            padding: isMobile ? "34px 14px 24px" : isTablet ? "38px 20px 26px" : "42px 28px 28px",
+            padding: isMobile ? "30px 12px 22px" : isTablet ? "38px 20px 26px" : "42px 28px 28px",
             gap: isMobile ? "26px" : "30px",
           }}
         >
@@ -1400,9 +1407,9 @@ Pode me passar as opções de pagamento?`
         <aside
           style={{
             ...styles.miniCartPanel,
-            right: isMobile ? "14px" : "24px",
-            bottom: isMobile ? "96px" : "98px",
-            width: isMobile ? "calc(100% - 28px)" : "360px",
+            right: isMobile ? "12px" : "24px",
+            bottom: isMobile ? "108px" : "98px",
+            width: isMobile ? "calc(100% - 24px)" : "360px",
           }}
         >
           <div style={styles.miniCartHeader}>
@@ -1513,7 +1520,13 @@ Pode me passar o frete e as opções de pagamento?`
         href="https://wa.me/5512982627108?text=Olá! Vim pelo site da Maison Noor e gostaria de atendimento."
         target="_blank"
         rel="noreferrer"
-        style={styles.whatsappFloat}
+        style={{
+          ...styles.whatsappFloat,
+          width: isMobile ? "56px" : styles.whatsappFloat.width,
+          height: isMobile ? "56px" : styles.whatsappFloat.height,
+          right: isMobile ? "12px" : styles.whatsappFloat.right,
+          bottom: isMobile ? "88px" : styles.whatsappFloat.bottom,
+        }}
         aria-label="Abrir WhatsApp da Maison Noor"
         title="Fale com a Maison Noor no WhatsApp"
       >
@@ -1545,7 +1558,7 @@ const styles: Record<string, CSSProperties> = {
     backdropFilter: "blur(18px)",
     background: "rgba(255, 249, 241, 0.86)",
     border: "1px solid rgba(229, 211, 190, 0.95)",
-    borderRadius: "24px",
+    borderRadius: "22px",
     boxShadow: "0 18px 45px rgba(47, 34, 20, 0.10), inset 0 1px 0 rgba(255,255,255,0.65)",
     transition: "all 0.28s ease",
     position: "relative",
@@ -1677,8 +1690,8 @@ const styles: Record<string, CSSProperties> = {
     gap: "10px",
   },
   mobileMenuButton: {
-    width: "44px",
-    height: "44px",
+    width: "40px",
+    height: "40px",
     borderRadius: "999px",
     border: "1px solid #D8C1A2",
     background: "linear-gradient(135deg, rgba(255,255,255,0.75), rgba(243,228,207,0.92))",
@@ -1749,7 +1762,7 @@ const styles: Record<string, CSSProperties> = {
   },
   mobileMenuFooter: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: "10px",
   },
   mobileSocialLink: {
@@ -1816,7 +1829,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: "18px",
     border: "1px solid #DFCDB7",
     backgroundColor: "rgba(255,255,255,0.82)",
-    padding: "0 54px 0 18px",
+    padding: "0 48px 0 16px",
     color: "#3D312B",
     outline: "none",
     boxSizing: "border-box",
@@ -1828,7 +1841,7 @@ const styles: Record<string, CSSProperties> = {
     top: "50%",
     transform: "translateY(-50%)",
     color: "#9C7440",
-    fontSize: "22px",
+    fontSize: "20px",
     pointerEvents: "none",
   },
   headerActions: {
@@ -1852,8 +1865,8 @@ const styles: Record<string, CSSProperties> = {
     color: "#2B2118",
   },
   iconLink: {
-    width: "42px",
-    height: "42px",
+    width: "40px",
+    height: "40px",
     borderRadius: "999px",
     border: "1px solid #DFCDB7",
     display: "flex",
@@ -1865,8 +1878,8 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 8px 18px rgba(99, 72, 41, 0.06)",
   },
   cartBadge: {
-    minWidth: "66px",
-    height: "42px",
+    minWidth: "64px",
+    height: "40px",
     borderRadius: "999px",
     border: "1px solid #DFCDB7",
     display: "flex",
@@ -1985,7 +1998,7 @@ const styles: Record<string, CSSProperties> = {
     backgroundSize: "cover",
     backgroundPosition: "center",
     display: "flex",
-    padding: "40px 30px",
+    padding: "28px 20px",
     boxSizing: "border-box",
     border: "1px solid #E2D2BF",
     boxShadow: "0 28px 60px rgba(43, 31, 21, 0.10)",
@@ -2035,7 +2048,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: "14px",
     fontWeight: 700,
     fontSize: "16px",
-    minWidth: "220px",
+    minWidth: "200px",
     boxShadow: "0 14px 26px rgba(12, 12, 12, 0.18)",
   },
   heroSecondaryButton: {
@@ -2218,7 +2231,7 @@ const styles: Record<string, CSSProperties> = {
     filter: "grayscale(0.18)",
   },
   cardContent: {
-    padding: "16px 16px 18px",
+    padding: "14px 14px 16px",
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
