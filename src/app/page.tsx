@@ -508,6 +508,18 @@ export default function HomePage() {
     }));
   }
 
+  function abrirWhatsappVip() {
+    if (typeof window === "undefined") return;
+
+    const mensagem = encodeURIComponent(
+      "Olá! Acabei de entrar para o Clube VIP Maison Noor ✨ Quero conhecer as fragrâncias disponíveis."
+    );
+
+    window.setTimeout(() => {
+      window.open(`https://wa.me/5512982627108?text=${mensagem}`, "_blank");
+    }, 900);
+  }
+
   async function enviarCadastroVip(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!vipForm.nome.trim() || !vipForm.whatsapp.trim()) return;
@@ -546,6 +558,8 @@ export default function HomePage() {
         estilo: "Intenso",
       });
 
+      abrirWhatsappVip();
+
       if (typeof window !== "undefined") {
         window.setTimeout(() => {
           setVipModalOpen(false);
@@ -563,6 +577,7 @@ export default function HomePage() {
         window.localStorage.setItem("maison_noor_clientes_vip_local", JSON.stringify(historico.slice(0, 100)));
       }
       setVipSuccess(true);
+      abrirWhatsappVip();
       if (typeof window !== "undefined") {
         window.setTimeout(() => {
           setVipModalOpen(false);
