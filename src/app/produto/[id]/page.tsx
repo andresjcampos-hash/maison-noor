@@ -784,7 +784,9 @@ Pode me passar mais detalhes e as opções de pagamento?`;
 
               <a
                 href={`https://wa.me/5512982627108?text=${encodeURIComponent(
-                  mensagemWhatsapp
+                  produtoPronto.disponivel <= 0
+                    ? `Olá! Vi o perfume ${produtoPronto.nome} no site, mas apareceu como indisponível. Ele vai voltar ao estoque?`
+                    : mensagemWhatsapp
                 )}`}
                 target="_blank"
                 rel="noreferrer"
@@ -792,8 +794,8 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                 onMouseLeave={() => setHoverWhatsapp(false)}
                 style={{
                   ...styles.whatsappButton,
-                  opacity: produtoPronto.disponivel <= 0 ? 0.6 : 1,
-                  pointerEvents: produtoPronto.disponivel <= 0 ? "none" : "auto",
+                  opacity: 1,
+                  pointerEvents: "auto",
                   transform: hoverWhatsapp ? "translateY(-1px)" : "translateY(0)",
                   boxShadow: hoverWhatsapp
                     ? "0 14px 28px rgba(31, 26, 20, 0.18)"
@@ -1014,7 +1016,9 @@ Pode me passar mais detalhes e as opções de pagamento?`;
             </button>
             <a
               href={`https://wa.me/5512982627108?text=${encodeURIComponent(
-                mensagemWhatsapp
+                produtoPronto.disponivel <= 0
+                  ? `Olá! Vi o perfume ${produtoPronto.nome} no site, mas apareceu como indisponível. Ele vai voltar ao estoque?`
+                  : mensagemWhatsapp
               )}`}
               target="_blank"
               rel="noreferrer"
