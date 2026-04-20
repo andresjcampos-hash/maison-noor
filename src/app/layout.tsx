@@ -5,6 +5,9 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Maison Noor Parfums | Perfumes Árabes Premium",
   description: "Perfumes árabes originais com curadoria premium. Entrega rápida e fragrâncias exclusivas.",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export default function RootLayout({
