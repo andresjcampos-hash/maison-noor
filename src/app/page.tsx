@@ -144,6 +144,44 @@ function saveCartToStorage(items: ProdutoCarrinho[]) {
   window.dispatchEvent(new Event("storage"));
 }
 
+function normalizeCartItem(item: any): ProdutoCarrinho | null {
+  const nome = String(item?.nome ?? item?.name ?? item?.title ?? "").trim();
+  const preco = Number(item?.preco ?? item?.precoVenda ?? item?.price ?? item?.valor ?? 0);
+
+  if (!nome || !Number.isFinite(preco) || preco < 0) return null;
+
+  return {
+    id: String(item?.id ?? item?.produtoId ?? item?.slug ?? nome),
+    nome,
+    preco,
+    imagem: String(item?.imagem ?? item?.imageUrl ?? item?.image ?? "/produtos/hero-perfume.png"),
+    tamanho: String(item?.tamanho ?? "Maison Noor"),
+  };
+}
+
+function normalizeCartArray(items: any[]): ProdutoCarrinho[] {
+  if (!Array.isArray(items)) return [];
+  return items.map(normalizeCartItem).filter(Boolean) as ProdutoCarrinho[];
+}
+
+function mergeCartItems(base: ProdutoCarrinho[], extra: ProdutoCarrinho[]) {
+  const merged: ProdutoCarrinho[] = [];
+  const seen = new Set<string>();
+
+  for (const item of [...base, ...extra]) {
+    const normalized = normalizeCartItem(item);
+    if (!normalized) continue;
+
+    const key = [normalized.id, normalized.nome, normalized.preco, normalized.tamanho].join("|");
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    merged.push(normalized);
+  }
+
+  return merged;
+}
+
 type HeroBanner = {
   id: string;
   eyebrow: string;
@@ -167,6 +205,7 @@ type ClienteSite = {
   nome?: string;
   email?: string;
   favoritos?: string[];
+  carrinho?: any[];
 };
 
 const productsCollection = collection(db, "products");
@@ -319,7 +358,7 @@ function categoriaDescricao(categoria: string) {
 export default function HomePage() {
   const [busca, setBusca] = useState("");
   const [categoriaAtiva, setCategoriaAtiva] = useState("Todos");
-  const [sacola, setSacola] = useState<ProdutoCarrinho[]>(() => getCartFromStorage());
+  const [sacola, setSacola] = useState<ProdutoCarrinho[]>([]);
   const [produtos, setProdutos] = useState<ProdutoFirebase[]>([]);
   const [loadingProdutos, setLoadingProdutos] = useState(true);
   const [windowWidth, setWindowWidth] = useState<number>(1280);
@@ -361,6 +400,8 @@ export default function HomePage() {
     estilo: "Intenso",
   });
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
+  const cartReadyRef = useRef(false);
+  const lastSavedCartRef = useRef("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -381,7 +422,7 @@ export default function HomePage() {
 
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || currentUser) return;
 
     const syncCart = () => setSacola(getCartFromStorage());
     syncCart();
@@ -393,11 +434,35 @@ export default function HomePage() {
       window.removeEventListener("storage", syncCart);
       window.removeEventListener("focus", syncCart);
     };
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
-    saveCartToStorage(sacola);
-  }, [sacola]);
+    if (!cartReadyRef.current) return;
+
+    const normalizedCart = normalizeCartArray(sacola);
+    const payload = JSON.stringify(normalizedCart);
+    if (payload === lastSavedCartRef.current) return;
+
+    lastSavedCartRef.current = payload;
+    saveCartToStorage(normalizedCart);
+
+    if (!currentUser) return;
+
+    const ref = doc(db, "clientes", currentUser.uid);
+    setDoc(
+      ref,
+      {
+        uid: currentUser.uid,
+        nome: clienteNome || currentUser.displayName || currentUser.email?.split("@")[0] || "Cliente",
+        email: currentUser.email || "",
+        carrinho: normalizedCart,
+        ultimoLogin: serverTimestamp(),
+      },
+      { merge: true }
+    ).catch((error) => {
+      console.error("Erro ao sincronizar carrinho do cliente:", error);
+    });
+  }, [sacola, currentUser, clienteNome]);
 
 
   useEffect(() => {
@@ -407,24 +472,72 @@ export default function HomePage() {
       if (!user) {
         setClienteNome("");
         setFavoritosIds([]);
+        const localCart = getCartFromStorage();
+        setSacola(localCart);
+        lastSavedCartRef.current = JSON.stringify(normalizeCartArray(localCart));
+        cartReadyRef.current = true;
         return;
       }
 
       try {
         const ref = doc(db, "clientes", user.uid);
         const snap = await getDoc(ref);
+        const localCart = getCartFromStorage();
 
         if (snap.exists()) {
           const data = snap.data() as ClienteSite;
+          const cartRemote = normalizeCartArray((data as any)?.carrinho || []);
+          const cartMerged = mergeCartItems(cartRemote, localCart);
+
           setClienteNome(data.nome || user.displayName || user.email?.split("@")[0] || "Cliente");
           setFavoritosIds(Array.isArray(data.favoritos) ? data.favoritos : []);
+          setSacola(cartMerged);
+          saveCartToStorage(cartMerged);
+          lastSavedCartRef.current = JSON.stringify(cartMerged);
+          cartReadyRef.current = true;
+
+          if (JSON.stringify(cartRemote) !== JSON.stringify(cartMerged)) {
+            await setDoc(
+              ref,
+              {
+                uid: user.uid,
+                nome: data.nome || user.displayName || user.email?.split("@")[0] || "Cliente",
+                email: data.email || user.email || "",
+                carrinho: cartMerged,
+                ultimoLogin: serverTimestamp(),
+              },
+              { merge: true }
+            );
+          }
         } else {
-          setClienteNome(user.displayName || user.email?.split("@")[0] || "Cliente");
+          const nomeCliente = user.displayName || user.email?.split("@")[0] || "Cliente";
+          setClienteNome(nomeCliente);
           setFavoritosIds([]);
+          setSacola(localCart);
+          saveCartToStorage(localCart);
+          lastSavedCartRef.current = JSON.stringify(normalizeCartArray(localCart));
+          cartReadyRef.current = true;
+
+          await setDoc(ref, {
+            uid: user.uid,
+            nome: nomeCliente,
+            email: user.email || "",
+            telefone: "",
+            tipo: "cliente",
+            vip: false,
+            favoritos: [],
+            carrinho: localCart,
+            createdAt: serverTimestamp(),
+            ultimoLogin: serverTimestamp(),
+          });
         }
       } catch {
+        const localCart = getCartFromStorage();
         setClienteNome(user.displayName || user.email?.split("@")[0] || "Cliente");
         setFavoritosIds([]);
+        setSacola(localCart);
+        lastSavedCartRef.current = JSON.stringify(normalizeCartArray(localCart));
+        cartReadyRef.current = true;
       }
     });
 
@@ -657,11 +770,7 @@ export default function HomePage() {
   }
 
   function adicionarSacola(produto: ProdutoCarrinho) {
-    setSacola((prev) => {
-      const next = [...prev, produto];
-      saveCartToStorage(next);
-      return next;
-    });
+    setSacola((prev) => [...prev, produto]);
 
     setShowMiniCart(true);
 
@@ -671,11 +780,7 @@ export default function HomePage() {
   }
 
   function removerDaSacola(index: number) {
-    setSacola((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      saveCartToStorage(next);
-      return next;
-    });
+    setSacola((prev) => prev.filter((_, i) => i !== index));
   }
 
   function atualizarVipField(campo: "nome" | "whatsapp" | "email" | "preferencia" | "estilo", valor: string) {
@@ -825,9 +930,14 @@ export default function HomePage() {
 
   async function handleLogoutCliente() {
     setAccountMenuOpen(false);
-    await signOut(auth);
-    if (typeof window !== "undefined") {
-      window.location.href = "/";
+    setShowMiniCart(false);
+
+    try {
+      await signOut(auth);
+    } finally {
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
     }
   }
 
