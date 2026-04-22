@@ -71,6 +71,11 @@
     criadoEmSort: number;
     codigoRastreio?: string;
     itensResumo: string[];
+    formaPagamento?: string;
+    expiresAtIso?: string;
+    expiraEmLabel?: string;
+    expiraEmSort?: number;
+    pagamentoExpirado?: boolean;
   };
 
   function traduzErroFirebase(code?: string) {
@@ -246,6 +251,98 @@
     }
   }
 
+
+  function getDateFromUnknown(value: any) {
+    try {
+      if (!value) return null;
+      if (typeof value?.toDate === "function") {
+        const date = value.toDate();
+        return Number.isNaN(date?.getTime?.()) ? null : date;
+      }
+      if (typeof value?.seconds === "number") {
+        const date = new Date(value.seconds * 1000);
+        return Number.isNaN(date.getTime()) ? null : date;
+      }
+      if (typeof value === "string" || typeof value === "number") {
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function getPedidoExpiracaoInfo(value: any) {
+    const date = getDateFromUnknown(value);
+
+    if (!date) {
+      return {
+        iso: undefined as string | undefined,
+        label: "Prazo não informado",
+        sort: 0,
+        expired: false,
+      };
+    }
+
+    return {
+      iso: date.toISOString(),
+      label: date.toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      sort: date.getTime(),
+      expired: date.getTime() < Date.now(),
+    };
+  }
+
+
+  function getPedidoCountdownInfo(expiresAtIso?: string, nowMs: number = Date.now()) {
+    const date = getDateFromUnknown(expiresAtIso);
+
+    if (!date) {
+      return {
+        label: "Prazo não informado",
+        urgency: "neutral" as "neutral" | "warning" | "danger",
+        expired: false,
+      };
+    }
+
+    const diffMs = date.getTime() - nowMs;
+    if (diffMs <= 0) {
+      return {
+        label: "Prazo encerrado",
+        urgency: "danger" as const,
+        expired: true,
+      };
+    }
+
+    const totalMinutes = Math.max(1, Math.floor(diffMs / 60000));
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+
+    let label = "";
+    if (days > 0) {
+      label = `Vence em ${days}d ${hours}h`;
+    } else if (hours > 0) {
+      label = `Vence em ${hours}h ${minutes}min`;
+    } else {
+      label = `Vence em ${minutes}min`;
+    }
+
+    const urgency = totalMinutes <= 60 ? "danger" : totalMinutes <= 360 ? "warning" : "neutral";
+
+    return {
+      label,
+      urgency,
+      expired: false,
+    };
+  }
+
   function getPedidoStatusNormalizado(status: any) {
     const raw = String(status || "").trim().toLowerCase();
 
@@ -255,6 +352,7 @@
     if (["enviado", "shipped", "postado", "despachado"].includes(raw)) return "enviado";
     if (["entregue", "delivered", "finalizado", "concluido", "concluído"].includes(raw)) return "entregue";
     if (["cancelado", "cancelada", "canceled", "cancelled", "perdido"].includes(raw)) return "cancelado";
+    if (["expirado_pagamento", "pagamento_expirado", "expirado", "expired"].includes(raw)) return "expirado_pagamento";
     return raw;
   }
 
@@ -266,6 +364,7 @@
     if (normalizado === "enviado") return "Enviado";
     if (normalizado === "entregue") return "Entregue";
     if (normalizado === "cancelado") return "Cancelado";
+    if (normalizado === "expirado_pagamento") return "Pagamento expirado";
 
     return "Pedido recebido";
   }
@@ -351,6 +450,14 @@
       };
     }
 
+    if (normalizado === "expirado_pagamento") {
+      return {
+        background: "rgba(246, 239, 230, 0.96)",
+        border: "1px solid #D8C7B2",
+        color: "#7A5D3A",
+      };
+    }
+
     return {
       background: "rgba(255, 248, 236, 0.96)",
       border: "1px solid #E4D1B2",
@@ -367,6 +474,7 @@
     if (normalizado === "enviado") return "Pedido despachado e em rota de entrega.";
     if (normalizado === "entregue") return "Pedido finalizado com entrega concluída.";
     if (normalizado === "cancelado") return "Pedido encerrado ou cancelado.";
+    if (normalizado === "expirado_pagamento") return "O prazo para pagamento terminou. Você pode solicitar uma nova cobrança.";
     return "Pedido recebido pela Maison Noor.";
   }
 
@@ -377,6 +485,7 @@
     if (normalizado === "pago") return 2;
     if (normalizado === "enviado") return 3;
     if (normalizado === "entregue") return 4;
+    if (normalizado === "expirado_pagamento") return 1;
     return 1;
   }
 
@@ -405,6 +514,7 @@
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
     const [pedidos, setPedidos] = useState<PedidoCliente[]>([]);
     const [loadingPedidos, setLoadingPedidos] = useState(false);
+    const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
 
     const isCadastro = useMemo(() => modo === "cadastro", [modo]);
 
@@ -424,6 +534,15 @@
         window.removeEventListener("resize", handleResize);
         window.removeEventListener("storage", syncCart);
       };
+    }, []);
+
+
+    useEffect(() => {
+      const interval = window.setInterval(() => {
+        setCurrentTimeMs(Date.now());
+      }, 30000);
+
+      return () => window.clearInterval(interval);
     }, []);
 
     useEffect(() => {
@@ -479,7 +598,7 @@
 
         try {
           const userEmail = String(user.email || email || "").trim().toLowerCase();
-          const rawPedidos: Array<{ id: string; data: any }> = [];
+          const rawPedidos: Array<{ id: string; data: any; refPath: string }> = [];
           const colecoes = [
             collection(db, "pedidos"),
             collection(db, "pedidos", "default", "lista"),
@@ -492,6 +611,7 @@
                 rawPedidos.push({
                   id: docSnap.id,
                   data: docSnap.data(),
+                  refPath: `${ref.path}/${docSnap.id}`,
                 });
               });
             } catch (_) {}
@@ -522,7 +642,7 @@
 
               return uidCandidates.includes(user.uid) || (!!userEmail && emailCandidates.includes(userEmail));
             })
-            .map(({ id, data }) => {
+            .map(({ id, data, refPath }) => {
               const numeroPedido = String(
                 data?.numero ??
                 data?.numeroPedido ??
@@ -538,11 +658,35 @@
                 data?.date
               );
 
-              const status = getPedidoStatusNormalizado(
+              const expiracaoInfo = getPedidoExpiracaoInfo(
+                data?.expiresAtIso ??
+                data?.expiraEm ??
+                data?.expiresAt ??
+                data?.validUntil
+              );
+
+              let status = getPedidoStatusNormalizado(
                 data?.status ??
                 data?.situacao ??
                 data?.estado
               );
+
+              const pendente = status === "aguardando_pagamento";
+              const pagamentoExpirado = pendente && !!expiracaoInfo.iso && expiracaoInfo.expired;
+
+              if (pagamentoExpirado) {
+                status = "expirado_pagamento";
+
+                try {
+                  if (refPath) {
+                    updateDoc(doc(db, refPath), {
+                      status: "expirado_pagamento",
+                      statusPagamento: "expirado",
+                      atualizadoEm: serverTimestamp(),
+                    }).catch(() => {});
+                  }
+                } catch (_) {}
+              }
 
               const pedido: PedidoCliente = {
                 id,
@@ -559,6 +703,11 @@
                   ""
                 ).trim() || undefined,
                 itensResumo: getPedidoItensResumo(data),
+                formaPagamento: String(data?.formaPagamento ?? data?.paymentMethod ?? "").trim() || undefined,
+                expiresAtIso: expiracaoInfo.iso,
+                expiraEmLabel: expiracaoInfo.label,
+                expiraEmSort: expiracaoInfo.sort,
+                pagamentoExpirado,
               };
 
               return pedido;
@@ -1516,6 +1665,31 @@
                               <span style={styles.orderHistorySubtitle}>
                                 {getPedidoStatusDescricao(pedido.status)}
                               </span>
+                              {pedido.status === "aguardando_pagamento" ? (() => {
+                                const countdownInfo = getPedidoCountdownInfo(pedido.expiresAtIso, currentTimeMs);
+                                const countdownStyle =
+                                  countdownInfo.urgency === "danger"
+                                    ? styles.orderExpiryHintDanger
+                                    : countdownInfo.urgency === "warning"
+                                    ? styles.orderExpiryHintWarning
+                                    : styles.orderExpiryHint;
+
+                                return (
+                                  <div style={styles.orderExpiryStack}>
+                                    <span style={countdownStyle}>{countdownInfo.label}</span>
+                                    <span style={styles.orderExpiryDeadline}>
+                                      Pagamento disponível até {pedido.expiraEmLabel || "prazo não informado"}
+                                    </span>
+                                  </div>
+                                );
+                              })() : pedido.status === "expirado_pagamento" ? (
+                                <div style={styles.orderExpiryStack}>
+                                  <span style={styles.orderExpiryHintExpired}>Prazo encerrado</span>
+                                  <span style={styles.orderExpiryDeadlineExpired}>
+                                    Encerrado em {pedido.expiraEmLabel || "data não informada"}
+                                  </span>
+                                </div>
+                              ) : null}
                             </div>
 
                             <span
@@ -1558,7 +1732,7 @@
                           <div
                             style={{
                               ...styles.orderHistoryMetaGrid,
-                              gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+                              gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))",
                             }}
                           >
                             <div style={styles.orderMetaCard}>
@@ -1569,6 +1743,11 @@
                             <div style={styles.orderMetaCard}>
                               <span style={styles.orderMetaLabel}>Status atual</span>
                               <strong style={styles.orderMetaValue}>{pedido.statusLabel}</strong>
+                            </div>
+
+                            <div style={styles.orderMetaCard}>
+                              <span style={styles.orderMetaLabel}>Pagamento</span>
+                              <strong style={styles.orderMetaValue}>{pedido.formaPagamento === "pix" ? "Pix" : pedido.formaPagamento === "whatsapp" ? "WhatsApp" : "Atendimento"}</strong>
                             </div>
 
                             <div style={styles.orderMetaCard}>
@@ -1594,21 +1773,50 @@
 
                           <div style={{ ...styles.orderActionsRow, gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))" }}>
                             <a
-                              href={`https://wa.me/5512982627108?text=${encodeURIComponent(`Olá! Preciso de ajuda com o pedido #${pedido.numero} na Maison Noor.`)}`}
+                              href={`https://wa.me/5512982627108?text=${encodeURIComponent(
+                                pedido.status === "expirado_pagamento"
+                                  ? `Olá! Quero reativar o pagamento do pedido #${pedido.numero} na Maison Noor.`
+                                  : pedido.status === "aguardando_pagamento"
+                                  ? `Olá! Quero pagar agora o pedido #${pedido.numero} na Maison Noor.`
+                                  : `Olá! Preciso de ajuda com o pedido #${pedido.numero} na Maison Noor.`
+                              )}`}
                               target="_blank"
                               rel="noreferrer"
                               style={styles.softInfoCardLink}
                             >
-                              <span style={styles.quickActionLabel}>Suporte</span>
-                              <strong style={styles.softInfoTitle}>Falar sobre este pedido</strong>
-                              <span style={styles.softInfoText}>Atendimento rápido para pagamento, envio, rastreio e entrega.</span>
+                              <span style={styles.quickActionLabel}>
+                                {pedido.status === "expirado_pagamento" ? "Reativar pagamento" : pedido.status === "aguardando_pagamento" ? "Pagar agora" : "Suporte"}
+                              </span>
+                              <strong style={styles.softInfoTitle}>
+                                {pedido.status === "expirado_pagamento" ? "Solicitar nova cobrança" : pedido.status === "aguardando_pagamento" ? "Continuar pagamento" : "Falar sobre este pedido"}
+                              </strong>
+                              <span style={styles.softInfoText}>
+                                {pedido.status === "expirado_pagamento"
+                                  ? "Peça uma nova cobrança para este pedido e retome o atendimento."
+                                  : pedido.status === "aguardando_pagamento"
+                                  ? "Seu pedido ainda está ativo. Continue o atendimento e finalize o pagamento."
+                                  : "Atendimento rápido para pagamento, envio, rastreio e entrega."}
+                              </span>
                             </a>
 
-                            <Link href="/" style={styles.softInfoCardLinkSecondary}>
-                              <span style={styles.quickActionLabel}>Nova compra</span>
-                              <strong style={styles.softInfoTitle}>Voltar para a vitrine</strong>
-                              <span style={styles.softInfoText}>Continue comprando e descubra novas seleções Maison Noor.</span>
-                            </Link>
+                            {pedido.status === "expirado_pagamento" ? (
+                              <a
+                                href={`https://wa.me/5512982627108?text=${encodeURIComponent(`Olá! Quero falar com a Maison Noor sobre o pedido expirado #${pedido.numero}.`)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={styles.softInfoCardLinkSecondary}
+                              >
+                                <span style={styles.quickActionLabel}>Atendimento</span>
+                                <strong style={styles.softInfoTitle}>Falar no WhatsApp</strong>
+                                <span style={styles.softInfoText}>Nossa equipe pode validar estoque e orientar uma nova finalização.</span>
+                              </a>
+                            ) : (
+                              <Link href="/" style={styles.softInfoCardLinkSecondary}>
+                                <span style={styles.quickActionLabel}>Nova compra</span>
+                                <strong style={styles.softInfoTitle}>Voltar para a vitrine</strong>
+                                <span style={styles.softInfoText}>Continue comprando e descubra novas seleções Maison Noor.</span>
+                              </Link>
+                            )}
                           </div>
                         </article>
                       );
@@ -2455,6 +2663,77 @@
       color: "#6F6257",
       fontSize: 13,
       lineHeight: 1.6,
+    },
+    orderExpiryStack: {
+      display: "grid",
+      gap: 6,
+      width: "fit-content",
+    },
+    orderExpiryHint: {
+      display: "inline-flex",
+      width: "fit-content",
+      alignItems: "center",
+      minHeight: 32,
+      padding: "7px 12px",
+      borderRadius: 999,
+      background: "rgba(255, 248, 236, 0.96)",
+      border: "1px solid #E4D1B2",
+      color: "#8A6434",
+      fontSize: 12,
+      fontWeight: 800,
+    },
+    orderExpiryHintWarning: {
+      display: "inline-flex",
+      width: "fit-content",
+      alignItems: "center",
+      minHeight: 32,
+      padding: "7px 12px",
+      borderRadius: 999,
+      background: "rgba(255, 245, 220, 0.98)",
+      border: "1px solid #E6C978",
+      color: "#8A6434",
+      fontSize: 12,
+      fontWeight: 800,
+      boxShadow: "0 8px 18px rgba(180, 136, 62, 0.10)",
+    },
+    orderExpiryHintDanger: {
+      display: "inline-flex",
+      width: "fit-content",
+      alignItems: "center",
+      minHeight: 32,
+      padding: "7px 12px",
+      borderRadius: 999,
+      background: "rgba(255, 239, 239, 0.98)",
+      border: "1px solid #E2A5A5",
+      color: "#9A3B3B",
+      fontSize: 12,
+      fontWeight: 800,
+      boxShadow: "0 8px 18px rgba(154, 59, 59, 0.10)",
+    },
+    orderExpiryDeadline: {
+      color: "#8B7A6A",
+      fontSize: 12,
+      lineHeight: 1.5,
+      fontWeight: 700,
+    },
+    orderExpiryHintExpired: {
+      display: "inline-flex",
+      width: "fit-content",
+      alignItems: "center",
+      minHeight: 32,
+      padding: "7px 12px",
+      borderRadius: 999,
+      background: "rgba(255, 241, 241, 0.98)",
+      border: "1px solid #E8C3C3",
+      color: "#9A3B3B",
+      fontSize: 12,
+      fontWeight: 800,
+    },
+    orderExpiryDeadlineExpired: {
+      color: "#8B7A6A",
+      fontSize: 12,
+      lineHeight: 1.5,
+      fontWeight: 700,
     },
     orderStatusBadge: {
       display: "inline-flex",
