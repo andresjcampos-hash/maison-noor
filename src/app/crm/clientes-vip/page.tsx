@@ -1,8 +1,7 @@
- "use client";
+
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -10,281 +9,443 @@ import {
   getDocs,
   orderBy,
   query,
+  setDoc,
   updateDoc,
 } from "firebase/firestore";
 
 type VipStatus =
   | "novo"
-  | "chamou_no_whatsapp"
+  | "chamou_whatsapp"
+  | "em_conversa"
   | "interessado"
-  | "aguardando_retorno"
-  | "converteu"
-  | "arquivado";
+  | "comprou"
+  | "vip_ativo"
+  | "perdido"
+  | "converteu";
 
-type ClienteVip = {
+type VipCliente = {
   id: string;
   nome: string;
-  whatsapp: string;
-  email: string;
-  preferencia: string;
-  estilo: string;
-  origem: string;
-  createdAt: string;
-  atualizadoEm: string;
+  telefone: string;
+  instagram?: string;
+  cidade?: string;
+  observacoes?: string;
   status: VipStatus;
-  observacoes: string;
+  ticketMedio?: number;
+  totalCompras?: number;
+  ultimaCompra?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
-const STATUS_OPTIONS: { v: VipStatus; label: string }[] = [
+type LeadOrigem = "instagram" | "whatsapp" | "indicacao" | "site" | "outros";
+type LeadStatus =
+  | "novo"
+  | "chamou_no_whatsapp"
+  | "negociacao"
+  | "pagou"
+  | "enviado"
+  | "finalizado"
+  | "perdido";
+
+type Lead = {
+  id: string;
+  nome: string;
+  telefone: string;
+  origem: LeadOrigem;
+  valorEstimado: number;
+  perfumes: string[];
+  status: LeadStatus;
+  createdAt: string;
+  updatedAt: string;
+  observacoes?: string;
+  historico?: Array<{
+    id: string;
+    data: string;
+    tipo: "msg" | "ligacao" | "obs" | "pagamento" | "envio";
+    texto: string;
+  }>;
+};
+
+const VIP_STATUS_OPTIONS: { v: VipStatus; label: string }[] = [
   { v: "novo", label: "Novo" },
-  { v: "chamou_no_whatsapp", label: "Chamou no WhatsApp" },
+  { v: "chamou_whatsapp", label: "Chamou WhatsApp" },
+  { v: "em_conversa", label: "Em conversa" },
   { v: "interessado", label: "Interessado" },
-  { v: "aguardando_retorno", label: "Aguardando retorno" },
+  { v: "comprou", label: "Comprou" },
+  { v: "vip_ativo", label: "VIP ativo" },
+  { v: "perdido", label: "Perdido" },
   { v: "converteu", label: "Converteu" },
-  { v: "arquivado", label: "Arquivado" },
 ];
 
-const CLIENTES_VIP_COL = collection(db, "clientes_vip");
+const VIP_COL = collection(db, "clientes_vip");
+const LEADS_COL = collection(db, "leads");
+
+function uid(): string {
+  // @ts-ignore
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    // @ts-ignore
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
 
 function onlyDigits(v: string): string {
   return (v || "").replace(/\D/g, "");
 }
 
-function formatPhoneBR(v: string): string {
-  const d = onlyDigits(v);
-  if (d.length === 11) return d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-  if (d.length === 10) return d.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
-  return v || "—";
+function onlyHandle(v: string): string {
+  return (v || "").replace(/\s/g, "").replace(/^@+/, "");
 }
 
-function formatDateBR(iso?: string): string {
-  if (!iso) return "—";
-  const dt = new Date(iso);
-  if (Number.isNaN(dt.getTime())) return "—";
-  return dt.toLocaleString("pt-BR");
+function cleanUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => cleanUndefinedDeep(v))
+      .filter((v) => v !== undefined) as unknown as T;
+  }
+
+  if (value && typeof value === "object") {
+    const out: any = {};
+    for (const [k, v] of Object.entries(value as any)) {
+      if (v === undefined) continue;
+      const vv = cleanUndefinedDeep(v);
+      if (vv === undefined) continue;
+      out[k] = vv;
+    }
+    return out;
+  }
+
+  return value;
 }
 
-function timestampToISO(value: any): string {
-  if (!value) return new Date().toISOString();
-  if (typeof value === "string") return value;
-  if (typeof value?.toDate === "function") return value.toDate().toISOString();
-  if (typeof value?.seconds === "number") return new Date(value.seconds * 1000).toISOString();
-  return new Date().toISOString();
-}
-
-function normalizeVip(id: string, data: any): ClienteVip {
-  const statusValues = STATUS_OPTIONS.map((s) => s.v);
-  const status = statusValues.includes(data?.status) ? data.status : "novo";
+function normalizeVip(id: string, data: any): VipCliente {
+  const statuses = VIP_STATUS_OPTIONS.map((s) => s.v);
+  const createdAt =
+    typeof data?.createdAt === "string" ? data.createdAt : new Date().toISOString();
+  const updatedAt =
+    typeof data?.updatedAt === "string"
+      ? data.updatedAt
+      : createdAt;
 
   return {
     id,
-    nome: typeof data?.nome === "string" && data.nome.trim() ? data.nome.trim() : "Sem nome",
-    whatsapp: typeof data?.whatsapp === "string" ? onlyDigits(data.whatsapp) : "",
-    email: typeof data?.email === "string" ? data.email : "",
-    preferencia: typeof data?.preferencia === "string" ? data.preferencia : "—",
-    estilo: typeof data?.estilo === "string" ? data.estilo : "—",
-    origem: typeof data?.origem === "string" ? data.origem : "site-maison-noor",
-    createdAt: timestampToISO(data?.createdAt),
-    atualizadoEm: timestampToISO(data?.atualizadoEm || data?.updatedAt || data?.createdAt),
-    status,
+    nome:
+      (typeof data?.nome === "string" && data.nome.trim()) ||
+      (typeof data?.name === "string" && data.name.trim()) ||
+      "Sem nome",
+    telefone: typeof data?.telefone === "string" ? onlyDigits(data.telefone) : "",
+    instagram: typeof data?.instagram === "string" ? onlyHandle(data.instagram) : "",
+    cidade: typeof data?.cidade === "string" ? data.cidade : "",
     observacoes: typeof data?.observacoes === "string" ? data.observacoes : "",
+    status: statuses.includes(data?.status) ? (data.status as VipStatus) : "novo",
+    ticketMedio: Number(data?.ticketMedio || 0),
+    totalCompras: Number(data?.totalCompras || 0),
+    ultimaCompra: typeof data?.ultimaCompra === "string" ? data.ultimaCompra : "",
+    createdAt,
+    updatedAt,
   };
 }
 
-async function fetchClientesVip(): Promise<ClienteVip[]> {
-  const q = query(CLIENTES_VIP_COL, orderBy("createdAt", "desc"));
+async function fetchVipClientes(): Promise<VipCliente[]> {
+  const q = query(VIP_COL, orderBy("updatedAt", "desc"));
   const snap = await getDocs(q);
   return snap.docs.map((d) => normalizeVip(d.id, d.data() || {}));
 }
 
-async function updateClienteVip(
-  id: string,
-  patch: Partial<Pick<ClienteVip, "status" | "observacoes">>
-): Promise<void> {
-  const ref = doc(CLIENTES_VIP_COL, id);
-  await updateDoc(ref, {
-    ...patch,
-    atualizadoEm: new Date().toISOString(),
-  } as any);
+async function fetchLeadIds(): Promise<string[]> {
+  const snap = await getDocs(LEADS_COL);
+  return snap.docs.map((d) => d.id);
 }
 
-function NavCRM() {
-  const pathname = usePathname();
+async function saveVipCliente(cliente: VipCliente): Promise<void> {
+  const ref = doc(VIP_COL, cliente.id);
+  const safe = cleanUndefinedDeep({
+    ...cliente,
+    nome: (cliente.nome || "").trim() || "Sem nome",
+    telefone: onlyDigits(cliente.telefone || ""),
+    instagram: onlyHandle(cliente.instagram || ""),
+    cidade: cliente.cidade || "",
+    observacoes: cliente.observacoes || "",
+    ticketMedio: Number(cliente.ticketMedio || 0),
+    totalCompras: Number(cliente.totalCompras || 0),
+    ultimaCompra: cliente.ultimaCompra || "",
+  });
+  await setDoc(ref, safe as any, { merge: true });
+}
 
-  const items = [
-    { href: "/crm", label: "Dashboard" },
-    { href: "/crm/leads", label: "Leads" },
-    { href: "/crm/clientes-vip", label: "Clientes VIP" },
-    { href: "/crm/kanban", label: "Kanban" },
-    { href: "/crm/pedidos", label: "Pedidos" },
-  ];
+async function updateVipCliente(id: string, patch: Partial<VipCliente>): Promise<void> {
+  const ref = doc(VIP_COL, id);
+  const safe = cleanUndefinedDeep({
+    ...patch,
+    telefone: patch.telefone !== undefined ? onlyDigits(String(patch.telefone)) : undefined,
+    instagram: patch.instagram !== undefined ? onlyHandle(String(patch.instagram)) : undefined,
+  });
+  await updateDoc(ref, safe as any);
+}
 
-  const isActive = (href: string) => {
-    if (href === "/crm") return pathname === "/crm" || pathname === "/crm/";
-    return pathname?.startsWith(href);
+async function convertVipToLead(cliente: VipCliente): Promise<void> {
+  const now = new Date().toISOString();
+  const lead: Lead = {
+    id: cliente.id,
+    nome: cliente.nome,
+    telefone: onlyDigits(cliente.telefone || ""),
+    origem: cliente.instagram ? "instagram" : "whatsapp",
+    valorEstimado: Number(cliente.ticketMedio || 0) || Number(cliente.totalCompras || 0) || 0,
+    perfumes: [],
+    status: "negociacao",
+    createdAt: cliente.createdAt || now,
+    updatedAt: now,
+    observacoes: cliente.observacoes || "Convertido automaticamente do módulo Clientes VIP.",
+    historico: [
+      {
+        id: uid(),
+        data: now,
+        tipo: "obs",
+        texto: "Cliente convertido do módulo Clientes VIP para Leads.",
+      },
+    ],
   };
 
-  return (
-    <nav className="nav">
-      <div className="navInner">
-        <div className="brand">
-          <div className="brandKicker">Maison Noor</div>
-          <div className="brandTitle">CRM</div>
-        </div>
+  await setDoc(doc(LEADS_COL, lead.id), cleanUndefinedDeep(lead) as any, { merge: true });
+  await updateVipCliente(cliente.id, { status: "converteu", updatedAt: now });
+}
 
-        <div className="links" role="navigation" aria-label="CRM">
-          {items.map((it) => (
-            <Link
-              key={it.href}
-              href={it.href}
-              className={`link ${isActive(it.href) ? "active" : ""}`}
-            >
-              {it.label}
-            </Link>
-          ))}
-        </div>
-      </div>
+function statusLabel(status: VipStatus): string {
+  return VIP_STATUS_OPTIONS.find((s) => s.v === status)?.label || status;
+}
 
-      <style jsx>{`
-        .nav {
-          position: sticky;
-          top: 0;
-          z-index: 60;
-          border-bottom: 1px solid rgba(200, 162, 106, 0.18);
-          background: rgba(10, 10, 14, 0.92);
-          backdrop-filter: blur(8px);
-        }
-        .navInner {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 18px;
-          max-width: 1320px;
-          margin: 0 auto;
-          padding: 14px 18px;
-        }
-        .brandKicker {
-          color: #b48a55;
-          font-size: 11px;
-          letter-spacing: 0.16em;
-          text-transform: uppercase;
-          font-weight: 700;
-        }
-        .brandTitle {
-          color: #f4e2c3;
-          font-size: 24px;
-          font-weight: 800;
-          line-height: 1.05;
-        }
-        .links {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-        .link {
-          color: #d4c2a8;
-          text-decoration: none;
-          font-weight: 700;
-          font-size: 14px;
-          border: 1px solid rgba(200, 162, 106, 0.18);
-          border-radius: 999px;
-          padding: 10px 14px;
-          transition: 0.2s ease;
-        }
-        .link:hover,
-        .link.active {
-          color: #111;
-          background: linear-gradient(135deg, #d8be97, #bf9458);
-          border-color: rgba(200, 162, 106, 0.45);
-          box-shadow: 0 10px 24px rgba(191, 148, 88, 0.18);
-        }
-      `}</style>
-    </nav>
-  );
+function statusClass(status: VipStatus): string {
+  switch (status) {
+    case "novo":
+      return "sNovo";
+    case "chamou_whatsapp":
+      return "sWhatsapp";
+    case "em_conversa":
+      return "sConversa";
+    case "interessado":
+      return "sInteressado";
+    case "comprou":
+      return "sComprou";
+    case "vip_ativo":
+      return "sAtivo";
+    case "perdido":
+      return "sPerdido";
+    case "converteu":
+      return "sConverteu";
+    default:
+      return "sNovo";
+  }
 }
 
 export default function ClientesVipPage() {
-  const [clientes, setClientes] = useState<ClienteVip[]>([]);
+  const [lista, setLista] = useState<VipCliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
-  const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<"" | VipStatus>("");
-  const [editing, setEditing] = useState<ClienteVip | null>(null);
-  const [editStatus, setEditStatus] = useState<VipStatus>("novo");
-  const [editObs, setEditObs] = useState("");
+  const [leadIds, setLeadIds] = useState<string[]>([]);
+  const [queryText, setQueryText] = useState("");
+  const [statusFiltro, setStatusFiltro] = useState<VipStatus | "">("");
 
-  function toast(text: string, ms = 2400) {
+  const [openModal, setOpenModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [nome, setNome] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [cidade, setCidade] = useState("");
+  const [observacoes, setObservacoes] = useState("");
+  const [status, setStatus] = useState<VipStatus>("novo");
+  const [ticketMedio, setTicketMedio] = useState("");
+  const [totalCompras, setTotalCompras] = useState("");
+
+  function toast(text: string, ms = 2200): void {
     setMsg(text);
-    window.setTimeout(() => setMsg(""), ms);
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => setMsg(""), ms);
+    }
   }
 
-  async function refresh() {
-    setLoading(true);
+  async function refresh(silent = false): Promise<void> {
     try {
-      const data = await fetchClientesVip();
-      setClientes(data);
-    } catch (e) {
-      console.error(e);
-      toast("⚠️ Não consegui carregar os clientes VIP do Firebase.", 3200);
+      setLoading(true);
+      const [data, leadIdsData] = await Promise.all([fetchVipClientes(), fetchLeadIds()]);
+      setLista(data);
+      setLeadIds(leadIdsData);
+      if (!silent) toast("🔄 Clientes VIP atualizados!");
+    } catch (error) {
+      console.error("Erro ao carregar clientes VIP:", error);
+      toast("⚠️ Não consegui carregar clientes VIP do Firebase.", 3200);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void refresh();
+    void refresh(true);
   }, []);
 
-  const clientesFiltrados = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return clientes.filter((c) => {
-      const bateBusca =
-        !termo ||
-        c.nome.toLowerCase().includes(termo) ||
-        c.email.toLowerCase().includes(termo) ||
-        c.whatsapp.includes(onlyDigits(termo)) ||
-        c.preferencia.toLowerCase().includes(termo) ||
-        c.estilo.toLowerCase().includes(termo);
+  const filtered = useMemo(() => {
+    const q = queryText.trim().toLowerCase();
+    return lista.filter((item) => {
+      const matchStatus = !statusFiltro || item.status === statusFiltro;
+      if (!matchStatus) return false;
 
-      const bateStatus = !filtroStatus || c.status === filtroStatus;
-      return bateBusca && bateStatus;
+      if (!q) return true;
+      return [
+        item.nome,
+        item.telefone,
+        item.instagram,
+        item.cidade,
+        item.observacoes,
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q));
     });
-  }, [clientes, busca, filtroStatus]);
+  }, [lista, queryText, statusFiltro]);
 
-  const totalNovos = clientes.filter((c) => c.status === "novo").length;
+  const stats = useMemo(() => {
+    const total = lista.length;
+    const novos = lista.filter((x) => x.status === "novo").length;
+    const emConversa = lista.filter((x) => x.status === "em_conversa").length;
+    const compraram = lista.filter((x) => x.status === "comprou" || x.status === "vip_ativo").length;
+    const leadIdsSet = new Set(leadIds);
+    const convertidos = lista.filter((x) => leadIdsSet.has(x.id)).length;
+    const conversao = total ? Math.round((convertidos / total) * 100) : 0;
+    return { total, novos, emConversa, compraram, convertidos, conversao };
+  }, [lista, leadIds]);
 
-  function abrirEditar(c: ClienteVip) {
-    setEditing(c);
-    setEditStatus(c.status);
-    setEditObs(c.observacoes || "");
+  function resetForm(): void {
+    setEditingId(null);
+    setNome("");
+    setTelefone("");
+    setInstagram("");
+    setCidade("");
+    setObservacoes("");
+    setStatus("novo");
+    setTicketMedio("");
+    setTotalCompras("");
   }
 
-  function fecharEditar() {
-    setEditing(null);
-    setEditObs("");
-    setEditStatus("novo");
+  function abrirNovo(): void {
+    resetForm();
+    setOpenModal(true);
   }
 
-  async function salvarEdicao() {
-    if (!editing) return;
+  function abrirEditar(item: VipCliente): void {
+    setEditingId(item.id);
+    setNome(item.nome || "");
+    setTelefone(item.telefone || "");
+    setInstagram(item.instagram || "");
+    setCidade(item.cidade || "");
+    setObservacoes(item.observacoes || "");
+    setStatus(item.status || "novo");
+    setTicketMedio(item.ticketMedio ? String(item.ticketMedio) : "");
+    setTotalCompras(item.totalCompras ? String(item.totalCompras) : "");
+    setOpenModal(true);
+  }
+
+  function validar(): string | null {
+    if ((nome || "").trim().length < 3) return "Nome precisa ter pelo menos 3 letras.";
+    if (onlyDigits(telefone).length < 10) return "Telefone precisa ter DDD + número.";
+    return null;
+  }
+
+  async function salvar(): Promise<void> {
+    const erro = validar();
+    if (erro) {
+      toast(`⚠️ ${erro}`, 2600);
+      return;
+    }
+
+    const now = new Date().toISOString();
+
     try {
-      await updateClienteVip(editing.id, {
-        status: editStatus,
-        observacoes: editObs,
-      });
-      toast("✅ Cliente VIP atualizado.");
-      await refresh();
-      fecharEditar();
-    } catch (e) {
-      console.error(e);
-      toast("⚠️ Não consegui salvar a edição no Firebase.", 3200);
+      if (editingId) {
+        await updateVipCliente(editingId, {
+          nome: nome.trim(),
+          telefone: onlyDigits(telefone),
+          instagram: onlyHandle(instagram),
+          cidade: cidade.trim(),
+          observacoes: observacoes.trim(),
+          status,
+          ticketMedio: Number(ticketMedio || 0),
+          totalCompras: Number(totalCompras || 0),
+          updatedAt: now,
+        });
+        toast("✅ Cliente VIP atualizado!");
+      } else {
+        const novo: VipCliente = {
+          id: uid(),
+          nome: nome.trim(),
+          telefone: onlyDigits(telefone),
+          instagram: onlyHandle(instagram),
+          cidade: cidade.trim(),
+          observacoes: observacoes.trim(),
+          status,
+          ticketMedio: Number(ticketMedio || 0),
+          totalCompras: Number(totalCompras || 0),
+          createdAt: now,
+          updatedAt: now,
+        };
+        await saveVipCliente(novo);
+        toast("✅ Cliente VIP cadastrado!");
+      }
+
+      setOpenModal(false);
+      resetForm();
+      await refresh(true);
+    } catch (error) {
+      console.error("Erro ao salvar cliente VIP:", error);
+      toast("⚠️ Não consegui salvar no Firebase.", 3200);
+    }
+  }
+
+  async function mudarStatus(item: VipCliente, novoStatus: VipStatus): Promise<void> {
+    const now = new Date().toISOString();
+
+    setLista((prev) =>
+      prev.map((x) => (x.id === item.id ? { ...x, status: novoStatus, updatedAt: now } : x))
+    );
+
+    try {
+      await updateVipCliente(item.id, { status: novoStatus, updatedAt: now });
+      toast("✅ Status atualizado!");
+    } catch (error) {
+      console.error("Erro ao atualizar status:", error);
+      toast("⚠️ Não consegui atualizar o status.", 3200);
+      await refresh(true);
+    }
+  }
+
+  async function abrirWhatsApp(item: VipCliente): Promise<void> {
+    const numeroBase = onlyDigits(item.telefone || "");
+    if (!numeroBase) {
+      toast("⚠️ Cliente sem telefone válido.", 2200);
+      return;
+    }
+
+    const numero = numeroBase.length <= 11 ? `55${numeroBase}` : numeroBase;
+    const mensagem = encodeURIComponent(
+      `Olá, ${item.nome}! Tudo bem? Aqui é da Maison Noor Parfums. ` +
+        `Passando para te atender de forma exclusiva e te mostrar nossas opções disponíveis hoje ✨`
+    );
+    const url = `https://wa.me/${numero}?text=${mensagem}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function onConverterLead(item: VipCliente): Promise<void> {
+    try {
+      await convertVipToLead(item);
+      toast("✅ Cliente VIP convertido em lead!");
+      await refresh(true);
+    } catch (error) {
+      console.error("Erro ao converter VIP em lead:", error);
+      toast("⚠️ Não consegui converter em lead.", 3200);
     }
   }
 
   return (
     <>
-      <NavCRM />
-
       <main className="page">
         <div className="pageShell">
           <header className="pageHeader">
@@ -292,22 +453,18 @@ export default function ClientesVipPage() {
               <div className="kicker">Maison Noor</div>
               <h1 className="pageTitle">CRM • Clientes VIP</h1>
               <p className="pageSub">
-                Cadastros captados no site, com atendimento e acompanhamento pelo CRM.
+                Gestão premium dos seus clientes mais valiosos com acompanhamento comercial,
+                relacionamento e conversão para lead no padrão Maison Noor.
               </p>
             </div>
 
             <div className="pageHeaderRight">
-              <div className="stats">
-                <div className="stat">
-                  <div className="statLabel">Total VIP</div>
-                  <div className="statValue">{clientes.length}</div>
-                </div>
-                <div className="stat">
-                  <div className="statLabel">Novos</div>
-                  <div className="statValue">{totalNovos}</div>
-                </div>
+              <div className="actionsTop">
                 <button className="btn" type="button" onClick={() => void refresh()}>
                   Atualizar
+                </button>
+                <button className="btnPrimary" type="button" onClick={abrirNovo}>
+                  Novo VIP
                 </button>
               </div>
             </div>
@@ -315,464 +472,789 @@ export default function ClientesVipPage() {
 
           {msg ? <div className="toast">{msg}</div> : null}
 
-          <section className="pageBody">
-            <div className="toolbar">
-              <input
-                className="search"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por nome, WhatsApp, e-mail, preferência..."
-              />
-
-              <select
-                className="select"
-                value={filtroStatus}
-                onChange={(e) => setFiltroStatus((e.target.value || "") as "" | VipStatus)}
-              >
-                <option value="">Todos os status</option>
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s.v} value={s.v}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+          <section className="statsGrid">
+            <div className="statCard">
+              <div className="statIcon">👑</div>
+              <div className="statLabel">Total VIP</div>
+              <div className="statValue">{stats.total}</div>
             </div>
 
-            <div className="card">
-              <div className="cardTitle">Clientes VIP cadastrados</div>
+            <div className="statCard">
+              <div className="statIcon">✨</div>
+              <div className="statLabel">Novos</div>
+              <div className="statValue">{stats.novos}</div>
+            </div>
 
-              {loading ? (
-                <div className="empty">Carregando clientes VIP...</div>
-              ) : clientesFiltrados.length === 0 ? (
-                <div className="empty">Nenhum cliente VIP encontrado.</div>
-              ) : (
-                <div className="tableWrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Cliente</th>
-                        <th>Contato</th>
-                        <th>Perfil</th>
-                        <th>Cadastro</th>
-                        <th>Status</th>
-                        <th>Ações</th>
-                      </tr>
-                    </thead>
+            <div className="statCard">
+              <div className="statIcon">💬</div>
+              <div className="statLabel">Em conversa</div>
+              <div className="statValue">{stats.emConversa}</div>
+            </div>
 
-                    <tbody>
-                      {clientesFiltrados.map((c) => (
-                        <tr key={c.id}>
-                          <td>
-                            <div className="name">{c.nome}</div>
-                            <div className="meta">{c.origem || "site-maison-noor"}</div>
-                          </td>
+            <div className="statCard">
+              <div className="statIcon">🛍️</div>
+              <div className="statLabel">Compraram</div>
+              <div className="statValue">{stats.compraram}</div>
+            </div>
 
-                          <td>
-                            <div className="mono">{formatPhoneBR(c.whatsapp)}</div>
-                            <div className="meta">{c.email || "Sem e-mail"}</div>
-                          </td>
+            <div className="statCard">
+              <div className="statIcon">📈</div>
+              <div className="statLabel">Conversão %</div>
+              <div className="statValue">{stats.conversao}%</div>
+              <div className="statMeta">{stats.convertidos} convertido(s) em lead</div>
+            </div>
+          </section>
 
-                          <td>
-                            <div className="chips">
-                              <span className="chip">{c.preferencia}</span>
-                              <span className="chip">{c.estilo}</span>
-                            </div>
-                          </td>
+          <section className="card">
+            <div className="toolbar">
+              <div className="field grow">
+                <label>Buscar</label>
+                <input
+                  value={queryText}
+                  onChange={(e) => setQueryText(e.target.value)}
+                  placeholder="Buscar por nome, telefone, Instagram, cidade..."
+                />
+              </div>
 
-                          <td>
-                            <div className="meta">{formatDateBR(c.createdAt)}</div>
-                            <div className="meta">Atualizado: {formatDateBR(c.atualizadoEm)}</div>
-                          </td>
+              <div className="field statusField">
+                <label>Status</label>
+                <select
+                  value={statusFiltro}
+                  onChange={(e) => setStatusFiltro(e.target.value as VipStatus | "")}
+                >
+                  <option value="">Todos os status</option>
+                  {VIP_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.v} value={opt.v}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </section>
 
-                          <td>
-                            <span className={`status status-${c.status}`}>
-                              {STATUS_OPTIONS.find((s) => s.v === c.status)?.label || "Novo"}
-                            </span>
-                          </td>
+          <section className="card">
+            <div className="cardHead">
+              <div>
+                <div className="cardTitle">Base VIP</div>
+                <div className="cardSub">Clientes de alto potencial e relacionamento premium.</div>
+              </div>
+              <div className="cardCount">{filtered.length} registro(s)</div>
+            </div>
 
-                          <td>
-                            <div className="actions">
-                              <a
-                                className="btnGhost"
-                                href={`https://wa.me/55${c.whatsapp}?text=${encodeURIComponent(
-                                  `Olá ${c.nome}! Vi seu cadastro no Clube VIP Maison Noor ✨ Posso te mostrar algumas fragrâncias especiais?`
-                                )}`}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                WhatsApp
-                              </a>
+            <div className="tableWrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Contato</th>
+                    <th>Status</th>
+                    <th>Resumo</th>
+                    <th>Ações rápidas</th>
+                  </tr>
+                </thead>
 
-                              <button className="btnGhost" type="button" onClick={() => abrirEditar(c)}>
-                                Editar
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                <tbody>
+                  {!loading && filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={5}>
+                        <div className="emptyState">
+                          <div className="emptyTitle">Nenhum cliente VIP encontrado</div>
+                          <div className="emptySub">
+                            Ajuste a busca ou crie um novo VIP para começar sua gestão comercial.
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+
+                  {filtered.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <div className="name">{item.nome}</div>
+                        <div className="meta">
+                          {item.cidade || "Cidade não informada"}
+                        </div>
+                      </td>
+
+                      <td>
+                        <div className="mono">{item.telefone || "—"}</div>
+                        <div className="meta">
+                          {item.instagram ? `@${item.instagram}` : "Sem Instagram"}
+                        </div>
+                      </td>
+
+                      <td>
+                        <span className={`statusBadge ${statusClass(item.status)}`}>
+                          <span className="statusDot" />
+                          {statusLabel(item.status)}
+                        </span>
+                      </td>
+
+                      <td>
+                        <div className="summaryList">
+                          <div>
+                            Ticket médio:{" "}
+                            <strong>
+                              {Number(item.ticketMedio || 0).toLocaleString("pt-BR", {
+                                style: "currency",
+                                currency: "BRL",
+                              })}
+                            </strong>
+                          </div>
+                          <div>
+                            Total compras:{" "}
+                            <strong>
+                              {Number(item.totalCompras || 0).toLocaleString("pt-BR", {
+                                style: "currency",
+                                currency: "BRL",
+                              })}
+                            </strong>
+                          </div>
+                          <div className="meta">
+                            Atualizado em{" "}
+                            {new Date(item.updatedAt || item.createdAt).toLocaleString("pt-BR")}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>
+                        <div className="actions">
+                          <button className="miniBtn" type="button" onClick={() => void abrirWhatsApp(item)}>
+                            WhatsApp
+                          </button>
+                          <button className="miniBtn" type="button" onClick={() => void mudarStatus(item, "em_conversa")}>
+                            Em conversa
+                          </button>
+                          <button className="miniBtn" type="button" onClick={() => void mudarStatus(item, "comprou")}>
+                            Comprou
+                          </button>
+                          <button className="miniBtn accent" type="button" onClick={() => void onConverterLead(item)}>
+                            Converter Lead
+                          </button>
+                          <button className="miniBtn" type="button" onClick={() => abrirEditar(item)}>
+                            Editar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
         </div>
+      </main>
 
-        {editing ? (
-          <div className="overlay" onClick={fecharEditar}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modalHead">
-                <div>
-                  <div className="kicker">Cliente VIP</div>
-                  <h2 className="modalTitle">{editing.nome}</h2>
+      {openModal ? (
+        <div className="modalOverlay" onClick={() => setOpenModal(false)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalHead">
+              <div>
+                <div className="cardTitle">{editingId ? "Editar cliente VIP" : "Novo cliente VIP"}</div>
+                <div className="cardSub">Cadastro premium no padrão Maison Noor.</div>
+              </div>
+
+              <button className="closeBtn" type="button" onClick={() => setOpenModal(false)}>
+                ×
+              </button>
+            </div>
+
+            <div className="modalBody">
+              <div className="row">
+                <div className="field">
+                  <label>Nome *</label>
+                  <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Maria Fernandes" />
                 </div>
 
-                <button className="closeBtn" type="button" onClick={fecharEditar}>
-                  ×
-                </button>
+                <div className="field">
+                  <label>Telefone *</label>
+                  <input value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="Ex: (12) 99999-9999" />
+                </div>
+              </div>
+
+              <div className="row">
+                <div className="field">
+                  <label>Instagram</label>
+                  <input value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="@clientevip" />
+                </div>
+
+                <div className="field">
+                  <label>Cidade</label>
+                  <input value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="Ex: São José dos Campos" />
+                </div>
               </div>
 
               <div className="row">
                 <div className="field">
                   <label>Status</label>
-                  <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as VipStatus)}>
-                    {STATUS_OPTIONS.map((s) => (
-                      <option key={s.v} value={s.v}>
-                        {s.label}
+                  <select value={status} onChange={(e) => setStatus(e.target.value as VipStatus)}>
+                    {VIP_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.v} value={opt.v}>
+                        {opt.label}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="field">
-                  <label>WhatsApp</label>
-                  <input value={formatPhoneBR(editing.whatsapp)} readOnly />
+                  <label>Ticket médio (R$)</label>
+                  <input
+                    value={ticketMedio}
+                    onChange={(e) => setTicketMedio(e.target.value)}
+                    placeholder="Ex: 320"
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Total compras (R$)</label>
+                  <input
+                    value={totalCompras}
+                    onChange={(e) => setTotalCompras(e.target.value)}
+                    placeholder="Ex: 950"
+                  />
                 </div>
               </div>
 
               <div className="field">
                 <label>Observações</label>
                 <textarea
-                  value={editObs}
-                  onChange={(e) => setEditObs(e.target.value)}
-                  placeholder="Ex: chamou no WhatsApp, gostou de fragrâncias doces, aguardar retorno..."
+                  value={observacoes}
+                  onChange={(e) => setObservacoes(e.target.value)}
+                  placeholder="Preferências, perfil de compra, observações de atendimento..."
+                  rows={4}
                 />
               </div>
 
               <div className="modalActions">
-                <button className="btnGhost" type="button" onClick={fecharEditar}>
+                <button className="btn" type="button" onClick={() => setOpenModal(false)}>
                   Cancelar
                 </button>
-                <button className="btn" type="button" onClick={() => void salvarEdicao()}>
-                  Salvar
+                <button className="btnPrimary" type="button" onClick={() => void salvar()}>
+                  {editingId ? "Salvar alterações" : "Cadastrar VIP"}
                 </button>
               </div>
             </div>
           </div>
-        ) : null}
-      </main>
+        </div>
+      ) : null}
 
       <style jsx>{`
-        .page {
-          min-height: 100vh;
+        :global(body) {
           background:
-            radial-gradient(circle at top, rgba(215, 192, 160, 0.08), transparent 24%),
-            linear-gradient(180deg, #0b0b0f 0%, #121218 100%);
-          color: #efe6d7;
+            radial-gradient(circle at top, rgba(200, 162, 106, 0.08), transparent 28%),
+            linear-gradient(180deg, #08080c 0%, #0b0b10 100%);
+          color: #f5f2ea;
         }
+
+        .page {
+          min-height: 100%;
+          color: #f5f2ea;
+        }
+
         .pageShell {
-          max-width: 1320px;
+          max-width: 1400px;
           margin: 0 auto;
-          padding: 28px 18px 44px;
+          padding: 26px 24px 40px;
         }
+
         .pageHeader {
           display: flex;
           justify-content: space-between;
-          gap: 18px;
           align-items: flex-start;
-          margin-bottom: 20px;
+          gap: 18px;
+          margin-bottom: 18px;
         }
+
+        .pageHeaderLeft {
+          max-width: 860px;
+        }
+
         .kicker {
-          color: #b48a55;
-          font-size: 12px;
-          font-weight: 700;
+          font-size: 11px;
           letter-spacing: 0.16em;
           text-transform: uppercase;
+          color: rgba(200, 162, 106, 0.95);
+          font-weight: 900;
           margin-bottom: 8px;
         }
+
         .pageTitle {
           margin: 0;
-          font-size: 34px;
+          font-size: clamp(28px, 4vw, 42px);
           line-height: 1.05;
-          color: #f7e7cf;
+          font-weight: 900;
+          letter-spacing: -0.03em;
         }
+
         .pageSub {
-          margin: 8px 0 0;
-          color: #b8aa98;
-          max-width: 680px;
+          margin: 10px 0 0;
+          font-size: 16px;
           line-height: 1.6;
+          color: rgba(245, 242, 234, 0.85);
+          max-width: 900px;
         }
-        .stats {
+
+        .pageHeaderRight {
           display: flex;
-          gap: 12px;
-          align-items: stretch;
+          align-items: flex-start;
+          justify-content: flex-end;
+        }
+
+        .actionsTop {
+          display: flex;
+          gap: 10px;
           flex-wrap: wrap;
+          justify-content: flex-end;
         }
-        .stat {
-          min-width: 132px;
-          padding: 12px 14px;
-          border-radius: 18px;
-          border: 1px solid rgba(200, 162, 106, 0.16);
-          background: linear-gradient(180deg, rgba(24, 24, 30, 0.92), rgba(16, 16, 20, 0.92));
-        }
-        .statLabel {
-          color: #a89172;
-          font-size: 12px;
-          margin-bottom: 6px;
-        }
-        .statValue {
-          font-size: 24px;
-          font-weight: 800;
-          color: #f4e2c3;
-        }
-        .btn,
-        .btnGhost {
-          border-radius: 14px;
-          height: 42px;
-          padding: 0 16px;
-          font-weight: 800;
-          cursor: pointer;
-          transition: 0.2s ease;
-        }
-        .btn {
-          border: 1px solid rgba(200, 162, 106, 0.35);
-          background: linear-gradient(135deg, #d8be97, #bf9458);
-          color: #111;
-          box-shadow: 0 10px 24px rgba(191, 148, 88, 0.18);
-        }
-        .btnGhost {
-          border: 1px solid rgba(200, 162, 106, 0.16);
-          background: rgba(255, 255, 255, 0.03);
-          color: #e7d5bb;
-          text-decoration: none;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .btn:hover,
-        .btnGhost:hover {
-          transform: translateY(-1px);
-        }
+
         .toast {
-          margin-bottom: 14px;
-          border: 1px solid rgba(200, 162, 106, 0.18);
-          background: rgba(20, 20, 26, 0.88);
-          color: #f4e2c3;
+          margin-bottom: 16px;
+          border: 1px solid rgba(200, 162, 106, 0.28);
+          background: rgba(200, 162, 106, 0.08);
+          color: #f7ebd3;
           padding: 12px 14px;
+          border-radius: 16px;
+          font-weight: 700;
+        }
+
+        .statsGrid {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 14px;
+          margin-bottom: 18px;
+        }
+
+        .statCard,
+        .card {
+          border-radius: 22px;
+          border: 1px solid rgba(200, 162, 106, 0.18);
+          background:
+            linear-gradient(180deg, rgba(200, 162, 106, 0.08), rgba(255,255,255,0.02)),
+            rgba(15, 15, 20, 0.9);
+          box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+          overflow: hidden;
+        }
+
+        .statCard {
+          padding: 18px;
+        }
+
+        .statIcon {
+          width: 44px;
+          height: 44px;
           border-radius: 14px;
-        }
-        .pageBody {
           display: grid;
+          place-items: center;
+          background: rgba(200, 162, 106, 0.1);
+          border: 1px solid rgba(200, 162, 106, 0.18);
+          margin-bottom: 12px;
+          font-size: 20px;
+        }
+
+        .statLabel {
+          color: rgba(245, 242, 234, 0.75);
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .statValue {
+          margin-top: 6px;
+          font-size: 30px;
+          line-height: 1;
+          font-weight: 900;
+          color: #f5e6c9;
+        }
+
+        .statMeta {
+          margin-top: 8px;
+          color: rgba(245, 242, 234, 0.62);
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .card {
+          padding: 20px;
+          margin-bottom: 18px;
+        }
+
+        .cardHead {
+          display: flex;
+          justify-content: space-between;
           gap: 16px;
+          align-items: center;
+          margin-bottom: 16px;
         }
-        .toolbar {
+
+        .cardTitle {
+          font-size: 28px;
+          font-weight: 900;
+          letter-spacing: -0.03em;
+        }
+
+        .cardSub {
+          margin-top: 6px;
+          color: rgba(245, 242, 234, 0.74);
+          font-size: 14px;
+        }
+
+        .cardCount {
+          color: #f1d4a0;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+
+        .toolbar,
+        .row {
           display: grid;
-          grid-template-columns: 1fr 260px;
-          gap: 12px;
+          grid-template-columns: 1.6fr 0.9fr;
+          gap: 14px;
         }
-        .search,
-        .select,
+
+        .row {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .grow {
+          min-width: 0;
+        }
+
+        .statusField {
+          min-width: 220px;
+        }
+
+        .field {
+          display: grid;
+          gap: 8px;
+        }
+
+        .field label {
+          font-size: 12px;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: rgba(245, 242, 234, 0.72);
+        }
+
         .field input,
         .field select,
         .field textarea {
           width: 100%;
+          min-width: 0;
           border-radius: 14px;
           border: 1px solid rgba(200, 162, 106, 0.18);
-          background: rgba(20, 20, 26, 0.9);
-          color: #f1e8db;
-          outline: none;
-          box-sizing: border-box;
-        }
-        .search,
-        .select,
-        .field input,
-        .field select {
-          height: 46px;
-          padding: 0 14px;
-        }
-        .field textarea {
-          min-height: 130px;
+          background: rgba(255, 255, 255, 0.04);
+          color: #fff;
           padding: 12px 14px;
-          resize: vertical;
+          outline: none;
+          font-size: 14px;
         }
-        .card {
-          border-radius: 24px;
-          border: 1px solid rgba(200, 162, 106, 0.16);
-          background: linear-gradient(180deg, rgba(16, 16, 20, 0.94), rgba(10, 10, 14, 0.94));
-          box-shadow: 0 24px 50px rgba(0, 0, 0, 0.16);
-          overflow: hidden;
+
+        .field input::placeholder,
+        .field textarea::placeholder {
+          color: rgba(255, 255, 255, 0.42);
         }
-        .cardTitle {
-          padding: 18px 18px 0;
-          font-size: 20px;
+
+        .field input:focus,
+        .field select:focus,
+        .field textarea:focus {
+          border-color: rgba(200, 162, 106, 0.5);
+          box-shadow: 0 0 0 3px rgba(200, 162, 106, 0.12);
+        }
+
+        .btn,
+        .btnPrimary,
+        .miniBtn,
+        .closeBtn {
+          border: 1px solid rgba(200, 162, 106, 0.22);
+          border-radius: 14px;
+          padding: 11px 15px;
           font-weight: 800;
-          color: #f4e2c3;
+          cursor: pointer;
+          transition: transform 0.08s ease, border 0.14s ease, background 0.14s ease;
         }
-        .empty {
-          padding: 18px;
-          color: #b8aa98;
+
+        .btn {
+          background: rgba(200, 162, 106, 0.08);
+          color: #f5f2ea;
         }
+
+        .btnPrimary {
+          background: linear-gradient(180deg, #d7b177, #b98b49);
+          color: #160f07;
+          border-color: rgba(200, 162, 106, 0.75);
+        }
+
+        .btn:hover,
+        .btnPrimary:hover,
+        .miniBtn:hover,
+        .closeBtn:hover {
+          transform: translateY(-1px);
+        }
+
         .tableWrap {
-          width: 100%;
-          overflow: auto;
-          padding: 14px 18px 18px;
-          box-sizing: border-box;
+          overflow-x: auto;
+          border-radius: 18px;
+          border: 1px solid rgba(200, 162, 106, 0.12);
         }
+
         .table {
           width: 100%;
           border-collapse: collapse;
-          min-width: 980px;
+          min-width: 1100px;
         }
-        th,
-        td {
+
+        .table thead th {
           text-align: left;
-          padding: 14px 12px;
-          border-bottom: 1px solid rgba(200, 162, 106, 0.1);
+          padding: 14px 16px;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: rgba(245, 242, 234, 0.68);
+          border-bottom: 1px solid rgba(200, 162, 106, 0.12);
+          background: rgba(255, 255, 255, 0.02);
+        }
+
+        .table tbody td {
+          padding: 16px;
+          border-bottom: 1px solid rgba(200, 162, 106, 0.08);
           vertical-align: top;
         }
-        th {
-          color: #b48a55;
-          font-size: 12px;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
+
+        .table tbody tr:hover {
+          background: rgba(200, 162, 106, 0.04);
         }
+
         .name {
-          color: #f6ead7;
-          font-weight: 800;
-          font-size: 15px;
+          font-size: 16px;
+          font-weight: 900;
         }
-        .meta,
-        .mono {
-          color: #b8aa98;
-          font-size: 13px;
-          line-height: 1.5;
-        }
-        .mono {
-          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        }
-        .chips {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-        .chip {
-          border-radius: 999px;
-          padding: 7px 10px;
-          border: 1px solid rgba(200, 162, 106, 0.16);
-          background: rgba(255, 255, 255, 0.04);
-          color: #e9dac3;
+
+        .meta {
+          margin-top: 4px;
+          color: rgba(245, 242, 234, 0.62);
           font-size: 12px;
         }
-        .status {
+
+        .mono {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-weight: 700;
+        }
+
+        .summaryList {
+          display: grid;
+          gap: 6px;
+        }
+
+        .actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .miniBtn {
+          background: rgba(255, 255, 255, 0.04);
+          color: #fff;
+          padding: 9px 12px;
+          font-size: 13px;
+        }
+
+        .miniBtn.accent {
+          background: rgba(200, 162, 106, 0.12);
+          color: #f3d29d;
+        }
+
+        .statusBadge {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          padding: 8px 10px;
+          gap: 8px;
+          padding: 8px 12px;
           border-radius: 999px;
           font-size: 12px;
-          font-weight: 800;
-          border: 1px solid rgba(200, 162, 106, 0.18);
-          background: rgba(255, 255, 255, 0.04);
-          color: #f5e4c7;
+          font-weight: 900;
+          border: 1px solid transparent;
           white-space: nowrap;
         }
-        .status-novo { background: rgba(212, 175, 106, 0.14); }
-        .status-chamou_no_whatsapp { background: rgba(59, 130, 246, 0.14); }
-        .status-interessado { background: rgba(16, 185, 129, 0.14); }
-        .status-aguardando_retorno { background: rgba(245, 158, 11, 0.14); }
-        .status-converteu { background: rgba(34, 197, 94, 0.16); }
-        .status-arquivado { background: rgba(107, 114, 128, 0.16); }
-        .actions {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
+
+        .statusDot {
+          width: 8px;
+          height: 8px;
+          border-radius: 999px;
+          background: currentColor;
+          box-shadow: 0 0 10px currentColor;
+          flex: 0 0 auto;
         }
-        .overlay {
+
+        .sNovo {
+          background: rgba(104, 143, 255, 0.14);
+          color: #bad0ff;
+          border-color: rgba(104, 143, 255, 0.22);
+        }
+
+        .sWhatsapp {
+          background: rgba(45, 198, 83, 0.13);
+          color: #a6f0ba;
+          border-color: rgba(45, 198, 83, 0.24);
+        }
+
+        .sConversa {
+          background: rgba(255, 193, 7, 0.12);
+          color: #ffe39b;
+          border-color: rgba(255, 193, 7, 0.22);
+        }
+
+        .sInteressado {
+          background: rgba(186, 104, 200, 0.12);
+          color: #edb9f5;
+          border-color: rgba(186, 104, 200, 0.22);
+        }
+
+        .sComprou {
+          background: rgba(255, 152, 0, 0.12);
+          color: #ffcf8b;
+          border-color: rgba(255, 152, 0, 0.22);
+        }
+
+        .sAtivo {
+          background: rgba(200, 162, 106, 0.15);
+          color: #f1d39d;
+          border-color: rgba(200, 162, 106, 0.32);
+        }
+
+        .sPerdido {
+          background: rgba(244, 67, 54, 0.12);
+          color: #ffb3ad;
+          border-color: rgba(244, 67, 54, 0.22);
+        }
+
+        .sConverteu {
+          background: rgba(0, 188, 212, 0.12);
+          color: #99eef9;
+          border-color: rgba(0, 188, 212, 0.22);
+        }
+
+        .emptyState {
+          padding: 28px 10px;
+          text-align: center;
+        }
+
+        .emptyTitle {
+          font-size: 18px;
+          font-weight: 900;
+          margin-bottom: 8px;
+        }
+
+        .emptySub {
+          color: rgba(245, 242, 234, 0.68);
+        }
+
+        .modalOverlay {
           position: fixed;
           inset: 0;
-          z-index: 100;
+          background: rgba(0, 0, 0, 0.62);
+          backdrop-filter: blur(6px);
           display: grid;
           place-items: center;
-          background: rgba(0, 0, 0, 0.55);
-          backdrop-filter: blur(4px);
-          padding: 18px;
-        }
-        .modal {
-          width: min(760px, 100%);
-          border-radius: 24px;
-          border: 1px solid rgba(200, 162, 106, 0.16);
-          background: linear-gradient(180deg, rgba(18, 18, 24, 0.98), rgba(10, 10, 14, 0.98));
-          box-shadow: 0 24px 50px rgba(0, 0, 0, 0.24);
+          z-index: 90;
           padding: 20px;
-          color: #f5ebdc;
         }
+
+        .modalCard {
+          width: min(920px, 100%);
+          border-radius: 24px;
+          border: 1px solid rgba(200, 162, 106, 0.18);
+          background:
+            linear-gradient(180deg, rgba(200, 162, 106, 0.08), rgba(255,255,255,0.02)),
+            #101015;
+          box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+          overflow: hidden;
+        }
+
         .modalHead {
           display: flex;
           justify-content: space-between;
+          align-items: center;
           gap: 12px;
-          align-items: flex-start;
-          margin-bottom: 16px;
+          padding: 18px 20px;
+          border-bottom: 1px solid rgba(200, 162, 106, 0.12);
         }
-        .modalTitle {
-          margin: 0;
-          color: #f7e7cf;
-          font-size: 28px;
-          line-height: 1.06;
-        }
+
         .closeBtn {
           width: 42px;
           height: 42px;
-          border-radius: 999px;
-          border: 1px solid rgba(200, 162, 106, 0.18);
-          background: rgba(255, 255, 255, 0.03);
-          color: #f7e7cf;
-          font-size: 28px;
-          cursor: pointer;
-        }
-        .row {
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
+          place-items: center;
+          padding: 0;
+          background: rgba(255, 255, 255, 0.04);
+          color: #fff;
+          font-size: 22px;
         }
-        .field {
+
+        .modalBody {
+          padding: 20px;
           display: grid;
-          gap: 8px;
-          margin-bottom: 12px;
+          gap: 14px;
         }
-        .field label {
-          color: #b48a55;
-          font-size: 12px;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          font-weight: 700;
-        }
+
         .modalActions {
           display: flex;
           justify-content: flex-end;
           gap: 10px;
-          margin-top: 8px;
+          padding-top: 6px;
         }
-        @media (max-width: 920px) {
-          .pageHeader {
-            grid-template-columns: 1fr;
-            display: grid;
+
+        @media (max-width: 1180px) {
+          .statsGrid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
           }
+        }
+
+        @media (max-width: 920px) {
+          .pageShell {
+            padding: 20px 16px 30px;
+          }
+
+          .pageHeader {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .pageHeaderRight {
+            justify-content: flex-start;
+          }
+
+          .statsGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
           .toolbar,
           .row {
             grid-template-columns: 1fr;
           }
-          .links {
-            justify-content: flex-start;
+
+          .cardTitle {
+            font-size: 24px;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .statsGrid {
+            grid-template-columns: 1fr;
+          }
+
+          .actionsTop,
+          .modalActions {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+
+          .card {
+            padding: 16px;
+          }
+
+          .statCard {
+            padding: 16px;
           }
         }
       `}</style>

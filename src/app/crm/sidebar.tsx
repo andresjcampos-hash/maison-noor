@@ -1,4 +1,4 @@
-// app/crm/SidebarMenu.tsx
+// app/crm/sidebar.tsx
 "use client";
 
 import Link from "next/link";
@@ -10,6 +10,7 @@ export function SidebarMenu() {
   const menu = [
     { label: "Dashboard", href: "/crm", icon: "🏠" },
     { label: "Leads", href: "/crm/leads", icon: "👤" },
+    { label: "Clientes VIP", href: "/crm/clientes-vip", icon: "💎" },
     { label: "Kanban", href: "/crm/kanban", icon: "📊" },
     { label: "Pedidos", href: "/crm/pedidos", icon: "🛍️" },
     { label: "Financeiro", href: "/crm/financeiro", icon: "💰" },
@@ -37,7 +38,6 @@ export function SidebarMenu() {
               }
             `}
           >
-            {/* Ícone */}
             <span
               className={`
                 h-7 w-7 flex items-center justify-center rounded-md text-sm
@@ -51,12 +51,10 @@ export function SidebarMenu() {
               {item.icon}
             </span>
 
-            {/* Texto */}
             <span className="text-[15px] font-medium tracking-wide">
               {item.label}
             </span>
 
-            {/* Bolinha ativa à direita */}
             {active && (
               <span className="ml-auto h-2 w-2 rounded-full bg-amber-400" />
             )}

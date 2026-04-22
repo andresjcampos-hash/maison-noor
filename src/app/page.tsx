@@ -4,16 +4,23 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { CSSProperties } from "react";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import {
   addDoc,
+  arrayRemove,
+  arrayUnion,
   collection,
+  doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
+  updateDoc,
 } from "firebase/firestore";
+import { onAuthStateChanged, signOut, User } from "firebase/auth";
 
 type CategoriaCRM = "masculino" | "feminino" | "unissex";
 
@@ -43,6 +50,100 @@ type ProdutoCarrinho = {
   tamanho: string;
 };
 
+
+const CART_KEYS = [
+  "maison_noor_sacola",
+  "maison_noor_sacola_v1",
+  "maison_noor_cart",
+  "maison_noor_cart_v1",
+  "cart",
+  "cartItems",
+  "sacola",
+  "sacolaItems",
+  "maison_cart",
+  "maison_noor_bag",
+] as const;
+
+function getCartFromStorage(): ProdutoCarrinho[] {
+  if (typeof window === "undefined") return [];
+
+  const normalize = (item: any): ProdutoCarrinho | null => {
+    const nome = String(item?.nome ?? item?.name ?? item?.title ?? "").trim();
+    const preco = Number(item?.preco ?? item?.precoVenda ?? item?.price ?? item?.valor ?? 0);
+
+    if (!nome || !Number.isFinite(preco) || preco < 0) return null;
+
+    return {
+      id: String(item?.id ?? item?.produtoId ?? item?.slug ?? nome),
+      nome,
+      preco,
+      imagem: String(item?.imagem ?? item?.imageUrl ?? item?.image ?? "/produtos/hero-perfume.png"),
+      tamanho: String(item?.tamanho ?? "Maison Noor"),
+    };
+  };
+
+  const candidatos: ProdutoCarrinho[][] = [];
+
+  for (const key of CART_KEYS) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) continue;
+
+      const normalizados = parsed
+        .map(normalize)
+        .filter(Boolean) as ProdutoCarrinho[];
+
+      if (normalizados.length) candidatos.push(normalizados);
+    } catch (_) {}
+  }
+
+  if (!candidatos.length) return [];
+
+  candidatos.sort((a, b) => {
+    const totalA = a.reduce((acc, item) => acc + Number(item.preco || 0), 0);
+    const totalB = b.reduce((acc, item) => acc + Number(item.preco || 0), 0);
+    return totalB - totalA || b.length - a.length;
+  });
+
+  return candidatos[0];
+}
+
+function saveCartToStorage(items: ProdutoCarrinho[]) {
+  if (typeof window === "undefined") return;
+
+  const payload = JSON.stringify(
+    items.map((item) => ({
+      id: item.id,
+      produtoId: item.id,
+      nome: item.nome,
+      preco: Number(item.preco ?? 0),
+      precoVenda: Number(item.preco ?? 0),
+      imagem: item.imagem,
+      imageUrl: item.imagem,
+      tamanho: item.tamanho,
+      quantidade: 1,
+      qtd: 1,
+    }))
+  );
+
+  if (!items.length) {
+    for (const key of CART_KEYS) {
+      window.localStorage.removeItem(key);
+    }
+    window.dispatchEvent(new Event("storage"));
+    return;
+  }
+
+  for (const key of CART_KEYS) {
+    window.localStorage.setItem(key, payload);
+  }
+
+  window.dispatchEvent(new Event("storage"));
+}
+
 type HeroBanner = {
   id: string;
   eyebrow: string;
@@ -59,6 +160,13 @@ type NavItem = {
   href?: string;
   targetId?: string;
   action?: () => void;
+};
+
+type ClienteSite = {
+  uid: string;
+  nome?: string;
+  email?: string;
+  favoritos?: string[];
 };
 
 const productsCollection = collection(db, "products");
@@ -211,13 +319,18 @@ function categoriaDescricao(categoria: string) {
 export default function HomePage() {
   const [busca, setBusca] = useState("");
   const [categoriaAtiva, setCategoriaAtiva] = useState("Todos");
-  const [sacola, setSacola] = useState<ProdutoCarrinho[]>([]);
+  const [sacola, setSacola] = useState<ProdutoCarrinho[]>(() => getCartFromStorage());
   const [produtos, setProdutos] = useState<ProdutoFirebase[]>([]);
   const [loadingProdutos, setLoadingProdutos] = useState(true);
   const [windowWidth, setWindowWidth] = useState<number>(1280);
   const [heroIndex, setHeroIndex] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const [showMegaMenu, setShowMegaMenu] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [clienteNome, setClienteNome] = useState("");
+  const [favoritosIds, setFavoritosIds] = useState<string[]>([]);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [favoritoLoadingId, setFavoritoLoadingId] = useState<string | null>(null);
   let whatsappTooltipTimer: number | null = null;
 
   function handleWhatsappEnter() {
@@ -266,12 +379,65 @@ export default function HomePage() {
     };
   }, []);
 
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncCart = () => setSacola(getCartFromStorage());
+    syncCart();
+
+    window.addEventListener("storage", syncCart);
+    window.addEventListener("focus", syncCart);
+
+    return () => {
+      window.removeEventListener("storage", syncCart);
+      window.removeEventListener("focus", syncCart);
+    };
+  }, []);
+
+  useEffect(() => {
+    saveCartToStorage(sacola);
+  }, [sacola]);
+
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+
+      if (!user) {
+        setClienteNome("");
+        setFavoritosIds([]);
+        return;
+      }
+
+      try {
+        const ref = doc(db, "clientes", user.uid);
+        const snap = await getDoc(ref);
+
+        if (snap.exists()) {
+          const data = snap.data() as ClienteSite;
+          setClienteNome(data.nome || user.displayName || user.email?.split("@")[0] || "Cliente");
+          setFavoritosIds(Array.isArray(data.favoritos) ? data.favoritos : []);
+        } else {
+          setClienteNome(user.displayName || user.email?.split("@")[0] || "Cliente");
+          setFavoritosIds([]);
+        }
+      } catch {
+        setClienteNome(user.displayName || user.email?.split("@")[0] || "Cliente");
+        setFavoritosIds([]);
+      }
+    });
+
+    return () => unsub();
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const handlePointerDown = (event: MouseEvent) => {
       if (!headerMenuRef.current?.contains(event.target as Node)) {
         setShowMegaMenu(false);
+        setAccountMenuOpen(false);
       }
     };
 
@@ -279,6 +445,7 @@ export default function HomePage() {
       if (event.key === "Escape") {
         setShowMegaMenu(false);
         setMobileMenuOpen(false);
+        setAccountMenuOpen(false);
       }
     };
 
@@ -490,15 +657,25 @@ export default function HomePage() {
   }
 
   function adicionarSacola(produto: ProdutoCarrinho) {
-    setSacola((prev) => [...prev, produto]);
+    setSacola((prev) => {
+      const next = [...prev, produto];
+      saveCartToStorage(next);
+      return next;
+    });
+
     setShowMiniCart(true);
+
     if (typeof window !== "undefined") {
       window.setTimeout(() => setShowMiniCart(false), 2400);
     }
   }
 
   function removerDaSacola(index: number) {
-    setSacola((prev) => prev.filter((_, i) => i !== index));
+    setSacola((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      saveCartToStorage(next);
+      return next;
+    });
   }
 
   function atualizarVipField(campo: "nome" | "whatsapp" | "email" | "preferencia" | "estilo", valor: string) {
@@ -586,6 +763,71 @@ export default function HomePage() {
       }
     } finally {
       setVipLoading(false);
+    }
+  }
+
+
+  function getPrimeiroNome(nome: string) {
+    return nome.trim().split(" ")[0] || "Cliente";
+  }
+
+  function ehFavorito(produtoId: string) {
+    return favoritosIds.includes(produtoId);
+  }
+
+  async function toggleFavorito(produto: ProdutoFirebase) {
+    if (!currentUser) {
+      if (typeof window !== "undefined") {
+        window.location.href = "/minha-conta";
+      }
+      return;
+    }
+
+    const produtoId = String(produto.id || "");
+    if (!produtoId) return;
+
+    setFavoritoLoadingId(produtoId);
+
+    try {
+      const ref = doc(db, "clientes", currentUser.uid);
+      const snap = await getDoc(ref);
+
+      if (!snap.exists()) {
+        await setDoc(ref, {
+          uid: currentUser.uid,
+          nome: clienteNome || currentUser.displayName || "",
+          email: currentUser.email || "",
+          telefone: "",
+          tipo: "cliente",
+          vip: false,
+          favoritos: [produtoId],
+          carrinho: [],
+          createdAt: serverTimestamp(),
+          ultimoLogin: serverTimestamp(),
+        });
+        setFavoritosIds([produtoId]);
+      } else {
+        const jaFavorito = favoritosIds.includes(produtoId);
+        await updateDoc(ref, {
+          favoritos: jaFavorito ? arrayRemove(produtoId) : arrayUnion(produtoId),
+          ultimoLogin: serverTimestamp(),
+        });
+        setFavoritosIds((prev) =>
+          prev.includes(produtoId)
+            ? prev.filter((id) => id !== produtoId)
+            : [...prev, produtoId]
+        );
+      }
+    } finally {
+      setFavoritoLoadingId(null);
+    }
+  }
+
+  async function handleLogoutCliente() {
+    setAccountMenuOpen(false);
+    await signOut(auth);
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
     }
   }
 
@@ -770,8 +1012,14 @@ export default function HomePage() {
                       <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
                     </svg>
                   </a>
-
                 </div>
+              )}
+
+              {!isMobile && (
+                <a href="/minha-conta" style={{ ...styles.cartBadge, ...(favoritosIds.length > 0 ? styles.cartBadgeActive : {}) }} title="Favoritos">
+                  <span style={styles.favoriteHeart}>♥</span>
+                  <span style={styles.cartCount}>{favoritosIds.length}</span>
+                </a>
               )}
 
               <button type="button" onClick={() => setShowMiniCart((prev) => !prev)} style={{ ...styles.cartBadge, ...(quantidadeSacola > 0 ? styles.cartBadgeActive : {}) }} title="Sacola">
@@ -782,12 +1030,42 @@ export default function HomePage() {
                 <span style={styles.cartCount}>{quantidadeSacola}</span>
               </button>
 
+              {!isMobile && (
+                currentUser ? (
+                  <div style={styles.accountMenuWrap}>
+                    <button
+                      type="button"
+                      onClick={() => setAccountMenuOpen((prev) => !prev)}
+                      style={{
+                        ...styles.accountButton,
+                        ...(accountMenuOpen ? styles.accountButtonActive : {}),
+                      }}
+                    >
+                      Olá, {getPrimeiroNome(clienteNome || "Cliente")} <span style={styles.dropdownCaret}>▾</span>
+                    </button>
+
+                    {accountMenuOpen && (
+                      <div style={styles.accountDropdown}>
+                        <a href="/minha-conta" style={styles.accountDropdownLink}>Minha conta</a>
+                        <a href="/minha-conta" style={styles.accountDropdownLink}>Favoritos ({favoritosIds.length})</a>
+                        <button type="button" onClick={handleLogoutCliente} style={styles.accountDropdownButton}>Sair</button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <a href="/minha-conta" style={styles.loginLink}>
+                    Entrar
+                  </a>
+                )
+              )}
+
               {isMobile ? (
                 <button
                   type="button"
                   onClick={() => {
                     setMobileMenuOpen((prev) => !prev);
                     setShowMegaMenu(false);
+                    setAccountMenuOpen(false);
                   }}
                   style={{
                     ...styles.mobileMenuButton,
@@ -878,6 +1156,26 @@ export default function HomePage() {
                 </div>
               </div>
 
+              <div style={styles.mobileAccountPanel}>
+                <div style={styles.mobileAccountTitle}>
+                  {currentUser ? `Olá, ${getPrimeiroNome(clienteNome || "Cliente")}` : "Área do cliente"}
+                </div>
+                <div style={styles.mobileAccountActions}>
+                  <a href="/minha-conta" style={styles.mobileSocialLink}>
+                    {currentUser ? "Minha conta" : "Entrar"}
+                  </a>
+                  {currentUser ? (
+                    <button type="button" onClick={handleLogoutCliente} style={styles.mobileMenuAction}>
+                      Sair
+                    </button>
+                  ) : (
+                    <a href="/login" style={styles.mobileSocialLink}>
+                      CRM
+                    </a>
+                  )}
+                </div>
+              </div>
+
               <div style={styles.mobileMenuFooter}>
                 <a
                   href="https://instagram.com/maison.noor.parfums"
@@ -894,9 +1192,6 @@ export default function HomePage() {
                   style={styles.mobileSocialLink}
                 >
                   WhatsApp
-                </a>
-                <a href="/login" style={styles.mobileSocialLink}>
-                  CRM
                 </a>
               </div>
             </div>
@@ -1122,6 +1417,25 @@ export default function HomePage() {
                       {getBadgeProduto(produto, index) ? (
                         <span style={styles.productBadge}>{getBadgeProduto(produto, index)}</span>
                       ) : null}
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleFavorito(produto);
+                        }}
+                        style={{
+                          ...styles.favoriteButton,
+                          ...(ehFavorito(produto.id) ? styles.favoriteButtonActive : {}),
+                          ...(favoritoLoadingId === produto.id ? styles.favoriteButtonLoading : {}),
+                        }}
+                        aria-label={ehFavorito(produto.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                        title={currentUser ? (ehFavorito(produto.id) ? "Remover dos favoritos" : "Adicionar aos favoritos") : "Entrar para salvar favorito"}
+                      >
+                        {ehFavorito(produto.id) ? "♥" : "♡"}
+                      </button>
+
                       <img
                         src={produto.imagemFinal}
                         alt={produto.nome}
@@ -2177,6 +2491,92 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
     lineHeight: 1,
   },
+
+  favoriteHeart: {
+    color: "#A67A43",
+    fontSize: "18px",
+    lineHeight: 1,
+  },
+  accountMenuWrap: {
+    position: "relative",
+  },
+  accountButton: {
+    minHeight: "44px",
+    borderRadius: "999px",
+    border: "1px solid #D8C1A2",
+    padding: "0 18px",
+    background: "linear-gradient(135deg, rgba(255,255,255,0.75), rgba(243,228,207,0.92))",
+    color: "#6E5844",
+    fontWeight: 700,
+    fontSize: "14px",
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    boxShadow: "0 8px 18px rgba(99, 72, 41, 0.06)",
+  },
+  accountButtonActive: {
+    background: "linear-gradient(135deg, #D8BE97, #C79D61)",
+    color: "#2B2118",
+  },
+  accountDropdown: {
+    position: "absolute",
+    top: "calc(100% + 10px)",
+    right: 0,
+    minWidth: "220px",
+    background: "linear-gradient(180deg, rgba(255,252,248,0.99), rgba(245,235,222,0.99))",
+    border: "1px solid rgba(220, 200, 175, 0.95)",
+    borderRadius: "18px",
+    padding: "10px",
+    boxShadow: "0 24px 50px rgba(47, 34, 20, 0.14)",
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    zIndex: 20,
+  },
+  accountDropdownLink: {
+    minHeight: "42px",
+    borderRadius: "12px",
+    padding: "0 14px",
+    color: "#5E4A39",
+    textDecoration: "none",
+    fontWeight: 700,
+    fontSize: "14px",
+    display: "flex",
+    alignItems: "center",
+    background: "rgba(255,255,255,0.65)",
+    border: "1px solid #E3D3BF",
+  },
+  accountDropdownButton: {
+    minHeight: "42px",
+    borderRadius: "12px",
+    padding: "0 14px",
+    color: "#5E4A39",
+    fontWeight: 700,
+    fontSize: "14px",
+    display: "flex",
+    alignItems: "center",
+    background: "rgba(255,255,255,0.65)",
+    border: "1px solid #E3D3BF",
+    cursor: "pointer",
+  },
+  mobileAccountPanel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+  mobileAccountTitle: {
+    color: "#8E6B3E",
+    fontSize: "12px",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.14em",
+  },
+  mobileAccountActions: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, 1fr)",
+    gap: "10px",
+  },
   cartBadgeActive: {
     background: "linear-gradient(135deg, rgba(255,249,241,0.96), rgba(243,228,207,0.92))",
     border: "1px solid #D8C1A2",
@@ -2506,6 +2906,34 @@ const styles: Record<string, CSSProperties> = {
   cardImageUnavailable: {
     opacity: 0.68,
     filter: "grayscale(0.18)",
+  },
+
+  favoriteButton: {
+    position: "absolute",
+    top: "14px",
+    right: "14px",
+    width: "38px",
+    height: "38px",
+    borderRadius: "999px",
+    border: "1px solid #E3D3BF",
+    background: "rgba(255,255,255,0.9)",
+    color: "#8B6B46",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "18px",
+    cursor: "pointer",
+    zIndex: 3,
+    boxShadow: "0 8px 16px rgba(20,16,12,0.08)",
+  },
+  favoriteButtonActive: {
+    color: "#B45E5E",
+    border: "1px solid #E9C4C4",
+    background: "#FFF7F7",
+  },
+  favoriteButtonLoading: {
+    opacity: 0.7,
+    cursor: "wait",
   },
   cardContent: {
     padding: "16px 16px 18px",

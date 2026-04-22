@@ -23,6 +23,7 @@ function IconDashboard() {
     </svg>
   );
 }
+
 function IconLeads() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -33,6 +34,18 @@ function IconLeads() {
     </svg>
   );
 }
+
+function IconVip() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 2l2.45 4.96l5.47.79l-3.96 3.86l.94 5.45L12 14.8l-4.9 2.58l.94-5.45L4.08 7.75l5.47-.79L12 2Z"
+      />
+    </svg>
+  );
+}
+
 function IconKanban() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -43,6 +56,7 @@ function IconKanban() {
     </svg>
   );
 }
+
 function IconPedidos() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -53,6 +67,7 @@ function IconPedidos() {
     </svg>
   );
 }
+
 function IconFinanceiro() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -63,6 +78,7 @@ function IconFinanceiro() {
     </svg>
   );
 }
+
 function IconProdutos() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -79,14 +95,10 @@ export default function Nav() {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // ✅ Opção A: Leads desativado (não aparece no menu)
   const links: NavLink[] = useMemo(
     () => [
-      // Mantém dashboard funcionando tanto em /crm quanto /crm/dashboard
       { href: "/crm", label: "Dashboard", icon: <IconDashboard /> },
-
-      // { href: "/crm/leads", label: "Leads", icon: <IconLeads /> }, // desativado
-
+      { href: "/crm/clientes-vip", label: "Clientes VIP", icon: <IconVip /> },
       { href: "/crm/kanban", label: "Kanban", icon: <IconKanban /> },
       { href: "/crm/pedidos", label: "Pedidos", icon: <IconPedidos /> },
       { href: "/crm/financeiro", label: "Financeiro", icon: <IconFinanceiro /> },
@@ -97,12 +109,10 @@ export default function Nav() {
 
   function isActive(href: string) {
     if (!pathname) return false;
-
-    // Dashboard: considera /crm e /crm/dashboard como ativo
     if (href === "/crm") return pathname === "/crm" || pathname === "/crm/";
-    if (href === "/crm/dashboard")
+    if (href === "/crm/dashboard") {
       return pathname === "/crm/dashboard" || pathname.startsWith("/crm/dashboard/");
-
+    }
     return pathname.startsWith(href);
   }
 
@@ -189,7 +199,10 @@ export default function Nav() {
           border: 1px solid rgba(255, 255, 255, 0.06);
           background: rgba(0, 0, 0, 0.16);
           padding: 6px 10px;
-          transition: transform 0.08s ease, border 0.12s ease, background 0.12s ease,
+          transition:
+            transform 0.08s ease,
+            border 0.12s ease,
+            background 0.12s ease,
             box-shadow 0.12s ease;
         }
 
@@ -221,9 +234,9 @@ export default function Nav() {
           align-items: center;
           justify-content: center;
           border-radius: 999px;
-          border: 1px solid rgba(200, 162, 106, 0.24);
-          background: rgba(200, 162, 106, 0.08);
-          color: rgba(200, 162, 106, 0.95);
+          border: 1px solid rgba(200, 162, 106, 0.18);
+          background: rgba(255, 255, 255, 0.03);
+          color: rgba(255, 240, 205, 0.92);
         }
 
         .crmNavLabel {
@@ -240,9 +253,11 @@ export default function Nav() {
           background: rgba(200, 162, 106, 0.12);
           box-shadow: 0 0 0 3px rgba(200, 162, 106, 0.1);
         }
+
         .crmNavItemActive .crmNavLabel {
           color: rgba(200, 162, 106, 0.98);
         }
+
         .crmNavItemActive .crmNavIcon {
           border-color: rgba(200, 162, 106, 0.45);
           background: rgba(200, 162, 106, 0.18);
@@ -263,8 +278,12 @@ export default function Nav() {
           text-transform: uppercase;
           cursor: pointer;
           text-align: center;
-          transition: background 0.16s ease, border-color 0.16s ease, transform 0.1s ease,
-            box-shadow 0.16s ease, opacity 0.12s ease;
+          transition:
+            background 0.16s ease,
+            border-color 0.16s ease,
+            transform 0.1s ease,
+            box-shadow 0.16s ease,
+            opacity 0.12s ease;
         }
 
         .crmNavLogoutButton:hover {
@@ -289,9 +308,11 @@ export default function Nav() {
           .crmNavList {
             gap: 8px;
           }
+
           .crmNavLabel {
             font-size: 13px;
           }
+
           .crmNavIcon {
             width: 24px;
             height: 24px;
