@@ -653,6 +653,11 @@ export default function HomePage() {
   }, [produtosProntos]);
 
 
+  function abrirProduto(produtoId: string) {
+    if (typeof window === "undefined" || !produtoId) return;
+    window.location.href = `/produto/${produtoId}`;
+  }
+
   function scrollToSection(targetId: string) {
     if (typeof window === "undefined") return;
 
@@ -1400,7 +1405,9 @@ export default function HomePage() {
                   style={{
                     ...styles.card,
                     ...(produto.indisponivel ? styles.cardUnavailable : {}),
+                    cursor: "pointer",
                   }}
+                  onClick={() => abrirProduto(produto.id)}
                 >
                   <Link href={`/produto/${produto.id}`} style={styles.productImageLink}>
                     <div
@@ -1455,16 +1462,19 @@ export default function HomePage() {
 
                     <div style={styles.cardActions}>
                       <button
-                        onClick={() =>
-                          !produto.indisponivel &&
-                          adicionarSacola({
-                            id: produto.id,
-                            nome: produto.nome,
-                            preco: produto.precoFinal,
-                            imagem: produto.imagemFinal,
-                            tamanho: produto.tamanho,
-                          })
-                        }
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!produto.indisponivel) {
+                            adicionarSacola({
+                              id: produto.id,
+                              nome: produto.nome,
+                              preco: produto.precoFinal,
+                              imagem: produto.imagemFinal,
+                              tamanho: produto.tamanho,
+                            });
+                          }
+                        }}
                         style={{
                           ...styles.addToCartButton,
                           ...(produto.indisponivel ? styles.disabledButton : {}),
@@ -1482,6 +1492,7 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
                         )}`}
                         target="_blank"
                         rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         style={styles.cardButton}
                       >
                         Falar sobre este presente
@@ -1577,7 +1588,9 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
                   style={{
                     ...styles.card,
                     ...(produto.indisponivel ? styles.cardUnavailable : {}),
+                    cursor: "pointer",
                   }}
+                  onClick={() => abrirProduto(produto.id)}
                   onMouseEnter={(e) => {
                     if (isMobile) return;
                     e.currentTarget.style.transform = "translateY(-10px)";
@@ -1683,16 +1696,19 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
 
                     <div style={styles.cardActions}>
                       <button
-                      onClick={() =>
-                          !produto.indisponivel &&
-                          adicionarSacola({
-                            id: produto.id,
-                            nome: produto.nome,
-                            preco: produto.precoFinal,
-                            imagem: produto.imagemFinal,
-                            tamanho: produto.tamanho,
-                          })
-                        }
+                      onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!produto.indisponivel) {
+                            adicionarSacola({
+                              id: produto.id,
+                              nome: produto.nome,
+                              preco: produto.precoFinal,
+                              imagem: produto.imagemFinal,
+                              tamanho: produto.tamanho,
+                            });
+                          }
+                        }}
                         style={{
                           ...styles.addToCartButton,
                           ...(produto.indisponivel ? styles.disabledButton : {}),
@@ -1719,6 +1735,7 @@ Pode me passar as opções de pagamento?`
                         target="_blank"
                         rel="noreferrer"
                         data-cta="whatsapp"
+                        onClick={(e) => e.stopPropagation()}
                         style={{
                           ...styles.cardButton,
                           ...(produto.indisponivel ? styles.unavailableWhatsButton : {}),
