@@ -7,6 +7,7 @@
     createUserWithEmailAndPassword,
     onAuthStateChanged,
     signInWithEmailAndPassword,
+    sendPasswordResetEmail,
     signOut,
     updateProfile,
     User,
@@ -58,6 +59,18 @@
     imagem: string;
     tamanho?: string;
     quantidade?: number;
+  };
+
+  type PedidoCliente = {
+    id: string;
+    numero: string;
+    status: string;
+    statusLabel: string;
+    valorTotal: number;
+    criadoEmLabel: string;
+    criadoEmSort: number;
+    codigoRastreio?: string;
+    itensResumo: string[];
   };
 
   function traduzErroFirebase(code?: string) {
@@ -200,6 +213,173 @@
     window.dispatchEvent(new Event("storage"));
   }
 
+  function getPedidoDateInfo(value: any) {
+    try {
+      if (!value) {
+        return { label: "Data indisponível", sort: 0 };
+      }
+
+      let date: Date | null = null;
+
+      if (typeof value?.toDate === "function") {
+        date = value.toDate();
+      } else if (typeof value?.seconds === "number") {
+        date = new Date(value.seconds * 1000);
+      } else if (typeof value === "string" || typeof value === "number") {
+        date = new Date(value);
+      }
+
+      if (!date || Number.isNaN(date.getTime())) {
+        return { label: "Data indisponível", sort: 0 };
+      }
+
+      return {
+        label: date.toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        }),
+        sort: date.getTime(),
+      };
+    } catch (_) {
+      return { label: "Data indisponível", sort: 0 };
+    }
+  }
+
+  function getPedidoStatusNormalizado(status: any) {
+    const raw = String(status || "").trim().toLowerCase();
+
+    if (!raw) return "aguardando_pagamento";
+    if (["aguardando_pagamento", "aguardando pagamento", "pendente", "pending", "rascunho"].includes(raw)) return "aguardando_pagamento";
+    if (["pago", "paid", "pagou", "confirmado"].includes(raw)) return "pago";
+    if (["enviado", "shipped", "postado", "despachado"].includes(raw)) return "enviado";
+    if (["entregue", "delivered", "finalizado", "concluido", "concluído"].includes(raw)) return "entregue";
+    if (["cancelado", "cancelada", "canceled", "cancelled", "perdido"].includes(raw)) return "cancelado";
+    return raw;
+  }
+
+  function getPedidoStatusLabel(status: any) {
+    const normalizado = getPedidoStatusNormalizado(status);
+
+    if (normalizado === "aguardando_pagamento") return "Aguardando pagamento";
+    if (normalizado === "pago") return "Pago";
+    if (normalizado === "enviado") return "Enviado";
+    if (normalizado === "entregue") return "Entregue";
+    if (normalizado === "cancelado") return "Cancelado";
+
+    return "Pedido recebido";
+  }
+
+  function getPedidoItensResumo(data: any): string[] {
+    const itens = Array.isArray(data?.itens)
+      ? data.itens
+      : Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data?.produtos)
+      ? data.produtos
+      : [];
+
+    return itens
+      .map((item: any) => {
+        const nome = String(item?.nome ?? item?.name ?? item?.title ?? "").trim();
+        const quantidade = Number(item?.quantidade ?? item?.qtd ?? item?.quantity ?? 1);
+        if (!nome) return "";
+        return quantidade > 1 ? `${nome} x${quantidade}` : nome;
+      })
+      .filter(Boolean)
+      .slice(0, 4);
+  }
+
+  function getPedidoValorTotal(data: any) {
+    const valorDireto = Number(
+      data?.valorTotal ??
+      data?.total ??
+      data?.precoTotal ??
+      data?.subtotal ??
+      0
+    );
+
+    if (Number.isFinite(valorDireto) && valorDireto > 0) return valorDireto;
+
+    const itens = Array.isArray(data?.itens)
+      ? data.itens
+      : Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data?.produtos)
+      ? data.produtos
+      : [];
+
+    return itens.reduce((acc: number, item: any) => {
+      const preco = Number(item?.preco ?? item?.valor ?? item?.price ?? 0);
+      const quantidade = Number(item?.quantidade ?? item?.qtd ?? item?.quantity ?? 1);
+      return acc + (Number.isFinite(preco) ? preco : 0) * (Number.isFinite(quantidade) && quantidade > 0 ? quantidade : 1);
+    }, 0);
+  }
+
+  function getPedidoStatusBadgeStyle(status: string) {
+    const normalizado = getPedidoStatusNormalizado(status);
+
+    if (normalizado === "pago") {
+      return {
+        background: "rgba(221, 242, 226, 0.9)",
+        border: "1px solid #B9DEC0",
+        color: "#2F6A3C",
+      };
+    }
+
+    if (normalizado === "enviado") {
+      return {
+        background: "rgba(227, 236, 249, 0.9)",
+        border: "1px solid #C7D5EC",
+        color: "#365B8C",
+      };
+    }
+
+    if (normalizado === "entregue") {
+      return {
+        background: "rgba(229, 244, 237, 0.9)",
+        border: "1px solid #BFE0CE",
+        color: "#2D6B4E",
+      };
+    }
+
+    if (normalizado === "cancelado") {
+      return {
+        background: "rgba(255, 241, 241, 0.96)",
+        border: "1px solid #E8C3C3",
+        color: "#9A3B3B",
+      };
+    }
+
+    return {
+      background: "rgba(255, 248, 236, 0.96)",
+      border: "1px solid #E4D1B2",
+      color: "#8A6434",
+    };
+  }
+
+
+  function getPedidoStatusDescricao(status: string) {
+    const normalizado = getPedidoStatusNormalizado(status);
+
+    if (normalizado === "aguardando_pagamento") return "Aguardando confirmação do pagamento.";
+    if (normalizado === "pago") return "Pagamento confirmado e pedido em preparação.";
+    if (normalizado === "enviado") return "Pedido despachado e em rota de entrega.";
+    if (normalizado === "entregue") return "Pedido finalizado com entrega concluída.";
+    if (normalizado === "cancelado") return "Pedido encerrado ou cancelado.";
+    return "Pedido recebido pela Maison Noor.";
+  }
+
+  function getPedidoStatusEtapa(status: string) {
+    const normalizado = getPedidoStatusNormalizado(status);
+
+    if (normalizado === "aguardando_pagamento") return 1;
+    if (normalizado === "pago") return 2;
+    if (normalizado === "enviado") return 3;
+    if (normalizado === "entregue") return 4;
+    return 1;
+  }
+
   export default function MinhaContaPage() {
     const router = useRouter();
 
@@ -223,6 +403,8 @@
     const [produtosMap, setProdutosMap] = useState<Record<string, Produto>>({});
     const [favoritosProdutos, setFavoritosProdutos] = useState<Produto[]>([]);
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
+    const [pedidos, setPedidos] = useState<PedidoCliente[]>([]);
+    const [loadingPedidos, setLoadingPedidos] = useState(false);
 
     const isCadastro = useMemo(() => modo === "cadastro", [modo]);
 
@@ -280,6 +462,131 @@
 
       setFavoritosProdutos(resolved);
     }, [cliente, produtosMap]);
+
+    useEffect(() => {
+      let active = true;
+
+      async function loadPedidosCliente() {
+        if (!user) {
+          if (active) {
+            setPedidos([]);
+            setLoadingPedidos(false);
+          }
+          return;
+        }
+
+        setLoadingPedidos(true);
+
+        try {
+          const userEmail = String(user.email || email || "").trim().toLowerCase();
+          const rawPedidos: Array<{ id: string; data: any }> = [];
+          const colecoes = [
+            collection(db, "pedidos"),
+            collection(db, "pedidos", "default", "lista"),
+          ];
+
+          for (const ref of colecoes) {
+            try {
+              const snap = await getDocs(ref);
+              snap.forEach((docSnap) => {
+                rawPedidos.push({
+                  id: docSnap.id,
+                  data: docSnap.data(),
+                });
+              });
+            } catch (_) {}
+          }
+
+          const vistos = new Set<string>();
+          const pedidosNormalizados = rawPedidos
+            .filter(({ data }) => {
+              const uidCandidates = [
+                data?.clienteUid,
+                data?.uid,
+                data?.userId,
+                data?.usuarioId,
+                data?.cliente?.uid,
+              ]
+                .map((value: any) => String(value || "").trim())
+                .filter(Boolean);
+
+              const emailCandidates = [
+                data?.clienteEmail,
+                data?.email,
+                data?.userEmail,
+                data?.compradorEmail,
+                data?.cliente?.email,
+              ]
+                .map((value: any) => String(value || "").trim().toLowerCase())
+                .filter(Boolean);
+
+              return uidCandidates.includes(user.uid) || (!!userEmail && emailCandidates.includes(userEmail));
+            })
+            .map(({ id, data }) => {
+              const numeroPedido = String(
+                data?.numero ??
+                data?.numeroPedido ??
+                data?.pedidoNumero ??
+                id
+              );
+
+              const createdInfo = getPedidoDateInfo(
+                data?.createdAt ??
+                data?.criadoEm ??
+                data?.updatedAt ??
+                data?.data ??
+                data?.date
+              );
+
+              const status = getPedidoStatusNormalizado(
+                data?.status ??
+                data?.situacao ??
+                data?.estado
+              );
+
+              const pedido: PedidoCliente = {
+                id,
+                numero: numeroPedido,
+                status,
+                statusLabel: getPedidoStatusLabel(status),
+                valorTotal: getPedidoValorTotal(data),
+                criadoEmLabel: createdInfo.label,
+                criadoEmSort: createdInfo.sort,
+                codigoRastreio: String(
+                  data?.codigoRastreio ??
+                  data?.rastreamento ??
+                  data?.trackingCode ??
+                  ""
+                ).trim() || undefined,
+                itensResumo: getPedidoItensResumo(data),
+              };
+
+              return pedido;
+            })
+            .filter((pedido) => {
+              const dedupeKey = `${pedido.id}|${pedido.numero}|${pedido.criadoEmSort}`;
+              if (vistos.has(dedupeKey)) return false
+              vistos.add(dedupeKey)
+              return true
+            })
+            .sort((a, b) => b.criadoEmSort - a.criadoEmSort);
+
+          if (active) {
+            setPedidos(pedidosNormalizados);
+          }
+        } finally {
+          if (active) {
+            setLoadingPedidos(false);
+          }
+        }
+      }
+
+      loadPedidosCliente();
+
+      return () => {
+        active = false;
+      };
+    }, [user, email]);
 
     useEffect(() => {
       const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -416,6 +723,27 @@
       }
     }
 
+    async function handleForgotPassword() {
+      setErro("");
+      setSucesso("");
+
+      const emailNormalizado = email.trim().toLowerCase();
+      if (!emailNormalizado) {
+        setErro("Digite seu e-mail para recuperar a senha.");
+        return;
+      }
+
+      setSaving(true);
+      try {
+        await sendPasswordResetEmail(auth, emailNormalizado);
+        setSucesso("Enviamos um link de redefinição de senha para o seu e-mail.");
+      } catch (err: any) {
+        setErro(traduzErroFirebase(err?.code));
+      } finally {
+        setSaving(false);
+      }
+    }
+
     async function handleSalvarPerfil(e: FormEvent) {
       e.preventDefault();
       if (!user) return;
@@ -531,6 +859,12 @@
       (acc, item) => acc + item.preco * Number(item.quantidade ?? 1),
       0
     );
+    const totalItensSacola = cartItems.reduce(
+      (acc, item) => acc + Number(item.quantidade ?? 1),
+      0
+    );
+    const percentualPerfil = [nome, email, telefone].filter((value) => String(value || "").trim()).length * 33;
+    const statusPerfil = percentualPerfil >= 99 ? "Perfil completo" : percentualPerfil >= 66 ? "Perfil quase completo" : "Complete seu perfil";
 
     function handleFinalizarCompra() {
     if (!cartItems.length || typeof window === "undefined") return;
@@ -682,6 +1016,25 @@
                     />
                   </div>
 
+                  {!isCadastro && (
+                    <div style={styles.forgotPasswordWrap}>
+                      <div style={styles.forgotPasswordTextWrap}>
+                        <strong style={styles.forgotPasswordTitle}>Esqueceu sua senha?</strong>
+                        <span style={styles.forgotPasswordText}>
+                          Digite seu e-mail e enviamos o link de recuperação.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleForgotPassword}
+                        style={styles.forgotPasswordButton}
+                        disabled={saving}
+                      >
+                        Enviar link de recuperação
+                      </button>
+                    </div>
+                  )}
+
                   <button type="submit" disabled={saving} style={styles.primaryButton}>
                     {saving ? "Processando..." : isCadastro ? "Criar conta" : "Entrar"}
                   </button>
@@ -716,7 +1069,7 @@
                       Olá, {nome || user.displayName || "Cliente"}
                     </h2>
                     <p style={styles.sectionText}>
-                      Seus produtos salvos e favoritos ficam reunidos aqui.
+                      Seus produtos salvos, favoritos e sacola ficam reunidos aqui em uma área mais organizada.
                     </p>
                   </div>
 
@@ -731,13 +1084,92 @@
                 </div>
               </section>
 
+              <section style={styles.accountRailCard}>
+                <div
+                  style={{
+                    ...styles.accountRailGrid,
+                    gridTemplateColumns: isMobile ? "1fr" : "1.15fr 0.85fr",
+                  }}
+                >
+                  <div>
+                    <span style={styles.accountRailKicker}>Acesso rápido</span>
+                    <div
+                      style={{
+                        ...styles.accountAnchorGrid,
+                        gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))",
+                      }}
+                    >
+                      <a href="#perfil" style={styles.accountAnchorCard}>Meu perfil</a>
+                      <a href="#favoritos" style={styles.accountAnchorCard}>Favoritos</a>
+                      <a href="#sacola" style={styles.accountAnchorCard}>Sacola</a>
+                      <a href="#pedidos-suporte" style={styles.accountAnchorCard}>Pedidos & suporte</a>
+                    </div>
+                  </div>
+
+                  <div style={styles.profileProgressCard}>
+                    <span style={styles.profileProgressLabel}>Status do perfil</span>
+                    <strong style={styles.profileProgressTitle}>{statusPerfil}</strong>
+                    <div style={styles.progressTrack}>
+                      <div
+                        style={{
+                          ...styles.progressFill,
+                          width: `${Math.min(100, percentualPerfil)}%`,
+                        }}
+                      />
+                    </div>
+                    <span style={styles.profileProgressHint}>
+                      Preencha nome, e-mail e telefone para deixar sua conta pronta para compras futuras.
+                    </span>
+                  </div>
+                </div>
+              </section>
+
+              <section style={styles.premiumBannerCard}>
+                <div style={styles.premiumBannerContent}>
+                  <div>
+                    <span style={styles.darkKicker}>Painel premium</span>
+                    <h3 style={styles.premiumBannerTitle}>Sua jornada Maison Noor em um só lugar</h3>
+                    <p style={styles.premiumBannerText}>
+                      Gerencie perfil, confira itens salvos e finalize sua compra com mais rapidez.
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      ...styles.quickActionsGrid,
+                      gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+                    }}
+                  >
+                    <a href="#favoritos" style={styles.quickActionCard}>
+                      <span style={styles.quickActionLabel}>Favoritos</span>
+                      <strong style={styles.quickActionValue}>{favoritosProdutos.length} salvo(s)</strong>
+                    </a>
+
+                    <a href="#sacola" style={styles.quickActionCard}>
+                      <span style={styles.quickActionLabel}>Sacola</span>
+                      <strong style={styles.quickActionValue}>{totalItensSacola} item(ns)</strong>
+                    </a>
+
+                    <a
+                      href="https://wa.me/5512982627108?text=Olá! Preciso de ajuda com a minha conta Maison Noor."
+                      target="_blank"
+                      rel="noreferrer"
+                      style={styles.quickActionCard}
+                    >
+                      <span style={styles.quickActionLabel}>Atendimento</span>
+                      <strong style={styles.quickActionValue}>Suporte rápido</strong>
+                    </a>
+                  </div>
+                </div>
+              </section>
+
               <div
                 style={{
                   ...styles.gridLogged,
                   gridTemplateColumns: isMobile ? "1fr" : "1.12fr 0.88fr",
                 }}
               >
-                <section style={styles.card}>
+                <section id="perfil" style={styles.card}>
                   <div style={styles.cardHeaderRow}>
                     <h3 style={styles.cardTitle}>Meu perfil</h3>
                     <span style={styles.miniLabel}>Dados da conta</span>
@@ -777,7 +1209,12 @@
                   </form>
                 </section>
 
-                <aside style={styles.statsGrid}>
+                <aside
+                  style={{
+                    ...styles.statsGrid,
+                    gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                  }}
+                >
                   <div style={styles.statCard}>
                     <span style={styles.statLabel}>Status</span>
                     <strong style={styles.statValue}>
@@ -794,9 +1231,12 @@
 
                   <div style={styles.statCard}>
                     <span style={styles.statLabel}>Carrinho salvo</span>
-                    <strong style={styles.statValue}>
-                      {cartItems.reduce((acc, item) => acc + Number(item.quantidade ?? 1), 0)}
-                    </strong>
+                    <strong style={styles.statValue}>{totalItensSacola}</strong>
+                  </div>
+
+                  <div style={styles.statCard}>
+                    <span style={styles.statLabel}>Perfil</span>
+                    <strong style={styles.statValue}>{Math.min(99, percentualPerfil)}%</strong>
                   </div>
                 </aside>
               </div>
@@ -817,10 +1257,12 @@
 
                   {favoritosProdutos.length === 0 ? (
                     <div style={styles.emptyBox}>
-                      Você ainda não salvou favoritos.
+                      <strong style={styles.emptyBoxTitle}>Você ainda não salvou favoritos.</strong>
+                      <span style={styles.emptyBoxText}>Quando encontrar um perfume especial, ele aparecerá aqui para facilitar sua próxima compra.</span>
+                      <Link href="/" style={styles.emptyBoxLink}>Explorar fragrâncias</Link>
                     </div>
                   ) : (
-                    <div style={styles.productList}>
+                    <div id="favoritos" style={styles.productList}>
                       {favoritosProdutos.slice(0, 4).map((produto) => (
                         <div key={produto.id} style={styles.productRow}>
                           <div style={styles.productThumbWrap}>
@@ -869,17 +1311,19 @@
                   <div style={styles.cardHeaderRow}>
                     <h3 style={styles.cardTitle}>Minha sacola</h3>
                     <span style={styles.miniLabel}>
-                      {cartItems.reduce((acc, item) => acc + Number(item.quantidade ?? 1), 0)} item(ns)
+                      {totalItensSacola} item(ns)
                     </span>
                   </div>
 
                   {cartItems.length === 0 ? (
                     <div style={styles.emptyBox}>
-                      Sua sacola está vazia no momento.
+                      <strong style={styles.emptyBoxTitle}>Sua sacola está vazia no momento.</strong>
+                      <span style={styles.emptyBoxText}>Adicione produtos e continue sua compra daqui, com mais rapidez e organização.</span>
+                      <Link href="/" style={styles.emptyBoxLink}>Continuar comprando</Link>
                     </div>
                   ) : (
                     <>
-                      <div style={styles.productList}>
+                      <div id="sacola" style={styles.productList}>
                         {cartItems.slice(0, 4).map((item, index) => (
                           <div key={`${item.id}-${index}`} style={styles.productRow}>
                             <div style={styles.productThumbWrap}>
@@ -941,6 +1385,236 @@
                   )}
                 </section>
               </div>
+
+              <section id="pedidos-suporte" style={styles.card}>
+                <div style={styles.cardHeaderRow}>
+                  <h3 style={styles.cardTitle}>Pedidos e suporte</h3>
+                  <span style={styles.miniLabel}>Histórico real</span>
+                </div>
+
+                <div style={styles.ordersHeroCard}>
+                  <div style={styles.ordersHeroTopRow}>
+                    <div>
+                      <span style={styles.quickActionLabel}>Acompanhamento Maison Noor</span>
+                      <strong style={styles.ordersHeroTitle}>
+                        Seus pedidos ficam organizados aqui com status, valor e suporte rápido.
+                      </strong>
+                      <p style={styles.ordersHeroText}>
+                        A área já busca automaticamente seus pedidos no Firebase e agora ficou mais clara para acompanhar cada etapa da compra.
+                      </p>
+                    </div>
+
+                    <div style={styles.ordersHeroSupportPill}>
+                      Atendimento humano via WhatsApp
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      ...styles.ordersMetricsGrid,
+                      gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+                    }}
+                  >
+                    <div style={styles.orderMetricCard}>
+                      <span style={styles.orderMetricValue}>{loadingPedidos ? "..." : pedidos.length}</span>
+                      <span style={styles.orderMetricLabel}>Pedidos no histórico</span>
+                    </div>
+                    <div style={styles.orderMetricCard}>
+                      <span style={styles.orderMetricValue}>{pedidos.filter((pedido) => getPedidoStatusNormalizado(pedido.status) === "aguardando_pagamento").length}</span>
+                      <span style={styles.orderMetricLabel}>Aguardando pagamento</span>
+                    </div>
+                    <div style={styles.orderMetricCard}>
+                      <span style={styles.orderMetricValue}>{pedidos.filter((pedido) => ["pago", "enviado"].includes(getPedidoStatusNormalizado(pedido.status))).length}</span>
+                      <span style={styles.orderMetricLabel}>Em andamento</span>
+                    </div>
+                  </div>
+                </div>
+
+                {loadingPedidos ? (
+                  <div style={styles.emptyBox}>
+                    <strong style={styles.emptyBoxTitle}>Carregando seus pedidos...</strong>
+                    <span style={styles.emptyBoxText}>
+                      Estamos buscando seu histórico para exibir status, valores e detalhes da compra.
+                    </span>
+                  </div>
+                ) : pedidos.length === 0 ? (
+                  <div
+                    style={{
+                      ...styles.quickActionsGrid,
+                      gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                    }}
+                  >
+                    <div style={styles.orderTimelineCard}>
+                      <span style={styles.quickActionLabel}>Fluxo da compra</span>
+                      <strong style={styles.softInfoTitle}>Como seus pedidos serão acompanhados</strong>
+
+                      <div style={styles.timelineList}>
+                        <div style={styles.timelineItem}>
+                          <span style={styles.timelineDot}>1</span>
+                          <div>
+                            <strong style={styles.timelineTitle}>Pedido recebido</strong>
+                            <span style={styles.timelineText}>Assim que a compra for fechada, ela aparecerá nesta área.</span>
+                          </div>
+                        </div>
+
+                        <div style={styles.timelineItem}>
+                          <span style={styles.timelineDot}>2</span>
+                          <div>
+                            <strong style={styles.timelineTitle}>Pagamento confirmado</strong>
+                            <span style={styles.timelineText}>Você poderá acompanhar confirmação, separação e andamento.</span>
+                          </div>
+                        </div>
+
+                        <div style={styles.timelineItem}>
+                          <span style={styles.timelineDot}>3</span>
+                          <div>
+                            <strong style={styles.timelineTitle}>Envio e entrega</strong>
+                            <span style={styles.timelineText}>Status como enviado e entregue aparecerão aqui assim que houver pedidos reais.</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={styles.orderSupportStack}>
+                      <div style={styles.softInfoCard}>
+                        <span style={styles.quickActionLabel}>Histórico vazio</span>
+                        <strong style={styles.softInfoTitle}>Nenhum pedido encontrado ainda</strong>
+                        <span style={styles.softInfoText}>Quando sua primeira compra for registrada, ela aparecerá aqui automaticamente.</span>
+                      </div>
+
+                      <a
+                        href="https://wa.me/5512982627108?text=Olá! Preciso de ajuda com meu pedido na Maison Noor."
+                        target="_blank"
+                        rel="noreferrer"
+                        style={styles.softInfoCardLink}
+                      >
+                        <span style={styles.quickActionLabel}>Suporte</span>
+                        <strong style={styles.softInfoTitle}>Falar no WhatsApp</strong>
+                        <span style={styles.softInfoText}>Atendimento rápido para dúvidas sobre conta, sacola, pagamento e entrega.</span>
+                      </a>
+
+                      <Link href="/" style={styles.softInfoCardLinkSecondary}>
+                        <span style={styles.quickActionLabel}>Continuar comprando</span>
+                        <strong style={styles.softInfoTitle}>Voltar para a vitrine</strong>
+                        <span style={styles.softInfoText}>Descubra novos perfumes, presentes e seleções especiais da Maison Noor.</span>
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={styles.ordersList}>
+                    {pedidos.map((pedido) => {
+                      const etapaAtual = getPedidoStatusEtapa(pedido.status);
+
+                      return (
+                        <article key={`${pedido.id}-${pedido.numero}`} style={styles.orderHistoryCard}>
+                          <div style={styles.orderHistoryHeader}>
+                            <div style={styles.orderHistoryHeading}>
+                              <span style={styles.orderNumberChip}>Pedido #{pedido.numero}</span>
+                              <strong style={styles.orderHistoryTitle}>
+                                Realizado em {pedido.criadoEmLabel}
+                              </strong>
+                              <span style={styles.orderHistorySubtitle}>
+                                {getPedidoStatusDescricao(pedido.status)}
+                              </span>
+                            </div>
+
+                            <span
+                              style={{
+                                ...styles.orderStatusBadge,
+                                ...getPedidoStatusBadgeStyle(pedido.status),
+                              }}
+                            >
+                              {pedido.statusLabel}
+                            </span>
+                          </div>
+
+                          <div style={styles.orderProgressWrap}>
+                            {["Recebido", "Pago", "Enviado", "Entregue"].map((etapaLabel, index) => {
+                              const etapaNumero = index + 1;
+                              const ativa = etapaAtual >= etapaNumero;
+                              return (
+                                <div key={`${pedido.id}-etapa-${etapaNumero}`} style={styles.orderProgressItem}>
+                                  <span
+                                    style={{
+                                      ...styles.orderProgressDot,
+                                      ...(ativa ? styles.orderProgressDotActive : {}),
+                                    }}
+                                  >
+                                    {etapaNumero}
+                                  </span>
+                                  <span
+                                    style={{
+                                      ...styles.orderProgressText,
+                                      ...(ativa ? styles.orderProgressTextActive : {}),
+                                    }}
+                                  >
+                                    {etapaLabel}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div
+                            style={{
+                              ...styles.orderHistoryMetaGrid,
+                              gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+                            }}
+                          >
+                            <div style={styles.orderMetaCard}>
+                              <span style={styles.orderMetaLabel}>Valor do pedido</span>
+                              <strong style={styles.orderMetaValue}>{formatarMoeda(pedido.valorTotal || 0)}</strong>
+                            </div>
+
+                            <div style={styles.orderMetaCard}>
+                              <span style={styles.orderMetaLabel}>Status atual</span>
+                              <strong style={styles.orderMetaValue}>{pedido.statusLabel}</strong>
+                            </div>
+
+                            <div style={styles.orderMetaCard}>
+                              <span style={styles.orderMetaLabel}>Rastreio</span>
+                              <strong style={styles.orderMetaValue}>
+                                {pedido.codigoRastreio || "Aguardando envio"}
+                              </strong>
+                            </div>
+                          </div>
+
+                          {!!pedido.itensResumo.length && (
+                            <div style={styles.orderItemsWrap}>
+                              <span style={styles.orderMetaLabel}>Itens do pedido</span>
+                              <div style={styles.orderItemsList}>
+                                {pedido.itensResumo.map((itemResumo, index) => (
+                                  <span key={`${pedido.id}-item-${index}`} style={styles.orderItemChip}>
+                                    {itemResumo}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div style={{ ...styles.orderActionsRow, gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))" }}>
+                            <a
+                              href={`https://wa.me/5512982627108?text=${encodeURIComponent(`Olá! Preciso de ajuda com o pedido #${pedido.numero} na Maison Noor.`)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={styles.softInfoCardLink}
+                            >
+                              <span style={styles.quickActionLabel}>Suporte</span>
+                              <strong style={styles.softInfoTitle}>Falar sobre este pedido</strong>
+                              <span style={styles.softInfoText}>Atendimento rápido para pagamento, envio, rastreio e entrega.</span>
+                            </a>
+
+                            <Link href="/" style={styles.softInfoCardLinkSecondary}>
+                              <span style={styles.quickActionLabel}>Nova compra</span>
+                              <strong style={styles.softInfoTitle}>Voltar para a vitrine</strong>
+                              <span style={styles.softInfoText}>Continue comprando e descubra novas seleções Maison Noor.</span>
+                            </Link>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}              </section>
             </div>
           )}
         </section>
@@ -1136,10 +1810,284 @@
       lineHeight: 1.08,
       color: "#FFF6EB",
     },
+    premiumBannerCard: {
+      borderRadius: 24,
+      border: "1px solid rgba(216,193,162,0.22)",
+      background: "linear-gradient(135deg, rgba(24,19,14,0.96), rgba(41,30,20,0.96))",
+      boxShadow: "0 18px 38px rgba(34, 24, 15, 0.14)",
+      padding: 22,
+      color: "#F6E9D6",
+    },
+    premiumBannerContent: {
+      display: "grid",
+      gap: 18,
+    },
+    premiumBannerTitle: {
+      margin: "6px 0 8px",
+      fontSize: 24,
+      lineHeight: 1.08,
+      color: "#FFF6EB",
+    },
+    premiumBannerText: {
+      margin: 0,
+      color: "#D7C3AD",
+      fontSize: 14,
+      lineHeight: 1.7,
+      maxWidth: 760,
+    },
+    quickActionsGrid: {
+      display: "grid",
+      gap: 12,
+    },
+    quickActionCard: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      padding: "16px 18px",
+      borderRadius: 18,
+      textDecoration: "none",
+      background: "rgba(255,255,255,0.07)",
+      border: "1px solid rgba(216,193,162,0.14)",
+      color: "#F6E9D6",
+    },
+    quickActionLabel: {
+      color: "#D8BE97",
+      fontSize: 11,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.14em",
+    },
+    quickActionValue: {
+      color: "#FFF6EB",
+      fontSize: 18,
+      lineHeight: 1.2,
+      fontWeight: 700,
+    },
+    softInfoCard: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      padding: "18px 18px",
+      borderRadius: 18,
+      background: "linear-gradient(180deg, rgba(255,255,255,0.72), rgba(248,239,228,0.92))",
+      border: "1px solid #E7D8C8",
+      minHeight: 150,
+    },
+    softInfoCardLink: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      padding: "18px 18px",
+      borderRadius: 18,
+      background: "linear-gradient(180deg, rgba(255,255,255,0.72), rgba(248,239,228,0.92))",
+      border: "1px solid #E7D8C8",
+      minHeight: 150,
+      textDecoration: "none",
+    },
+    softInfoCardLinkSecondary: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      padding: "18px 18px",
+      borderRadius: 18,
+      background: "linear-gradient(180deg, #FFF9F1, #F2E3CF)",
+      border: "1px solid #E7D8C8",
+      minHeight: 150,
+      textDecoration: "none",
+    },
+    ordersHeroCard: {
+      display: "grid",
+      gap: 18,
+      padding: "22px 22px",
+      borderRadius: 24,
+      border: "1px solid #E7D8C8",
+      background: "linear-gradient(135deg, #FFF9F2, #F4E7D6)",
+      boxShadow: "0 16px 34px rgba(48,34,20,0.06)",
+      marginBottom: 18,
+    },
+    ordersHeroTitle: {
+      display: "block",
+      color: "#3E3027",
+      fontSize: 22,
+      lineHeight: 1.2,
+      fontWeight: 700,
+      marginTop: 6,
+    },
+    ordersHeroText: {
+      margin: "10px 0 0",
+      color: "#6F6257",
+      fontSize: 14,
+      lineHeight: 1.7,
+      maxWidth: 760,
+    },
+    ordersMetricsGrid: {
+      display: "grid",
+      gap: 12,
+    },
+    orderMetricCard: {
+      padding: "16px 16px",
+      borderRadius: 18,
+      border: "1px solid #E8D8C5",
+      background: "rgba(255,255,255,0.72)",
+      display: "flex",
+      flexDirection: "column",
+      gap: 6,
+    },
+    orderMetricValue: {
+      color: "#9B7441",
+      fontSize: 26,
+      fontWeight: 700,
+      lineHeight: 1,
+    },
+    orderMetricLabel: {
+      color: "#75685C",
+      fontSize: 13,
+      lineHeight: 1.45,
+    },
+    orderTimelineCard: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 12,
+      padding: "20px 20px",
+      borderRadius: 22,
+      border: "1px solid #E8D8C5",
+      background: "linear-gradient(180deg, #FFFDF9, #F9F0E4)",
+      boxShadow: "0 12px 28px rgba(48,34,20,0.05)",
+    },
+    timelineList: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 14,
+      marginTop: 4,
+    },
+    timelineItem: {
+      display: "grid",
+      gridTemplateColumns: "36px 1fr",
+      gap: 12,
+      alignItems: "flex-start",
+    },
+    timelineDot: {
+      width: 36,
+      height: 36,
+      borderRadius: 999,
+      background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+      color: "#241A12",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontWeight: 700,
+      fontSize: 14,
+      boxShadow: "0 10px 20px rgba(120, 87, 45, 0.12)",
+    },
+    timelineTitle: {
+      display: "block",
+      color: "#3F322A",
+      fontSize: 15,
+      marginBottom: 4,
+    },
+    timelineText: {
+      display: "block",
+      color: "#78695B",
+      fontSize: 13,
+      lineHeight: 1.55,
+    },
+    orderSupportStack: {
+      display: "grid",
+      gap: 12,
+      alignContent: "start",
+    },
+    softInfoTitle: {
+      color: "#3E3027",
+      fontSize: 18,
+      lineHeight: 1.2,
+      fontWeight: 700,
+    },
+    softInfoText: {
+      color: "#6D6157",
+      fontSize: 13,
+      lineHeight: 1.6,
+    },
     benefitsList: {
       display: "grid",
       gap: 10,
       marginTop: 12,
+    },
+    accountRailCard: {
+      borderRadius: 22,
+      border: "1px solid #E8DAC8",
+      background: "linear-gradient(180deg, rgba(255,255,255,0.86), rgba(248,239,228,0.92))",
+      boxShadow: "0 10px 24px rgba(48,34,20,0.05)",
+      padding: 18,
+    },
+    accountRailGrid: {
+      display: "grid",
+      gap: 16,
+      alignItems: "center",
+    },
+    accountRailKicker: {
+      display: "inline-block",
+      color: "#A8844C",
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.16em",
+      marginBottom: 10,
+    },
+    accountAnchorGrid: {
+      display: "grid",
+      gap: 10,
+    },
+    accountAnchorCard: {
+      minHeight: 46,
+      borderRadius: 14,
+      border: "1px solid #E4D4C2",
+      background: "#FFFDF9",
+      color: "#5E4A39",
+      textDecoration: "none",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontWeight: 700,
+      fontSize: 13,
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.82)",
+    },
+    profileProgressCard: {
+      borderRadius: 18,
+      background: "linear-gradient(135deg, rgba(24,19,14,0.96), rgba(41,30,20,0.96))",
+      color: "#F6E9D6",
+      padding: 18,
+      border: "1px solid rgba(216,193,162,0.16)",
+      display: "grid",
+      gap: 10,
+    },
+    profileProgressLabel: {
+      color: "#D8BE97",
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.16em",
+    },
+    profileProgressTitle: {
+      color: "#FFF6EB",
+      fontSize: 20,
+      lineHeight: 1.1,
+    },
+    progressTrack: {
+      width: "100%",
+      height: 10,
+      borderRadius: 999,
+      background: "rgba(255,255,255,0.12)",
+      overflow: "hidden",
+    },
+    progressFill: {
+      height: "100%",
+      borderRadius: 999,
+      background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+    },
+    profileProgressHint: {
+      color: "#D7C3AD",
+      fontSize: 12,
+      lineHeight: 1.6,
     },
     benefitItem: {
       borderRadius: 14,
@@ -1435,6 +2383,214 @@
       fontWeight: 700,
       textDecoration: "none",
     },
+
+    ordersHeroTopRow: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      gap: 16,
+      flexWrap: "wrap",
+    },
+    ordersHeroSupportPill: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 36,
+      padding: "8px 14px",
+      borderRadius: 999,
+      border: "1px solid #E2D0BA",
+      background: "rgba(255,255,255,0.82)",
+      color: "#6A5440",
+      fontSize: 12,
+      fontWeight: 700,
+      whiteSpace: "nowrap",
+    },
+    ordersList: {
+      display: "grid",
+      gap: 14,
+    },
+    orderHistoryCard: {
+      display: "grid",
+      gap: 16,
+      padding: "20px 20px",
+      borderRadius: 22,
+      border: "1px solid #E7D8C8",
+      background: "linear-gradient(180deg, #FFFDFC, #F9F0E4)",
+      boxShadow: "0 14px 30px rgba(48,34,20,0.05)",
+    },
+    orderHistoryHeader: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      gap: 14,
+      flexWrap: "wrap",
+    },
+    orderHistoryHeading: {
+      display: "grid",
+      gap: 6,
+    },
+    orderNumberChip: {
+      display: "inline-flex",
+      width: "fit-content",
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 30,
+      padding: "6px 12px",
+      borderRadius: 999,
+      background: "rgba(255,255,255,0.88)",
+      border: "1px solid #E5D6C6",
+      color: "#8A6434",
+      fontSize: 11,
+      fontWeight: 800,
+      letterSpacing: "0.12em",
+      textTransform: "uppercase",
+    },
+    orderHistoryTitle: {
+      color: "#3E3027",
+      fontSize: 22,
+      lineHeight: 1.2,
+      fontWeight: 700,
+    },
+    orderHistorySubtitle: {
+      color: "#6F6257",
+      fontSize: 13,
+      lineHeight: 1.6,
+    },
+    orderStatusBadge: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 38,
+      padding: "8px 14px",
+      borderRadius: 999,
+      fontSize: 12,
+      fontWeight: 800,
+      whiteSpace: "nowrap",
+    },
+    orderProgressWrap: {
+      display: "grid",
+      gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+      gap: 10,
+    },
+    orderProgressItem: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "12px 12px",
+      borderRadius: 16,
+      border: "1px solid #E9DDCF",
+      background: "rgba(255,255,255,0.72)",
+    },
+    orderProgressDot: {
+      width: 28,
+      height: 28,
+      borderRadius: 999,
+      background: "#E8DED1",
+      color: "#806C56",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontWeight: 800,
+      fontSize: 12,
+      flexShrink: 0,
+    },
+    orderProgressDotActive: {
+      background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+      color: "#241A12",
+      boxShadow: "0 10px 18px rgba(120, 87, 45, 0.14)",
+    },
+    orderProgressText: {
+      color: "#8A7A6C",
+      fontSize: 12,
+      fontWeight: 700,
+      lineHeight: 1.3,
+    },
+    orderProgressTextActive: {
+      color: "#3E3027",
+    },
+    orderHistoryMetaGrid: {
+      display: "grid",
+      gap: 12,
+    },
+    orderMetaCard: {
+      display: "grid",
+      gap: 6,
+      padding: "15px 16px",
+      borderRadius: 18,
+      background: "rgba(255,255,255,0.78)",
+      border: "1px solid #E9DDCF",
+    },
+    orderMetaLabel: {
+      color: "#8B7A6A",
+      fontSize: 11,
+      textTransform: "uppercase",
+      letterSpacing: "0.12em",
+      fontWeight: 700,
+    },
+    orderMetaValue: {
+      color: "#3E3027",
+      fontSize: 16,
+      lineHeight: 1.35,
+      fontWeight: 700,
+      wordBreak: "break-word",
+    },
+    orderItemsWrap: {
+      display: "grid",
+      gap: 10,
+    },
+    orderItemsList: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    orderItemChip: {
+      display: "inline-flex",
+      alignItems: "center",
+      minHeight: 34,
+      padding: "8px 12px",
+      borderRadius: 999,
+      border: "1px solid #E8DACA",
+      background: "rgba(255,255,255,0.9)",
+      color: "#624D3A",
+      fontSize: 12,
+      fontWeight: 700,
+    },
+    orderActionsRow: {
+      display: "grid",
+      gap: 12,
+    },
+    emptyBoxTitle: {
+      display: "block",
+      color: "#3E3027",
+      fontSize: 16,
+      lineHeight: 1.3,
+      fontWeight: 700,
+      marginBottom: 6,
+    },
+    emptyBoxText: {
+      display: "block",
+      color: "#75685C",
+      fontSize: 13,
+      lineHeight: 1.6,
+      marginBottom: 12,
+    },
+    emptyBoxLink: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 40,
+      padding: "0 14px",
+      borderRadius: 12,
+      border: "1px solid #D8C1A2",
+      background: "linear-gradient(135deg, rgba(255,255,255,0.75), rgba(243,228,207,0.92))",
+      color: "#6E5844",
+      fontWeight: 700,
+      textDecoration: "none",
+      fontSize: 13,
+      whiteSpace: "nowrap",
+      width: "fit-content",
+    },
+
     cartButton: {
       display: "inline-flex",
       alignItems: "center",

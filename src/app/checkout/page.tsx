@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { auth, db } from "@/lib/firebase";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
 type CartItem = {
   id?: string;
@@ -22,6 +24,40 @@ type FreightOption = {
   valor: number;
   destaque?: string;
 };
+
+
+type SavedOrderItem = {
+  produtoId: string;
+  nome: string;
+  quantidade: number;
+  precoUnitario: number;
+  subtotal: number;
+  imagem: string;
+};
+
+function gerarNumeroPedido() {
+  const agora = new Date();
+  const yyyy = agora.getFullYear();
+  const mm = String(agora.getMonth() + 1).padStart(2, "0");
+  const dd = String(agora.getDate()).padStart(2, "0");
+  const sufixo = String(Math.floor(Math.random() * 900) + 100);
+  return `${yyyy}${mm}${dd}-${sufixo}`;
+}
+
+function mapOrderItems(items: CartItem[]): SavedOrderItem[] {
+  return items.map((item) => {
+    const quantidade = Number(item.qtd || item.quantidade || 1);
+    const precoUnitario = Number(item.preco || item.precoVenda || 0);
+    return {
+      produtoId: String(item.id || item.produtoId || item.nome),
+      nome: item.nome,
+      quantidade,
+      precoUnitario,
+      subtotal: precoUnitario * quantidade,
+      imagem: String(item.imagem || item.imageUrl || ""),
+    };
+  });
+}
 
 const CART_KEYS = [
   "maison_noor_sacola",
@@ -66,6 +102,15 @@ function getCartFromStorage(): CartItem[] {
   }
 
   return [];
+}
+
+
+function clearCartStorage() {
+  if (typeof window === "undefined") return;
+  for (const key of CART_KEYS) {
+    window.localStorage.removeItem(key);
+  }
+  window.dispatchEvent(new Event("storage"));
 }
 
 function formatarMoeda(valor: number) {
@@ -142,6 +187,8 @@ export default function CheckoutPage() {
   const [cep, setCep] = useState("");
   const [freightOptions, setFreightOptions] = useState<FreightOption[]>([]);
   const [selectedFreight, setSelectedFreight] = useState<string>("");
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [checkoutFeedback, setCheckoutFeedback] = useState("");
 
   useEffect(() => {
     setMounted(true);
@@ -180,29 +227,50 @@ export default function CheckoutPage() {
   const pixTotal = subtotal + freteSelecionado;
   const total = subtotal + freteSelecionado;
 
-  function finalizarWhatsapp() {
-    const itens = carrinho
-      .map(
-        (item) =>
-          `• ${item.nome} - Qtd: ${Number(item.qtd || item.quantidade || 1)} - ${formatarMoeda(
-            Number(item.preco || item.precoVenda || 0) *
-              Number(item.qtd || item.quantidade || 1)
-          )}`
-      )
-      .join("\n");
+  async function salvarPedido(formaPagamento: "whatsapp" | "pix") {
+    if (!carrinho.length) return null;
 
-    const freteTexto = freightOptions.length
-      ? `${freightOptions.find((opt) => opt.id === selectedFreight)?.nome ?? "Frete"} - ${formatarMoeda(freteSelecionado)}`
-      : "Ainda não calculado";
+    const user = auth.currentUser;
+    const itensPedido = mapOrderItems(carrinho);
+    const freteAtual = freightOptions.find((opt) => opt.id === selectedFreight);
+    const numeroPedido = gerarNumeroPedido();
 
-    const texto = encodeURIComponent(
-      `Olá! Quero finalizar minha compra na Maison Noor.\n\nCEP: ${cep || "não informado"}\nFrete: ${freteTexto}\n\nPedido:\n${itens || "Sacola vazia"}\n\nSubtotal: ${formatarMoeda(subtotal)}\nTotal: ${formatarMoeda(total)}`
-    );
+    const payload = {
+      numero: numeroPedido,
+      numeroPedido,
+      clienteUid: user?.uid || "",
+      uid: user?.uid || "",
+      userId: user?.uid || "",
+      usuarioId: user?.uid || "",
+      clienteEmail: user?.email || "",
+      email: user?.email || "",
+      status: "aguardando_pagamento",
+      formaPagamento,
+      origem: "checkout-site",
+      cep: cep || "",
+      freteId: selectedFreight || "",
+      freteNome: freteAtual?.nome || "",
+      fretePrazo: freteAtual?.prazo || "",
+      freteValor: freteSelecionado,
+      subtotal,
+      total,
+      valorTotal: total,
+      totalPix: pixTotal,
+      itens: itensPedido,
+      items: itensPedido,
+      itemCount: itensPedido.reduce((acc, item) => acc + item.quantidade, 0),
+      moeda: "BRL",
+      rastreio: "",
+      createdAt: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+      createdAtIso: new Date().toISOString(),
+    };
 
-    window.open(`https://wa.me/5512982627108?text=${texto}`, "_blank");
+    const ref = await addDoc(collection(db, "pedidos", "default", "lista"), payload);
+    return { id: ref.id, numeroPedido };
   }
 
-  function solicitarPix() {
+  async function finalizarWhatsapp() {
     const itens = carrinho
       .map(
         (item) =>
@@ -217,11 +285,112 @@ export default function CheckoutPage() {
       ? `${freightOptions.find((opt) => opt.id === selectedFreight)?.nome ?? "Frete"} - ${formatarMoeda(freteSelecionado)}`
       : "Ainda não calculado";
 
-    const texto = encodeURIComponent(
+    const fallbackTexto = encodeURIComponent(
+      `Olá! Quero finalizar minha compra na Maison Noor.
+
+CEP: ${cep || "não informado"}
+Frete: ${freteTexto}
+
+Pedido:
+${itens || "Sacola vazia"}
+
+Subtotal: ${formatarMoeda(subtotal)}
+Total: ${formatarMoeda(total)}`
+    );
+
+    try {
+      setSavingOrder(true);
+      setCheckoutFeedback("");
+      const pedidoSalvo = await salvarPedido("whatsapp");
+      const pedidoNumeroTexto = pedidoSalvo?.numeroPedido ? `#${pedidoSalvo.numeroPedido}` : "a gerar";
+
+      if (typeof window !== "undefined" && pedidoSalvo?.id) {
+        window.sessionStorage.setItem(
+          "maison_noor_checkout_last_order",
+          JSON.stringify({
+            id: pedidoSalvo.id,
+            numeroPedido: pedidoSalvo.numeroPedido,
+            formaPagamento: "whatsapp",
+            createdAt: new Date().toISOString(),
+          })
+        );
+      }
+
+      const texto = encodeURIComponent(
+        `Olá! Quero finalizar minha compra na Maison Noor.
+
+Pedido: ${pedidoNumeroTexto}
+CEP: ${cep || "não informado"}
+Frete: ${freteTexto}
+
+Pedido:
+${itens || "Sacola vazia"}
+
+Subtotal: ${formatarMoeda(subtotal)}
+Total: ${formatarMoeda(total)}`
+      );
+      setCheckoutFeedback(`Pedido ${pedidoNumeroTexto} salvo com sucesso.`);
+      window.open(`https://wa.me/5512982627108?text=${texto}`, "_blank");
+    } catch (error) {
+      console.error("Erro ao salvar pedido:", error);
+      setCheckoutFeedback("Não foi possível salvar o pedido automaticamente. Você ainda pode finalizar pelo WhatsApp.");
+      window.open(`https://wa.me/5512982627108?text=${fallbackTexto}`, "_blank");
+    } finally {
+      setSavingOrder(false);
+    }
+  }
+
+  async function solicitarPix() {
+    const itens = carrinho
+      .map(
+        (item) =>
+          `• ${item.nome} - Qtd: ${Number(item.qtd || item.quantidade || 1)} - ${formatarMoeda(
+            Number(item.preco || item.precoVenda || 0) *
+              Number(item.qtd || item.quantidade || 1)
+          )}`
+      )
+      .join("\n");
+
+    const freteTexto = freightOptions.length
+      ? `${freightOptions.find((opt) => opt.id === selectedFreight)?.nome ?? "Frete"} - ${formatarMoeda(freteSelecionado)}`
+      : "Ainda não calculado";
+
+    const fallbackTexto = encodeURIComponent(
       `Olá! Quero receber a chave Pix / link de pagamento do meu pedido na Maison Noor.\n\nCEP: ${cep || "não informado"}\nFrete: ${freteTexto}\n\nPedido:\n${itens || "Sacola vazia"}\n\nSubtotal: ${formatarMoeda(subtotal)}\nTotal no Pix: ${formatarMoeda(pixTotal)}`
     );
 
-    window.open(`https://wa.me/5512982627108?text=${texto}`, "_blank");
+    try {
+      setSavingOrder(true);
+      setCheckoutFeedback("");
+
+      const pedidoSalvo = await salvarPedido("pix");
+      const pedidoNumeroTexto = pedidoSalvo?.numeroPedido ? `#${pedidoSalvo.numeroPedido}` : "a gerar";
+
+      if (typeof window !== "undefined" && pedidoSalvo?.id) {
+        window.sessionStorage.setItem(
+          "maison_noor_checkout_last_order",
+          JSON.stringify({
+            id: pedidoSalvo.id,
+            numeroPedido: pedidoSalvo.numeroPedido,
+            formaPagamento: "pix",
+            createdAt: new Date().toISOString(),
+          })
+        );
+      }
+
+      const texto = encodeURIComponent(
+        `Olá! Quero receber a chave Pix / link de pagamento do meu pedido na Maison Noor.\n\nPedido: ${pedidoNumeroTexto}\nCEP: ${cep || "não informado"}\nFrete: ${freteTexto}\n\nPedido:\n${itens || "Sacola vazia"}\n\nSubtotal: ${formatarMoeda(subtotal)}\nTotal no Pix: ${formatarMoeda(pixTotal)}`
+      );
+
+      setCheckoutFeedback(`Pedido ${pedidoNumeroTexto} salvo com sucesso. Abrindo o atendimento Pix...`);
+      window.open(`https://wa.me/5512982627108?text=${texto}`, "_blank");
+    } catch (error) {
+      console.error("Erro ao salvar pedido Pix:", error);
+      setCheckoutFeedback("Não foi possível salvar o pedido automaticamente. Você ainda pode solicitar o Pix pelo WhatsApp.");
+      window.open(`https://wa.me/5512982627108?text=${fallbackTexto}`, "_blank");
+    } finally {
+      setSavingOrder(false);
+    }
   }
 
   return (
@@ -378,24 +547,36 @@ export default function CheckoutPage() {
               podemos integrar cálculo automático e pagamento PagBank dentro do site.
             </div>
 
+            {checkoutFeedback ? (
+              <div style={styles.checkoutFeedback}>{checkoutFeedback}</div>
+            ) : null}
+
             <button
               type="button"
-              style={styles.mainButton}
+              style={{
+                ...styles.mainButton,
+                ...((savingOrder || !carrinho.length) ? styles.buttonDisabled : {}),
+              }}
               onClick={finalizarWhatsapp}
+              disabled={savingOrder || !carrinho.length}
             >
-              Finalizar no WhatsApp
+              {savingOrder ? "Salvando pedido..." : "Finalizar no WhatsApp"}
             </button>
 
             <button
               type="button"
               onClick={solicitarPix}
-              style={styles.pixButton}
+              style={{
+                ...styles.pixButton,
+                ...((savingOrder || !carrinho.length) ? styles.buttonDisabled : {}),
+              }}
+              disabled={savingOrder || !carrinho.length}
             >
-              Solicitar pagamento Pix
+              {savingOrder ? "Salvando pedido..." : "Solicitar pagamento Pix"}
             </button>
 
             <p style={styles.safeText}>
-              Compra protegida • Atendimento real • Maison Noor
+              Pedido salvo antes da abertura do atendimento • Compra protegida • Maison Noor
             </p>
           </div>
         </div>
@@ -674,6 +855,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
   },
+  checkoutFeedback: {
+    marginBottom: 14,
+    padding: "12px 14px",
+    borderRadius: 14,
+    background: "#fff7ec",
+    border: "1px solid #ead8b7",
+    color: "#6e5c4d",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
   mainButton: {
     width: "100%",
     height: 50,
@@ -699,6 +890,10 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#fff",
     fontSize: 15,
     cursor: "pointer",
+  },
+  buttonDisabled: {
+    opacity: 0.65,
+    cursor: "not-allowed",
   },
   safeText: {
     textAlign: "center",
