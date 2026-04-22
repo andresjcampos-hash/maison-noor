@@ -195,7 +195,6 @@ const categorias = [
   "Masculinos",
   "Unissex",
   "Presentes",
-  "Kits",
   "Promoções",
   "Cremes",
   "Família Olfativa",
@@ -312,8 +311,7 @@ function categoriaDescricao(categoria: string) {
   if (categoria === "Femininos") return "Fragrâncias delicadas e marcantes";
   if (categoria === "Masculinos") return "Seleção intensa e sofisticada";
   if (categoria === "Unissex") return "Versatilidade premium para todos os estilos";
-  if (categoria === "Presentes") return "Cestas e kits especiais para presentear com elegância";
-  if (categoria === "Kits") return "Presentes elegantes e combinações especiais";
+  if (categoria === "Presentes") return "Kits, cestas e combinações especiais para presentear com elegância";
   if (categoria === "Promoções") return "Ofertas especiais por tempo limitado";
   if (categoria === "Cremes") return "Cuidados perfumados e texturas sofisticadas";
   return "Explore os perfumes por notas e famílias olfativas";
@@ -631,7 +629,6 @@ export default function HomePage() {
 
       if (categoriaAtiva === "Todos") bateCategoria = true;
       else if (categoriaAtiva === "Presentes") bateCategoria = produto.isKit;
-      else if (categoriaAtiva === "Kits") bateCategoria = produto.isKit;
       else if (categoriaAtiva === "Promoções") bateCategoria = produto.isPromocao;
       else if (categoriaAtiva === "Cremes") bateCategoria = textoCategoriaLivre.includes("creme") || textoCategoriaLivre.includes("body lotion") || textoCategoriaLivre.includes("hidratante");
       else if (categoriaAtiva === "Família Olfativa") bateCategoria = textoCategoriaLivre.includes("olfativa") || textoCategoriaLivre.includes("amadeir") || textoCategoriaLivre.includes("oriental") || textoCategoriaLivre.includes("floral") || textoCategoriaLivre.includes("cítrico") || textoCategoriaLivre.includes("citrico") || textoCategoriaLivre.includes("adocicado") || textoCategoriaLivre.includes("aquático") || textoCategoriaLivre.includes("aquatico") || textoCategoriaLivre.includes("ambar") || textoCategoriaLivre.includes("âmbar") || textoCategoriaLivre.includes("aromático") || textoCategoriaLivre.includes("aromatico");
@@ -1004,11 +1001,18 @@ export default function HomePage() {
                               onClick={() => selecionarCategoria(categoria)}
                               style={{
                                 ...styles.megaMenuItem,
+                                ...(categoria === "Presentes" ? styles.megaMenuGiftItem : {}),
                                 ...(ativa ? styles.megaMenuItemActive : {}),
                               }}
                             >
-                              <span style={styles.megaMenuItemTitle}>{categoria}</span>
-                              <span style={styles.megaMenuItemText}>{categoriaDescricao(categoria)}</span>
+                              <span style={{
+                                ...styles.megaMenuItemTitle,
+                                ...(categoria === "Presentes" ? styles.megaMenuGiftTitle : {}),
+                              }}>{categoria === "Presentes" ? "🎁 Presentes" : categoria}</span>
+                              <span style={{
+                                ...styles.megaMenuItemText,
+                                ...(categoria === "Presentes" ? styles.megaMenuGiftText : {}),
+                              }}>{categoriaDescricao(categoria)}</span>
                             </button>
                           );
                         })}
@@ -2027,7 +2031,7 @@ Pode me passar as opções de pagamento?`
               <button onClick={() => selecionarCategoria("Femininos")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Femininos</button>
               <button onClick={() => selecionarCategoria("Masculinos")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Masculinos</button>
               <button onClick={() => selecionarCategoria("Unissex")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Unissex</button>
-              <button onClick={() => selecionarCategoria("Kits")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Kits</button>
+              <button onClick={() => selecionarCategoria("Presentes")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Presentes</button>
               <button onClick={() => selecionarCategoria("Cremes")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Cremes</button>
               <button onClick={() => selecionarCategoria("Família Olfativa")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Família Olfativa</button>
             </div>
@@ -2843,6 +2847,17 @@ const styles: Record<string, CSSProperties> = {
   megaMenuItemActive: {
     background: "linear-gradient(135deg, rgba(217,190,147,0.45), rgba(191,148,88,0.28))",
     border: "1px solid #D1AE7A",
+  },
+  megaMenuGiftItem: {
+    background: "linear-gradient(135deg, rgba(212,175,119,0.18), rgba(255,244,229,0.96))",
+    border: "1px solid rgba(205, 167, 106, 0.58)",
+    boxShadow: "0 14px 28px rgba(120, 87, 45, 0.08)",
+  },
+  megaMenuGiftTitle: {
+    color: "#8E6431",
+  },
+  megaMenuGiftText: {
+    color: "#7A6550",
   },
   megaMenuItemTitle: {
     color: "#3F312A",
