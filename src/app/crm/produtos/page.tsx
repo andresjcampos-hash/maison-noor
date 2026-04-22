@@ -402,7 +402,8 @@ export default function ProdutosPage() {
             categoria:
               x.categoria === "masculino" ||
               x.categoria === "feminino" ||
-              x.categoria === "unissex"
+              x.categoria === "unissex" ||
+              x.categoria === "kits-presente"
                 ? (x.categoria as Categoria)
                 : undefined,
             precoCompra: Number(x.precoCompra) || 0,
@@ -599,6 +600,7 @@ export default function ProdutosPage() {
             <option value="masculino">Masculino</option>
             <option value="feminino">Feminino</option>
             <option value="unissex">Unissex</option>
+            <option value="kits-presente">Kits Presente</option>
           </select>
         </div>
 
@@ -878,6 +880,7 @@ export default function ProdutosPage() {
                   <option value="masculino">Masculino</option>
                   <option value="feminino">Feminino</option>
                   <option value="unissex">Unissex</option>
+                  <option value="kits-presente">Kits Presente</option>
                 </select>
               </div>
 

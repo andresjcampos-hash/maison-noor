@@ -22,7 +22,7 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 
-type CategoriaCRM = "masculino" | "feminino" | "unissex";
+type CategoriaCRM = "masculino" | "feminino" | "unissex" | "kits-presente";
 
 type ProdutoFirebase = {
   id: string;
@@ -144,44 +144,6 @@ function saveCartToStorage(items: ProdutoCarrinho[]) {
   window.dispatchEvent(new Event("storage"));
 }
 
-function normalizeCartItem(item: any): ProdutoCarrinho | null {
-  const nome = String(item?.nome ?? item?.name ?? item?.title ?? "").trim();
-  const preco = Number(item?.preco ?? item?.precoVenda ?? item?.price ?? item?.valor ?? 0);
-
-  if (!nome || !Number.isFinite(preco) || preco < 0) return null;
-
-  return {
-    id: String(item?.id ?? item?.produtoId ?? item?.slug ?? nome),
-    nome,
-    preco,
-    imagem: String(item?.imagem ?? item?.imageUrl ?? item?.image ?? "/produtos/hero-perfume.png"),
-    tamanho: String(item?.tamanho ?? "Maison Noor"),
-  };
-}
-
-function normalizeCartArray(items: any[]): ProdutoCarrinho[] {
-  if (!Array.isArray(items)) return [];
-  return items.map(normalizeCartItem).filter(Boolean) as ProdutoCarrinho[];
-}
-
-function mergeCartItems(base: ProdutoCarrinho[], extra: ProdutoCarrinho[]) {
-  const merged: ProdutoCarrinho[] = [];
-  const seen = new Set<string>();
-
-  for (const item of [...base, ...extra]) {
-    const normalized = normalizeCartItem(item);
-    if (!normalized) continue;
-
-    const key = [normalized.id, normalized.nome, normalized.preco, normalized.tamanho].join("|");
-    if (seen.has(key)) continue;
-
-    seen.add(key);
-    merged.push(normalized);
-  }
-
-  return merged;
-}
-
 type HeroBanner = {
   id: string;
   eyebrow: string;
@@ -205,7 +167,6 @@ type ClienteSite = {
   nome?: string;
   email?: string;
   favoritos?: string[];
-  carrinho?: any[];
 };
 
 const productsCollection = collection(db, "products");
@@ -233,6 +194,7 @@ const categorias = [
   "Femininos",
   "Masculinos",
   "Unissex",
+  "Presentes",
   "Kits",
   "Promoções",
   "Cremes",
@@ -288,6 +250,7 @@ function categoriaSite(categoria?: CategoriaCRM): string {
   if (categoria === "feminino") return "Femininos";
   if (categoria === "masculino") return "Masculinos";
   if (categoria === "unissex") return "Unissex";
+  if (categoria === "kits-presente") return "Kits Presente";
   return "Unissex";
 }
 
@@ -301,7 +264,7 @@ function getImagemProduto(produto: ProdutoFirebase): string {
 
 function ehKit(produto: ProdutoFirebase) {
   const texto = `${produto.nome || ""} ${produto.observacoes || ""}`.toLowerCase();
-  return texto.includes("kit");
+  return produto.categoria === "kits-presente" || texto.includes("kit") || texto.includes("cesta") || texto.includes("presente");
 }
 
 function ehPromocao(produto: ProdutoFirebase) {
@@ -349,6 +312,7 @@ function categoriaDescricao(categoria: string) {
   if (categoria === "Femininos") return "Fragrâncias delicadas e marcantes";
   if (categoria === "Masculinos") return "Seleção intensa e sofisticada";
   if (categoria === "Unissex") return "Versatilidade premium para todos os estilos";
+  if (categoria === "Presentes") return "Cestas e kits especiais para presentear com elegância";
   if (categoria === "Kits") return "Presentes elegantes e combinações especiais";
   if (categoria === "Promoções") return "Ofertas especiais por tempo limitado";
   if (categoria === "Cremes") return "Cuidados perfumados e texturas sofisticadas";
@@ -399,9 +363,12 @@ export default function HomePage() {
     preferencia: "Masculino",
     estilo: "Intenso",
   });
+  const [mounted, setMounted] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
-  const cartReadyRef = useRef(false);
-  const lastSavedCartRef = useRef("");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -422,7 +389,7 @@ export default function HomePage() {
 
 
   useEffect(() => {
-    if (typeof window === "undefined" || currentUser) return;
+    if (typeof window === "undefined") return;
 
     const syncCart = () => setSacola(getCartFromStorage());
     syncCart();
@@ -434,35 +401,11 @@ export default function HomePage() {
       window.removeEventListener("storage", syncCart);
       window.removeEventListener("focus", syncCart);
     };
-  }, [currentUser]);
+  }, []);
 
   useEffect(() => {
-    if (!cartReadyRef.current) return;
-
-    const normalizedCart = normalizeCartArray(sacola);
-    const payload = JSON.stringify(normalizedCart);
-    if (payload === lastSavedCartRef.current) return;
-
-    lastSavedCartRef.current = payload;
-    saveCartToStorage(normalizedCart);
-
-    if (!currentUser) return;
-
-    const ref = doc(db, "clientes", currentUser.uid);
-    setDoc(
-      ref,
-      {
-        uid: currentUser.uid,
-        nome: clienteNome || currentUser.displayName || currentUser.email?.split("@")[0] || "Cliente",
-        email: currentUser.email || "",
-        carrinho: normalizedCart,
-        ultimoLogin: serverTimestamp(),
-      },
-      { merge: true }
-    ).catch((error) => {
-      console.error("Erro ao sincronizar carrinho do cliente:", error);
-    });
-  }, [sacola, currentUser, clienteNome]);
+    saveCartToStorage(sacola);
+  }, [sacola]);
 
 
   useEffect(() => {
@@ -472,72 +415,24 @@ export default function HomePage() {
       if (!user) {
         setClienteNome("");
         setFavoritosIds([]);
-        const localCart = getCartFromStorage();
-        setSacola(localCart);
-        lastSavedCartRef.current = JSON.stringify(normalizeCartArray(localCart));
-        cartReadyRef.current = true;
         return;
       }
 
       try {
         const ref = doc(db, "clientes", user.uid);
         const snap = await getDoc(ref);
-        const localCart = getCartFromStorage();
 
         if (snap.exists()) {
           const data = snap.data() as ClienteSite;
-          const cartRemote = normalizeCartArray((data as any)?.carrinho || []);
-          const cartMerged = mergeCartItems(cartRemote, localCart);
-
           setClienteNome(data.nome || user.displayName || user.email?.split("@")[0] || "Cliente");
           setFavoritosIds(Array.isArray(data.favoritos) ? data.favoritos : []);
-          setSacola(cartMerged);
-          saveCartToStorage(cartMerged);
-          lastSavedCartRef.current = JSON.stringify(cartMerged);
-          cartReadyRef.current = true;
-
-          if (JSON.stringify(cartRemote) !== JSON.stringify(cartMerged)) {
-            await setDoc(
-              ref,
-              {
-                uid: user.uid,
-                nome: data.nome || user.displayName || user.email?.split("@")[0] || "Cliente",
-                email: data.email || user.email || "",
-                carrinho: cartMerged,
-                ultimoLogin: serverTimestamp(),
-              },
-              { merge: true }
-            );
-          }
         } else {
-          const nomeCliente = user.displayName || user.email?.split("@")[0] || "Cliente";
-          setClienteNome(nomeCliente);
+          setClienteNome(user.displayName || user.email?.split("@")[0] || "Cliente");
           setFavoritosIds([]);
-          setSacola(localCart);
-          saveCartToStorage(localCart);
-          lastSavedCartRef.current = JSON.stringify(normalizeCartArray(localCart));
-          cartReadyRef.current = true;
-
-          await setDoc(ref, {
-            uid: user.uid,
-            nome: nomeCliente,
-            email: user.email || "",
-            telefone: "",
-            tipo: "cliente",
-            vip: false,
-            favoritos: [],
-            carrinho: localCart,
-            createdAt: serverTimestamp(),
-            ultimoLogin: serverTimestamp(),
-          });
         }
       } catch {
-        const localCart = getCartFromStorage();
         setClienteNome(user.displayName || user.email?.split("@")[0] || "Cliente");
         setFavoritosIds([]);
-        setSacola(localCart);
-        lastSavedCartRef.current = JSON.stringify(normalizeCartArray(localCart));
-        cartReadyRef.current = true;
       }
     });
 
@@ -735,6 +630,7 @@ export default function HomePage() {
       const textoCategoriaLivre = `${produto.nome || ""} ${produto.marca || ""} ${produto.observacoes || ""} ${String((produto as any).tipo || "")}`.toLowerCase();
 
       if (categoriaAtiva === "Todos") bateCategoria = true;
+      else if (categoriaAtiva === "Presentes") bateCategoria = produto.isKit;
       else if (categoriaAtiva === "Kits") bateCategoria = produto.isKit;
       else if (categoriaAtiva === "Promoções") bateCategoria = produto.isPromocao;
       else if (categoriaAtiva === "Cremes") bateCategoria = textoCategoriaLivre.includes("creme") || textoCategoriaLivre.includes("body lotion") || textoCategoriaLivre.includes("hidratante");
@@ -744,6 +640,21 @@ export default function HomePage() {
       return bateBusca && bateCategoria;
     });
   }, [busca, categoriaAtiva, produtosProntos]);
+
+  const produtosPresentes = useMemo(() => {
+    return produtosProntos.filter((produto) => {
+      const textoLivre = `${produto.nome || ""} ${produto.observacoes || ""}`.toLowerCase();
+      return (
+        produto.categoria === "kits-presente" ||
+        produto.categoriaSite === "Kits Presente" ||
+        produto.isKit ||
+        textoLivre.includes("cesta") ||
+        textoLivre.includes("dia das maes") ||
+        textoLivre.includes("dia das mães")
+      );
+    });
+  }, [produtosProntos]);
+
 
   function scrollToSection(targetId: string) {
     if (typeof window === "undefined") return;
@@ -770,7 +681,11 @@ export default function HomePage() {
   }
 
   function adicionarSacola(produto: ProdutoCarrinho) {
-    setSacola((prev) => [...prev, produto]);
+    setSacola((prev) => {
+      const next = [...prev, produto];
+      saveCartToStorage(next);
+      return next;
+    });
 
     setShowMiniCart(true);
 
@@ -780,7 +695,11 @@ export default function HomePage() {
   }
 
   function removerDaSacola(index: number) {
-    setSacola((prev) => prev.filter((_, i) => i !== index));
+    setSacola((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      saveCartToStorage(next);
+      return next;
+    });
   }
 
   function atualizarVipField(campo: "nome" | "whatsapp" | "email" | "preferencia" | "estilo", valor: string) {
@@ -930,14 +849,9 @@ export default function HomePage() {
 
   async function handleLogoutCliente() {
     setAccountMenuOpen(false);
-    setShowMiniCart(false);
-
-    try {
-      await signOut(auth);
-    } finally {
-      if (typeof window !== "undefined") {
-        window.location.href = "/";
-      }
+    await signOut(auth);
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
     }
   }
 
@@ -1128,7 +1042,7 @@ export default function HomePage() {
               {!isMobile && (
                 <a href="/minha-conta" style={{ ...styles.cartBadge, ...(favoritosIds.length > 0 ? styles.cartBadgeActive : {}) }} title="Favoritos">
                   <span style={styles.favoriteHeart}>♥</span>
-                  <span style={styles.cartCount}>{favoritosIds.length}</span>
+                  <span style={styles.cartCount} suppressHydrationWarning>{mounted ? favoritosIds.length : 0}</span>
                 </a>
               )}
 
@@ -1137,7 +1051,7 @@ export default function HomePage() {
                   <path d="M6 7h12l-1 11H7L6 7Z" />
                   <path d="M9 7a3 3 0 0 1 6 0" />
                 </svg>
-                <span style={styles.cartCount}>{quantidadeSacola}</span>
+                <span style={styles.cartCount} suppressHydrationWarning>{mounted ? quantidadeSacola : 0}</span>
               </button>
 
               {!isMobile && (
@@ -1151,13 +1065,13 @@ export default function HomePage() {
                         ...(accountMenuOpen ? styles.accountButtonActive : {}),
                       }}
                     >
-                      Olá, {getPrimeiroNome(clienteNome || "Cliente")} <span style={styles.dropdownCaret}>▾</span>
+                      Olá, {mounted ? getPrimeiroNome(clienteNome || "Cliente") : "Cliente"} <span style={styles.dropdownCaret}>▾</span>
                     </button>
 
                     {accountMenuOpen && (
                       <div style={styles.accountDropdown}>
                         <a href="/minha-conta" style={styles.accountDropdownLink}>Minha conta</a>
-                        <a href="/minha-conta" style={styles.accountDropdownLink}>Favoritos ({favoritosIds.length})</a>
+                        <a href="/minha-conta" style={styles.accountDropdownLink}>Favoritos ({mounted ? favoritosIds.length : 0})</a>
                         <button type="button" onClick={handleLogoutCliente} style={styles.accountDropdownButton}>Sair</button>
                       </div>
                     )}
@@ -1268,7 +1182,7 @@ export default function HomePage() {
 
               <div style={styles.mobileAccountPanel}>
                 <div style={styles.mobileAccountTitle}>
-                  {currentUser ? `Olá, ${getPrimeiroNome(clienteNome || "Cliente")}` : "Área do cliente"}
+                  {currentUser ? `Olá, ${mounted ? getPrimeiroNome(clienteNome || "Cliente") : "Cliente"}` : "Área do cliente"}
                 </div>
                 <div style={styles.mobileAccountActions}>
                   <a href="/minha-conta" style={styles.mobileSocialLink}>
@@ -1418,6 +1332,176 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {produtosPresentes.length > 0 && (
+        <section
+          id="presentes"
+          style={{
+            ...styles.section,
+            padding: isMobile
+              ? "0 14px 28px"
+              : isTablet
+              ? "0 20px 32px"
+              : "0 28px 34px",
+          }}
+        >
+          <div style={styles.presentesSectionCard}>
+            <div
+              style={{
+                ...styles.sectionHeaderPremium,
+                marginBottom: isMobile ? "18px" : "22px",
+              }}
+            >
+              <div>
+                <p style={styles.kicker}>Especial Dia das Mães</p>
+                <h2
+                  style={{
+                    ...styles.sectionTitle,
+                    fontSize: isMobile ? "24px" : isTablet ? "28px" : "32px",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Cestas e kits para presentear
+                </h2>
+                <p style={styles.presentesSubtitle}>
+                  Seleções prontas para surpreender com elegância, perfume e apresentação premium.
+                </p>
+              </div>
+
+              {!isMobile && (
+                <button
+                  type="button"
+                  onClick={() => selecionarCategoria("Presentes")}
+                  style={styles.presentesViewAllButton}
+                >
+                  Ver todos os presentes
+                </button>
+              )}
+            </div>
+
+            <div
+              style={{
+                ...styles.grid,
+                gridTemplateColumns: isMobile
+                  ? "1fr"
+                  : isTablet
+                  ? "repeat(2, 1fr)"
+                  : "repeat(4, 1fr)",
+                gap: isMobile ? "16px" : "20px",
+              }}
+            >
+              {produtosPresentes.slice(0, isMobile ? 4 : 8).map((produto, index) => (
+                <article
+                  key={`presente-${produto.id}`}
+                  style={{
+                    ...styles.card,
+                    ...(produto.indisponivel ? styles.cardUnavailable : {}),
+                  }}
+                >
+                  <Link href={`/produto/${produto.id}`} style={styles.productImageLink}>
+                    <div
+                      style={{
+                        ...styles.cardImageWrap,
+                        height: isMobile ? "180px" : "170px",
+                      }}
+                    >
+                      <span style={styles.presentesBadge}>Presente especial</span>
+
+                      <img
+                        src={produto.imagemFinal}
+                        alt={produto.nome}
+                        style={{
+                          ...styles.cardImage,
+                          ...(produto.indisponivel ? styles.cardImageUnavailable : {}),
+                        }}
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = "/produtos/hero-perfume.png";
+                        }}
+                      />
+                    </div>
+                  </Link>
+
+                  <div style={styles.cardContent}>
+                    <div style={styles.cardTopBlock}>
+                      <p style={styles.cardBrand}>Kit Presente Maison Noor</p>
+
+                      <Link href={`/produto/${produto.id}`} style={styles.productTitleLink}>
+                        <h3
+                          style={{
+                            ...styles.cardTitle,
+                            fontSize: isMobile ? "18px" : "16px",
+                            minHeight: isMobile ? "auto" : "50px",
+                          }}
+                        >
+                          {produto.nome}
+                        </h3>
+                      </Link>
+
+                      <p style={styles.presentesDescription}>
+                        Ideal para surpreender no Dia das Mães com um presente elegante e pronto para entregar.
+                      </p>
+
+                      {produto.indisponivel && <p style={styles.unavailableBadge}>Indisponível</p>}
+                    </div>
+
+                    <div style={styles.cardPriceBlock}>
+                      <p style={styles.cardPrice}>{formatarMoeda(produto.precoFinal)}</p>
+                      <p style={styles.cardTrust}>Montagem especial • Presente pronto para impressionar ✨</p>
+                    </div>
+
+                    <div style={styles.cardActions}>
+                      <button
+                        onClick={() =>
+                          !produto.indisponivel &&
+                          adicionarSacola({
+                            id: produto.id,
+                            nome: produto.nome,
+                            preco: produto.precoFinal,
+                            imagem: produto.imagemFinal,
+                            tamanho: produto.tamanho,
+                          })
+                        }
+                        style={{
+                          ...styles.addToCartButton,
+                          ...(produto.indisponivel ? styles.disabledButton : {}),
+                        }}
+                        disabled={produto.indisponivel}
+                      >
+                        {produto.indisponivel ? "Indisponível" : "Adicionar presente"}
+                      </button>
+
+                      <a
+                        href={`https://wa.me/5512982627108?text=${encodeURIComponent(
+                          `Olá! Tenho interesse no presente ${produto.nome} 😍
+
+Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={styles.cardButton}
+                      >
+                        Falar sobre este presente
+                      </a>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {isMobile && (
+              <div style={styles.presentesMobileActions}>
+                <button
+                  type="button"
+                  onClick={() => selecionarCategoria("Presentes")}
+                  style={styles.presentesViewAllButton}
+                >
+                  Ver todos os presentes
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <section
         id="produtos"
@@ -2939,6 +3023,61 @@ const styles: Record<string, CSSProperties> = {
     color: "#6D6157",
     fontSize: "16px",
     lineHeight: 1.7,
+  },
+  presentesSectionCard: {
+    borderRadius: "28px",
+    border: "1px solid #E7D8C8",
+    background: "linear-gradient(180deg, #FFF9F2, #F7ECDD)",
+    boxShadow: "0 18px 40px rgba(62, 44, 24, 0.08)",
+    padding: "22px",
+  },
+  presentesSubtitle: {
+    margin: 0,
+    color: "#75685C",
+    fontSize: "15px",
+    lineHeight: 1.65,
+    maxWidth: "700px",
+  },
+  presentesViewAllButton: {
+    minHeight: "46px",
+    borderRadius: "999px",
+    border: "1px solid #D8C1A2",
+    padding: "0 18px",
+    background: "linear-gradient(135deg, #FFF9F1, #F0DFC8)",
+    color: "#6B523A",
+    fontWeight: 700,
+    fontSize: "14px",
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(120, 87, 45, 0.08)",
+  },
+  presentesBadge: {
+    position: "absolute",
+    top: "14px",
+    left: "14px",
+    zIndex: 2,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "6px 10px",
+    borderRadius: "999px",
+    background: "linear-gradient(135deg, rgba(212,175,119,0.96), rgba(190,145,85,0.96))",
+    color: "#2B2118",
+    fontSize: "10px",
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    boxShadow: "0 8px 16px rgba(20,16,12,0.08)",
+  },
+  presentesDescription: {
+    margin: "4px 0 0",
+    fontSize: "12px",
+    color: "#8B7A6A",
+    lineHeight: 1.55,
+  },
+  presentesMobileActions: {
+    marginTop: "18px",
+    display: "flex",
+    justifyContent: "center",
   },
   searchResultText: {
     margin: "0 0 18px",
