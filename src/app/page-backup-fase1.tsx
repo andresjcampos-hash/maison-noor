@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -935,13 +934,9 @@ export default function HomePage() {
                 minWidth: isMobile ? undefined : "270px",
               }}
             >
-              <Image
+              <img
                 src="/logo-maison-noor.png"
                 alt="Maison Noor"
-                width={82}
-                height={82}
-                priority
-                sizes="(max-width: 767px) 62px, (max-width: 1100px) 72px, 82px"
                 style={{
                   ...styles.logoImage,
                   height: isMobile ? "62px" : scrolled ? "72px" : "82px",
@@ -1367,7 +1362,6 @@ export default function HomePage() {
         <section
           id="presentes"
           style={{
-            ...styles.deferSection,
             ...styles.section,
             padding: isMobile
               ? "0 14px 28px"
@@ -1441,9 +1435,9 @@ export default function HomePage() {
                       <span style={styles.presentesBadge}>Presente especial</span>
 
                       <img
-                  decoding="async"
                         src={produto.imagemFinal}
                         loading="lazy"
+                        decoding="async"
                         alt={produto.nome}
                         style={{
                           ...styles.cardImage,
@@ -1669,9 +1663,9 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
                       </button>
 
                       <img
-                  decoding="async"
                         src={produto.imagemFinal}
                         loading="lazy"
+                        decoding="async"
                         alt={produto.nome}
                         style={{
                           ...styles.cardImage,
@@ -1893,10 +1887,9 @@ Pode me passar as opções de pagamento?`
             <Link key={`reco-${produto.id}`} href={`/produto/${produto.id}`} style={styles.recommendCard}>
               <div style={styles.recommendImageWrap}>
                 <img
-                  decoding="async"
                   src={produto.imagemFinal}
                   loading="lazy"
-
+                  decoding="async"
                   alt={produto.nome}
                   style={styles.recommendImage}
                   onError={(e) => {
@@ -2062,15 +2055,7 @@ Pode me passar as opções de pagamento?`
                   textAlign: isMobile ? "center" : "left",
                 }}
               >
-                <Image
-                  src="/logo-maison-noor.png"
-                  alt="Maison Noor"
-                  width={76}
-                  height={76}
-                  loading="lazy"
-                  sizes="76px"
-                  style={styles.footerLogo}
-                />
+                <img src="/logo-maison-noor.png" alt="Maison Noor" style={styles.footerLogo} />
                 <div>
                   <div style={styles.footerBrand}>Maison Noor Parfums</div>
                   <p style={styles.footerDescription}>
@@ -2171,10 +2156,9 @@ Pode me passar as opções de pagamento?`
                     <div key={`${item.id}-${index}`} style={styles.miniCartItem}>
                       <div style={styles.miniCartThumbWrap}>
                         <img
-                  decoding="async"
                           src={item.imagem}
                           loading="lazy"
-
+                          decoding="async"
                           alt={item.nome}
                           style={styles.miniCartThumb}
                           onError={(e) => {
@@ -3065,10 +3049,6 @@ const styles: Record<string, CSSProperties> = {
   section: {
     maxWidth: "1360px",
     margin: "0 auto",
-  },
-  deferSection: {
-    contentVisibility: "auto",
-    containIntrinsicSize: "900px",
   },
   sectionHeaderPremium: {
     display: "flex",
