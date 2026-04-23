@@ -13,6 +13,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -361,22 +362,11 @@ export default function HomePage() {
     estilo: "Intenso",
   });
   const [mounted, setMounted] = useState(false);
-  const [debouncedBusca, setDebouncedBusca] = useState("");
-  const [visibleProductsCount, setVisibleProductsCount] = useState(10);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDebouncedBusca(busca);
-    }, 220);
-
-    return () => window.clearTimeout(timer);
-  }, [busca]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -475,19 +465,13 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    const q = query(productsCollection, orderBy("updatedAt", "desc"));
 
-    async function carregarProdutos() {
-      setLoadingProdutos(true);
-
-      try {
-        const q = query(productsCollection, orderBy("updatedAt", "desc"));
-        const snapshot = await getDocs(q);
-
-        if (cancelled) return;
-
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
         const arr: ProdutoFirebase[] = [];
-        snapshot.forEach((d) => {
+        snap.forEach((d) => {
           const data = d.data() as any;
           arr.push({
             id: d.id,
@@ -507,20 +491,41 @@ export default function HomePage() {
             imageUrl: data.imageUrl,
           });
         });
-
         setProdutos(arr);
-      } catch (error) {
-        console.error("Erro ao carregar produtos da Home:", error);
-      } finally {
-        if (!cancelled) setLoadingProdutos(false);
+        setLoadingProdutos(false);
+      },
+      async () => {
+        try {
+          const fallback = await getDocs(q);
+          const arr: ProdutoFirebase[] = [];
+          fallback.forEach((d) => {
+            const data = d.data() as any;
+            arr.push({
+              id: d.id,
+              nome: data.nome ?? "",
+              marca: data.marca,
+              volumeMl: data.volumeMl,
+              categoria: data.categoria,
+              precoCompra: data.precoCompra,
+              precoVenda: data.precoVenda,
+              estoque: data.estoque,
+              reservado: data.reservado ?? 0,
+              ativo: data.ativo ?? true,
+              createdAt: data.createdAt,
+              updatedAt: data.updatedAt,
+              observacoes: data.observacoes,
+              imagem: data.imagem,
+              imageUrl: data.imageUrl,
+            });
+          });
+          setProdutos(arr);
+        } finally {
+          setLoadingProdutos(false);
+        }
       }
-    }
+    );
 
-    carregarProdutos();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => unsubscribe();
   }, []);
 
   const isMobile = windowWidth < 768;
@@ -529,20 +534,6 @@ export default function HomePage() {
   useEffect(() => {
     if (!isMobile) setMobileMenuOpen(false);
   }, [isMobile]);
-
-  useEffect(() => {
-    if (isMobile) {
-      setVisibleProductsCount(6);
-      return;
-    }
-
-    if (isTablet) {
-      setVisibleProductsCount(8);
-      return;
-    }
-
-    setVisibleProductsCount(10);
-  }, [isMobile, isTablet, categoriaAtiva]);
 
   const produtosProntos = useMemo(() => {
     return produtos
@@ -622,7 +613,7 @@ export default function HomePage() {
   }, []);
 
   const produtosFiltrados = useMemo(() => {
-    const termo = debouncedBusca.trim().toLowerCase();
+    const termo = busca.trim().toLowerCase();
 
     return produtosProntos.filter((produto) => {
       const bateBusca =
@@ -645,7 +636,7 @@ export default function HomePage() {
 
       return bateBusca && bateCategoria;
     });
-  }, [debouncedBusca, categoriaAtiva, produtosProntos]);
+  }, [busca, categoriaAtiva, produtosProntos]);
 
   const produtosPresentes = useMemo(() => {
     return produtosProntos.filter((produto) => {
@@ -660,13 +651,6 @@ export default function HomePage() {
       );
     });
   }, [produtosProntos]);
-
-
-  const produtosVisiveis = useMemo(() => {
-    return produtosFiltrados.slice(0, visibleProductsCount);
-  }, [produtosFiltrados, visibleProductsCount]);
-
-  const canShowMoreProdutos = produtosFiltrados.length > visibleProductsCount;
 
 
   function abrirProduto(produtoId: string) {
@@ -1436,8 +1420,6 @@ export default function HomePage() {
 
                       <img
                         src={produto.imagemFinal}
-                        loading="lazy"
-                        decoding="async"
                         alt={produto.nome}
                         style={{
                           ...styles.cardImage,
@@ -1572,9 +1554,9 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
 
         {!loadingProdutos && (busca.trim() || categoriaAtiva !== "Todos") && (
           <p style={styles.searchResultText}>
-            {debouncedBusca.trim() ? (
+            {busca.trim() ? (
               <>
-                Resultados para: <strong>{debouncedBusca}</strong>
+                Resultados para: <strong>{busca}</strong>
               </>
             ) : (
               <>
@@ -1596,7 +1578,10 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
               gap: isMobile ? "16px" : "22px",
             }}
           >
-            {produtosVisiveis.map((produto, index) => {
+            {produtosFiltrados.map((produto, index) => {
+              const linkPagamento = getPagBankLink(produto);
+              const linkFallbackPagamento = getFallbackPagamentoWhatsapp(produto);
+
               return (
                 <article
                   key={produto.id}
@@ -1664,8 +1649,6 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
 
                       <img
                         src={produto.imagemFinal}
-                        loading="lazy"
-                        decoding="async"
                         alt={produto.nome}
                         style={{
                           ...styles.cardImage,
@@ -1765,20 +1748,6 @@ Pode me passar as opções de pagamento?`
                 </article>
               );
             })}
-          </div>
-        )}
-
-        {!loadingProdutos && canShowMoreProdutos && (
-          <div style={styles.loadMoreWrap}>
-            <button
-              type="button"
-              onClick={() =>
-                setVisibleProductsCount((prev) => prev + (isMobile ? 4 : isTablet ? 4 : 5))
-              }
-              style={styles.loadMoreButton}
-            >
-              Ver mais produtos
-            </button>
           </div>
         )}
 
@@ -1888,8 +1857,6 @@ Pode me passar as opções de pagamento?`
               <div style={styles.recommendImageWrap}>
                 <img
                   src={produto.imagemFinal}
-                  loading="lazy"
-                  decoding="async"
                   alt={produto.nome}
                   style={styles.recommendImage}
                   onError={(e) => {
@@ -2157,8 +2124,6 @@ Pode me passar as opções de pagamento?`
                       <div style={styles.miniCartThumbWrap}>
                         <img
                           src={item.imagem}
-                          loading="lazy"
-                          decoding="async"
                           alt={item.nome}
                           style={styles.miniCartThumb}
                           onError={(e) => {
@@ -3408,23 +3373,6 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     color: "#7A6A5C",
     fontSize: "16px",
-  },
-  loadMoreWrap: {
-    display: "flex",
-    justifyContent: "center",
-    marginTop: "24px",
-  },
-  loadMoreButton: {
-    minHeight: "48px",
-    borderRadius: "999px",
-    border: "1px solid #D8C1A2",
-    padding: "0 22px",
-    background: "linear-gradient(135deg, #FFF9F1, #F0DFC8)",
-    color: "#6B523A",
-    fontWeight: 700,
-    fontSize: "14px",
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(120, 87, 45, 0.08)",
   },
   aboutSection: {
     maxWidth: "1360px",
