@@ -80,6 +80,21 @@ type ProdutoRelacionado = {
   tamanho: string;
 };
 
+const avaliacoesMaisonNoor = [
+  {
+    nome: "Cliente Maison Noor",
+    texto: "Fragrância marcante, atendimento muito cuidadoso e experiência de compra elegante.",
+  },
+  {
+    nome: "Compra para presente",
+    texto: "Escolhi com ajuda pelo WhatsApp e o perfume chegou com apresentação impecável.",
+  },
+  {
+    nome: "Cliente satisfeito",
+    texto: "Produto com presença, ótimo suporte e curadoria que ajuda muito na escolha.",
+  },
+];
+
 function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", {
     style: "currency",
@@ -680,12 +695,6 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                 {formatarMoeda(produtoPronto.precoFinal)}
               </p>
 
-              <div style={styles.purchaseInfoBox}>
-                <span style={styles.purchaseInfoLabel}>Compra assistida Maison Noor</span>
-                <strong style={styles.purchaseInfoTitle}>Condições de pagamento informadas no atendimento</strong>
-                <span style={styles.purchaseInfoText}>Finalize pela sacola ou fale conosco no WhatsApp para confirmar disponibilidade, frete e forma de pagamento.</span>
-              </div>
-
               <p style={styles.productTrustLine}>
                 Seleção exclusiva Maison Noor • Original importado • Curadoria premium
               </p>
@@ -712,23 +721,6 @@ Pode me passar mais detalhes e as opções de pagamento?`;
 
               <div style={styles.convTrust}>
                 Escolha frequente entre clientes que gostam de perfumes intensos, refinados e memoráveis.
-              </div>
-            </div>
-
-            <div style={styles.idealBox}>
-              <div style={styles.idealHeader}>
-                <span style={styles.idealIcon}>✦</span>
-                <div>
-                  <strong style={styles.idealTitle}>Ideal para quem busca</strong>
-                  <p style={styles.idealSubtitle}>Uma assinatura olfativa elegante, marcante e memorável.</p>
-                </div>
-              </div>
-
-              <div style={styles.idealGrid}>
-                <span style={styles.idealTag}>Presença sofisticada</span>
-                <span style={styles.idealTag}>Ocasiões especiais</span>
-                <span style={styles.idealTag}>Presente premium</span>
-                <span style={styles.idealTag}>Atendimento consultivo</span>
               </div>
             </div>
 
@@ -834,17 +826,11 @@ Pode me passar mais detalhes e as opções de pagamento?`;
             )}
 
             <div style={styles.urgency}>
-              Reposição limitada — fragrância com alta procura
+              🔥 Estoque baixo — alta saída hoje
             </div>
 
             <div style={styles.paymentNote}>
-              Compra segura • Atendimento consultivo • Suporte humanizado
-            </div>
-
-            <div style={styles.premiumTrustStrip}>
-              <span style={styles.premiumTrustPill}>✦ Experiência premium</span>
-              <span style={styles.premiumTrustPill}>◈ Envio orientado</span>
-              <span style={styles.premiumTrustPill}>⌁ Compra assistida</span>
+              🔒 Atendimento rápido • Pagamento seguro no fechamento • Suporte humanizado
             </div>
 
             <div
@@ -859,30 +845,21 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               </div>
 
               <div style={styles.notesBox}>
-                <h2 style={styles.sectionTitle}>Pirâmide olfativa</h2>
+                <h2 style={styles.sectionTitle}>Notas olfativas</h2>
 
-                <div style={styles.notePremiumItem}>
-                  <span style={styles.noteIcon}>✨</span>
-                  <div>
-                    <span style={styles.noteLabel}>Notas de saída</span>
-                    <span style={styles.noteText}>{produtoPronto.notasTopoFinal}</span>
-                  </div>
+                <div style={styles.noteItem}>
+                  <span style={styles.noteLabel}>Saída:</span>
+                  <span style={styles.noteText}>{produtoPronto.notasTopoFinal}</span>
                 </div>
 
-                <div style={styles.notePremiumItem}>
-                  <span style={styles.noteIcon}>◆</span>
-                  <div>
-                    <span style={styles.noteLabel}>Notas de coração</span>
-                    <span style={styles.noteText}>{produtoPronto.notasCoracaoFinal}</span>
-                  </div>
+                <div style={styles.noteItem}>
+                  <span style={styles.noteLabel}>Coração:</span>
+                  <span style={styles.noteText}>{produtoPronto.notasCoracaoFinal}</span>
                 </div>
 
-                <div style={styles.notePremiumItem}>
-                  <span style={styles.noteIcon}>◈</span>
-                  <div>
-                    <span style={styles.noteLabel}>Notas de fundo</span>
-                    <span style={styles.noteText}>{produtoPronto.notasFundoFinal}</span>
-                  </div>
+                <div style={styles.noteItem}>
+                  <span style={styles.noteLabel}>Fundo:</span>
+                  <span style={styles.noteText}>{produtoPronto.notasFundoFinal}</span>
                 </div>
               </div>
             </div>
@@ -980,6 +957,34 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                 <strong style={styles.detailValue}>{produtoPronto.tipoFinal}</strong>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section style={styles.reviewsSection}>
+          <div style={styles.reviewsHeader}>
+            <div>
+              <p style={styles.relatedKicker}>Avaliações Maison Noor</p>
+              <h2 style={styles.relatedTitle}>Confiança para escolher sua fragrância</h2>
+            </div>
+            <div style={styles.reviewsScoreBox}>
+              <span style={styles.reviewsStars}>★★★★★</span>
+              <strong style={styles.reviewsScore}>Experiência premium</strong>
+            </div>
+          </div>
+
+          <div
+            style={{
+              ...styles.reviewsGrid,
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+            }}
+          >
+            {avaliacoesMaisonNoor.map((avaliacao) => (
+              <article key={avaliacao.nome} style={styles.reviewCard}>
+                <span style={styles.reviewStars}>★★★★★</span>
+                <p style={styles.reviewText}>“{avaliacao.texto}”</p>
+                <strong style={styles.reviewAuthor}>{avaliacao.nome}</strong>
+              </article>
+            ))}
           </div>
         </section>
 
@@ -1314,38 +1319,6 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.03em",
   },
 
-  purchaseInfoBox: {
-    border: "1px solid #E4D2BA",
-    background: "linear-gradient(180deg, #FFFDF9, #F7EBDD)",
-    borderRadius: "18px",
-    padding: "13px 15px",
-    margin: "12px 0 12px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "5px",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
-  },
-
-  purchaseInfoLabel: {
-    color: "#9B7441",
-    fontSize: "11px",
-    fontWeight: 800,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  purchaseInfoTitle: {
-    color: "#4B3828",
-    fontSize: "15px",
-    lineHeight: 1.3,
-  },
-
-  purchaseInfoText: {
-    color: "#7B6958",
-    fontSize: "12px",
-    lineHeight: 1.45,
-  },
-
   statusRow: {
     marginBottom: "14px",
   },
@@ -1392,83 +1365,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#6F6258",
     fontSize: "13px",
     lineHeight: 1.6,
-  },
-
-  premiumTrustStrip: {
-    display: "flex",
-    gap: "8px",
-    flexWrap: "wrap",
-    marginBottom: "18px",
-  },
-
-  premiumTrustPill: {
-    border: "1px solid #E7D8C7",
-    background: "linear-gradient(180deg, #FFFDF9, #F8EEDC)",
-    color: "#5E4B39",
-    borderRadius: "999px",
-    padding: "8px 10px",
-    fontSize: "12px",
-    fontWeight: 700,
-  },
-
-  idealBox: {
-    background: "linear-gradient(180deg, #FFFCF8, #F6EADB)",
-    border: "1px solid #E6D6C2",
-    borderRadius: "20px",
-    padding: "16px",
-    marginBottom: "14px",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.76)",
-  },
-
-  idealHeader: {
-    display: "flex",
-    gap: "12px",
-    alignItems: "flex-start",
-    marginBottom: "12px",
-  },
-
-  idealIcon: {
-    width: "34px",
-    height: "34px",
-    borderRadius: "999px",
-    background: "linear-gradient(135deg, #D8B178, #BD9055)",
-    color: "#2A2018",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 800,
-    flexShrink: 0,
-  },
-
-  idealTitle: {
-    color: "#2F2721",
-    fontSize: "16px",
-    lineHeight: 1.25,
-  },
-
-  idealSubtitle: {
-    margin: "4px 0 0",
-    color: "#6F6258",
-    fontSize: "13px",
-    lineHeight: 1.55,
-  },
-
-  idealGrid: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "8px",
-  },
-
-  idealTag: {
-    display: "inline-flex",
-    alignItems: "center",
-    borderRadius: "999px",
-    border: "1px solid #E4D4C0",
-    background: "rgba(255,255,255,0.62)",
-    color: "#6B523A",
-    fontSize: "12px",
-    fontWeight: 700,
-    padding: "7px 10px",
   },
 
   convBox: {
@@ -1641,30 +1537,6 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: "10px",
   },
 
-  notePremiumItem: {
-    display: "grid",
-    gridTemplateColumns: "38px 1fr",
-    gap: "12px",
-    alignItems: "flex-start",
-    padding: "12px",
-    borderRadius: "16px",
-    border: "1px solid #E9DCCB",
-    background: "rgba(255,255,255,0.58)",
-    marginBottom: "10px",
-  },
-
-  noteIcon: {
-    width: "38px",
-    height: "38px",
-    borderRadius: "999px",
-    background: "linear-gradient(135deg, #FFF8EE, #EED8B7)",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    border: "1px solid #E5D3BC",
-    fontSize: "17px",
-  },
-
   noteLabel: {
     color: "#8A755D",
     fontSize: "12px",
@@ -1674,7 +1546,6 @@ const styles: Record<string, CSSProperties> = {
   },
 
   noteText: {
-    display: "block",
     color: "#3A2F29",
     fontSize: "14px",
     lineHeight: 1.6,
@@ -1740,6 +1611,79 @@ const styles: Record<string, CSSProperties> = {
     color: "#2F2721",
     fontSize: "14px",
     lineHeight: 1.5,
+  },
+
+  reviewsSection: {
+    marginTop: "18px",
+    borderRadius: "24px",
+    border: "1px solid #E6D7C5",
+    background: "linear-gradient(180deg, #FFFDFC, #F7EBDD)",
+    padding: "18px",
+    boxShadow: "0 14px 30px rgba(48,34,20,0.06)",
+  },
+
+  reviewsHeader: {
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: "14px",
+    marginBottom: "14px",
+    flexWrap: "wrap",
+  },
+
+  reviewsScoreBox: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-end",
+    gap: "4px",
+    borderRadius: "16px",
+    border: "1px solid #E7D8C6",
+    background: "rgba(255,255,255,0.72)",
+    padding: "10px 12px",
+  },
+
+  reviewsStars: {
+    color: "#B4874A",
+    fontSize: "13px",
+    letterSpacing: "0.08em",
+  },
+
+  reviewsScore: {
+    color: "#3A2F29",
+    fontSize: "12px",
+  },
+
+  reviewsGrid: {
+    display: "grid",
+    gap: "12px",
+  },
+
+  reviewCard: {
+    borderRadius: "18px",
+    border: "1px solid #E7D8C6",
+    background: "rgba(255,255,255,0.74)",
+    padding: "14px",
+  },
+
+  reviewStars: {
+    display: "block",
+    color: "#B4874A",
+    fontSize: "12px",
+    letterSpacing: "0.08em",
+    marginBottom: "8px",
+  },
+
+  reviewText: {
+    margin: "0 0 10px",
+    color: "#5C4D41",
+    fontSize: "13px",
+    lineHeight: 1.65,
+  },
+
+  reviewAuthor: {
+    display: "block",
+    color: "#3A2F29",
+    fontSize: "13px",
   },
 
   relatedSection: {
