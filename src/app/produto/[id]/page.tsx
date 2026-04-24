@@ -80,21 +80,6 @@ type ProdutoRelacionado = {
   tamanho: string;
 };
 
-const avaliacoesMaisonNoor = [
-  {
-    nome: "Cliente Maison Noor",
-    texto: "Fragrância marcante, atendimento muito cuidadoso e experiência de compra elegante.",
-  },
-  {
-    nome: "Compra para presente",
-    texto: "Escolhi com ajuda pelo WhatsApp e o perfume chegou com apresentação impecável.",
-  },
-  {
-    nome: "Cliente satisfeito",
-    texto: "Produto com presença, ótimo suporte e curadoria que ajuda muito na escolha.",
-  },
-];
-
 function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", {
     style: "currency",
@@ -535,7 +520,7 @@ Pode me passar mais detalhes e as opções de pagamento?`;
       <div
         style={{
           ...styles.container,
-          padding: isMobile ? "14px 12px 104px" : "18px 18px 32px",
+          padding: isMobile ? "14px 12px 92px" : "18px 18px 32px",
         }}
       >
         <div style={styles.breadcrumb}>
@@ -549,8 +534,8 @@ Pode me passar mais detalhes e as opções de pagamento?`;
         <section
           style={{
             ...styles.productSection,
-            gridTemplateColumns: isMobile || isTablet ? "1fr" : "0.84fr 1.16fr",
-            gap: isMobile ? "14px" : "18px",
+            gridTemplateColumns: isMobile || isTablet ? "1fr" : "0.58fr 1.42fr",
+            gap: isMobile ? "14px" : "22px",
           }}
         >
           <div style={styles.imageColumn}>
@@ -563,13 +548,13 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               <div
                 style={{
                   ...styles.galleryShell,
-                  gridTemplateColumns: !isMobile ? "1fr 1fr" : "1fr",
+                  gridTemplateColumns: "1fr",
                 }}
               >
                 <div
                   style={{
                     ...styles.mainImageWrap,
-                    height: isMobile ? "260px" : isTablet ? "340px" : "420px",
+                    height: isMobile ? "238px" : isTablet ? "340px" : "500px",
                   }}
                   onMouseEnter={() => !isMobile && setZoomAtivo(true)}
                   onMouseLeave={() => setZoomAtivo(false)}
@@ -589,35 +574,57 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                     }}
                   />
 
+                  {!isMobile && zoomAtivo && (
+                    <div style={styles.zoomInlinePanel}>
+                      <div style={styles.zoomInlineHeader}>Zoom do produto</div>
+                      <div
+                        style={{
+                          ...styles.zoomInlineImage,
+                          backgroundImage: `url(${imagemAtual})`,
+                          backgroundPosition: `${zoomPosition.x}% ${zoomPosition.y}%`,
+                        }}
+                      />
+                    </div>
+                  )}
+
                   {!isMobile && (
                     <div style={styles.zoomHint}>Passe o mouse para ampliar</div>
                   )}
                 </div>
 
-                {!isMobile && (
-                  <div
-                    style={{
-                      ...styles.zoomPanel,
-                      opacity: zoomAtivo ? 1 : 0.35,
-                    }}
-                  >
-                    <div style={styles.zoomPanelHeader}>
-                      {zoomAtivo ? "Zoom premium" : "Passe o mouse na imagem"}
-                    </div>
-                    <div style={styles.zoomLensWrap}>
-                      <div
-                        style={{
-                          ...styles.zoomPanelImage,
-                          backgroundImage: `url(${imagemAtual})`,
-                          backgroundRepeat: "no-repeat",
-                          backgroundSize: "250%",
-                          backgroundPosition: `${zoomPosition.x}% ${zoomPosition.y}%`,
-                        }}
-                      />
+                <div style={styles.gallerySupportBox}>
+                  <strong style={styles.gallerySupportTitle}>Experiência Maison Noor</strong>
+                  <span style={styles.gallerySupportText}>Imagem em destaque, curadoria premium e atendimento consultivo para escolher com segurança.</span>
+                </div>
+
+                <div style={styles.leftDecisionStack}>
+                  <div style={styles.leftDecisionCard}>
+                    <span style={styles.leftDecisionIcon}>✦</span>
+                    <div>
+                      <strong style={styles.leftDecisionTitle}>Por que escolher</strong>
+                      <p style={styles.leftDecisionText}>Fragrância com presença marcante, ideal para quem busca assinatura olfativa sofisticada.</p>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  <div style={styles.leftDecisionCard}>
+                    <span style={styles.leftDecisionIcon}>◈</span>
+                    <div>
+                      <strong style={styles.leftDecisionTitle}>Compra assistida</strong>
+                      <p style={styles.leftDecisionText}>Tire dúvidas sobre fixação, ocasião de uso e perfil da fragrância antes de finalizar.</p>
+                    </div>
+                  </div>
+
+                  <a
+                    href={`https://wa.me/5512982627108?text=${encodeURIComponent(
+                      `Olá! Tenho dúvidas sobre o perfume ${produtoPronto.nome}. Pode me ajudar a escolher?`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={styles.leftWhatsappButton}
+                  >
+                    Falar com especialista
+                  </a>
+                </div>
 
               {imagens.length > 1 && (
                 <div
@@ -658,6 +665,7 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               )}
             </div>
           </div>
+          </div>
 
           <div
             style={{
@@ -695,6 +703,12 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                 {formatarMoeda(produtoPronto.precoFinal)}
               </p>
 
+              <div style={styles.purchaseInfoBox}>
+                <span style={styles.purchaseInfoLabel}>Compra assistida Maison Noor</span>
+                <strong style={styles.purchaseInfoTitle}>Condições de pagamento informadas no atendimento</strong>
+                <span style={styles.purchaseInfoText}>Finalize pela sacola ou fale conosco no WhatsApp para confirmar disponibilidade, frete e forma de pagamento.</span>
+              </div>
+
               <p style={styles.productTrustLine}>
                 Seleção exclusiva Maison Noor • Original importado • Curadoria premium
               </p>
@@ -721,6 +735,23 @@ Pode me passar mais detalhes e as opções de pagamento?`;
 
               <div style={styles.convTrust}>
                 Escolha frequente entre clientes que gostam de perfumes intensos, refinados e memoráveis.
+              </div>
+            </div>
+
+            <div style={styles.idealBox}>
+              <div style={styles.idealHeader}>
+                <span style={styles.idealIcon}>✦</span>
+                <div>
+                  <strong style={styles.idealTitle}>Ideal para quem busca</strong>
+                  <p style={styles.idealSubtitle}>Uma assinatura olfativa elegante, marcante e memorável.</p>
+                </div>
+              </div>
+
+              <div style={styles.idealGrid}>
+                <span style={styles.idealTag}>Presença sofisticada</span>
+                <span style={styles.idealTag}>Ocasiões especiais</span>
+                <span style={styles.idealTag}>Presente premium</span>
+                <span style={styles.idealTag}>Atendimento consultivo</span>
               </div>
             </div>
 
@@ -826,11 +857,17 @@ Pode me passar mais detalhes e as opções de pagamento?`;
             )}
 
             <div style={styles.urgency}>
-              🔥 Estoque baixo — alta saída hoje
+              Reposição limitada — fragrância com alta procura
             </div>
 
             <div style={styles.paymentNote}>
-              🔒 Atendimento rápido • Pagamento seguro no fechamento • Suporte humanizado
+              Compra segura • Atendimento consultivo • Suporte humanizado
+            </div>
+
+            <div style={styles.premiumTrustStrip}>
+              <span style={styles.premiumTrustPill}>✦ Experiência premium</span>
+              <span style={styles.premiumTrustPill}>◈ Envio orientado</span>
+              <span style={styles.premiumTrustPill}>⌁ Compra assistida</span>
             </div>
 
             <div
@@ -845,21 +882,30 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               </div>
 
               <div style={styles.notesBox}>
-                <h2 style={styles.sectionTitle}>Notas olfativas</h2>
+                <h2 style={styles.sectionTitle}>Pirâmide olfativa</h2>
 
-                <div style={styles.noteItem}>
-                  <span style={styles.noteLabel}>Saída:</span>
-                  <span style={styles.noteText}>{produtoPronto.notasTopoFinal}</span>
+                <div style={styles.notePremiumItem}>
+                  <span style={styles.noteIcon}>✨</span>
+                  <div>
+                    <span style={styles.noteLabel}>Notas de saída</span>
+                    <span style={styles.noteText}>{produtoPronto.notasTopoFinal}</span>
+                  </div>
                 </div>
 
-                <div style={styles.noteItem}>
-                  <span style={styles.noteLabel}>Coração:</span>
-                  <span style={styles.noteText}>{produtoPronto.notasCoracaoFinal}</span>
+                <div style={styles.notePremiumItem}>
+                  <span style={styles.noteIcon}>◆</span>
+                  <div>
+                    <span style={styles.noteLabel}>Notas de coração</span>
+                    <span style={styles.noteText}>{produtoPronto.notasCoracaoFinal}</span>
+                  </div>
                 </div>
 
-                <div style={styles.noteItem}>
-                  <span style={styles.noteLabel}>Fundo:</span>
-                  <span style={styles.noteText}>{produtoPronto.notasFundoFinal}</span>
+                <div style={styles.notePremiumItem}>
+                  <span style={styles.noteIcon}>◈</span>
+                  <div>
+                    <span style={styles.noteLabel}>Notas de fundo</span>
+                    <span style={styles.noteText}>{produtoPronto.notasFundoFinal}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -957,34 +1003,6 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                 <strong style={styles.detailValue}>{produtoPronto.tipoFinal}</strong>
               </div>
             </div>
-          </div>
-        </section>
-
-        <section style={styles.reviewsSection}>
-          <div style={styles.reviewsHeader}>
-            <div>
-              <p style={styles.relatedKicker}>Avaliações Maison Noor</p>
-              <h2 style={styles.relatedTitle}>Confiança para escolher sua fragrância</h2>
-            </div>
-            <div style={styles.reviewsScoreBox}>
-              <span style={styles.reviewsStars}>★★★★★</span>
-              <strong style={styles.reviewsScore}>Experiência premium</strong>
-            </div>
-          </div>
-
-          <div
-            style={{
-              ...styles.reviewsGrid,
-              gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
-            }}
-          >
-            {avaliacoesMaisonNoor.map((avaliacao) => (
-              <article key={avaliacao.nome} style={styles.reviewCard}>
-                <span style={styles.reviewStars}>★★★★★</span>
-                <p style={styles.reviewText}>“{avaliacao.texto}”</p>
-                <strong style={styles.reviewAuthor}>{avaliacao.nome}</strong>
-              </article>
-            ))}
           </div>
         </section>
 
@@ -1191,6 +1209,45 @@ const styles: Record<string, CSSProperties> = {
     zIndex: 2,
   },
 
+  zoomInlinePanel: {
+    position: "absolute",
+    top: "14px",
+    right: "14px",
+    width: "46%",
+    height: "46%",
+    minWidth: "190px",
+    minHeight: "190px",
+    borderRadius: "18px",
+    overflow: "hidden",
+    border: "1px solid rgba(218, 190, 146, 0.95)",
+    background: "linear-gradient(180deg, #FFFDFC, #F8EFE2)",
+    boxShadow: "0 18px 38px rgba(31, 22, 14, 0.18)",
+    pointerEvents: "none",
+    zIndex: 4,
+  },
+
+  zoomInlineHeader: {
+    height: "34px",
+    display: "flex",
+    alignItems: "center",
+    padding: "0 12px",
+    background: "rgba(31,26,20,0.9)",
+    color: "#FFF7EE",
+    fontSize: "11px",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  zoomInlineImage: {
+    width: "100%",
+    height: "calc(100% - 34px)",
+    backgroundRepeat: "no-repeat",
+    backgroundSize: "230%",
+    backgroundColor: "#FFF9F1",
+    transition: "background-position 0.06s linear",
+  },
+
   zoomPanel: {
     borderRadius: "22px",
     overflow: "hidden",
@@ -1229,6 +1286,90 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     transition: "background-position 0.08s linear",
   },
+
+  gallerySupportBox: {
+    marginTop: "12px",
+    borderRadius: "18px",
+    border: "1px solid #EADBC8",
+    background: "linear-gradient(180deg, rgba(255,252,248,0.94), rgba(247,238,226,0.9))",
+    padding: "14px 15px",
+    display: "grid",
+    gap: "5px",
+  },
+
+  gallerySupportTitle: {
+    color: "#3A2B20",
+    fontSize: "13px",
+    fontWeight: 800,
+  },
+
+  gallerySupportText: {
+    color: "#746457",
+    fontSize: "12px",
+    lineHeight: 1.45,
+  },
+
+  leftDecisionStack: {
+    display: "grid",
+    gap: "10px",
+    marginTop: "10px",
+  },
+
+  leftDecisionCard: {
+    display: "grid",
+    gridTemplateColumns: "34px 1fr",
+    gap: "10px",
+    alignItems: "flex-start",
+    borderRadius: "18px",
+    border: "1px solid #EADBC8",
+    background: "linear-gradient(180deg, rgba(255,252,248,0.96), rgba(247,238,226,0.92))",
+    padding: "13px 14px",
+    boxShadow: "0 10px 22px rgba(48,34,20,0.045)",
+  },
+
+  leftDecisionIcon: {
+    width: "34px",
+    height: "34px",
+    borderRadius: "999px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "linear-gradient(135deg, #D7B477, #C6924F)",
+    color: "#251A12",
+    fontSize: "14px",
+    fontWeight: 800,
+    boxShadow: "0 8px 16px rgba(139, 98, 48, 0.16)",
+  },
+
+  leftDecisionTitle: {
+    display: "block",
+    color: "#3A2B20",
+    fontSize: "13px",
+    fontWeight: 800,
+    marginBottom: "4px",
+  },
+
+  leftDecisionText: {
+    margin: 0,
+    color: "#746457",
+    fontSize: "12px",
+    lineHeight: 1.45,
+  },
+
+  leftWhatsappButton: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "44px",
+    borderRadius: "16px",
+    background: "linear-gradient(135deg, #1F1A14, #33281F)",
+    color: "#FFF7EE",
+    textDecoration: "none",
+    fontSize: "13px",
+    fontWeight: 800,
+    boxShadow: "0 12px 26px rgba(31, 26, 20, 0.16)",
+  },
+
 
   thumbsRow: {
     display: "flex",
@@ -1319,6 +1460,38 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.03em",
   },
 
+  purchaseInfoBox: {
+    border: "1px solid #E4D2BA",
+    background: "linear-gradient(180deg, #FFFDF9, #F7EBDD)",
+    borderRadius: "18px",
+    padding: "13px 15px",
+    margin: "12px 0 12px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "5px",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
+  },
+
+  purchaseInfoLabel: {
+    color: "#9B7441",
+    fontSize: "11px",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  purchaseInfoTitle: {
+    color: "#4B3828",
+    fontSize: "15px",
+    lineHeight: 1.3,
+  },
+
+  purchaseInfoText: {
+    color: "#7B6958",
+    fontSize: "12px",
+    lineHeight: 1.45,
+  },
+
   statusRow: {
     marginBottom: "14px",
   },
@@ -1365,6 +1538,83 @@ const styles: Record<string, CSSProperties> = {
     color: "#6F6258",
     fontSize: "13px",
     lineHeight: 1.6,
+  },
+
+  premiumTrustStrip: {
+    display: "flex",
+    gap: "8px",
+    flexWrap: "wrap",
+    marginBottom: "18px",
+  },
+
+  premiumTrustPill: {
+    border: "1px solid #E7D8C7",
+    background: "linear-gradient(180deg, #FFFDF9, #F8EEDC)",
+    color: "#5E4B39",
+    borderRadius: "999px",
+    padding: "8px 10px",
+    fontSize: "12px",
+    fontWeight: 700,
+  },
+
+  idealBox: {
+    background: "linear-gradient(180deg, #FFFCF8, #F6EADB)",
+    border: "1px solid #E6D6C2",
+    borderRadius: "20px",
+    padding: "16px",
+    marginBottom: "14px",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.76)",
+  },
+
+  idealHeader: {
+    display: "flex",
+    gap: "12px",
+    alignItems: "flex-start",
+    marginBottom: "12px",
+  },
+
+  idealIcon: {
+    width: "34px",
+    height: "34px",
+    borderRadius: "999px",
+    background: "linear-gradient(135deg, #D8B178, #BD9055)",
+    color: "#2A2018",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+
+  idealTitle: {
+    color: "#2F2721",
+    fontSize: "16px",
+    lineHeight: 1.25,
+  },
+
+  idealSubtitle: {
+    margin: "4px 0 0",
+    color: "#6F6258",
+    fontSize: "13px",
+    lineHeight: 1.55,
+  },
+
+  idealGrid: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+  },
+
+  idealTag: {
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: "999px",
+    border: "1px solid #E4D4C0",
+    background: "rgba(255,255,255,0.62)",
+    color: "#6B523A",
+    fontSize: "12px",
+    fontWeight: 700,
+    padding: "7px 10px",
   },
 
   convBox: {
@@ -1537,6 +1787,30 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: "10px",
   },
 
+  notePremiumItem: {
+    display: "grid",
+    gridTemplateColumns: "38px 1fr",
+    gap: "12px",
+    alignItems: "flex-start",
+    padding: "12px",
+    borderRadius: "16px",
+    border: "1px solid #E9DCCB",
+    background: "rgba(255,255,255,0.58)",
+    marginBottom: "10px",
+  },
+
+  noteIcon: {
+    width: "38px",
+    height: "38px",
+    borderRadius: "999px",
+    background: "linear-gradient(135deg, #FFF8EE, #EED8B7)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "1px solid #E5D3BC",
+    fontSize: "17px",
+  },
+
   noteLabel: {
     color: "#8A755D",
     fontSize: "12px",
@@ -1546,6 +1820,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   noteText: {
+    display: "block",
     color: "#3A2F29",
     fontSize: "14px",
     lineHeight: 1.6,
@@ -1613,79 +1888,6 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
   },
 
-  reviewsSection: {
-    marginTop: "18px",
-    borderRadius: "24px",
-    border: "1px solid #E6D7C5",
-    background: "linear-gradient(180deg, #FFFDFC, #F7EBDD)",
-    padding: "18px",
-    boxShadow: "0 14px 30px rgba(48,34,20,0.06)",
-  },
-
-  reviewsHeader: {
-    display: "flex",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    gap: "14px",
-    marginBottom: "14px",
-    flexWrap: "wrap",
-  },
-
-  reviewsScoreBox: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-end",
-    gap: "4px",
-    borderRadius: "16px",
-    border: "1px solid #E7D8C6",
-    background: "rgba(255,255,255,0.72)",
-    padding: "10px 12px",
-  },
-
-  reviewsStars: {
-    color: "#B4874A",
-    fontSize: "13px",
-    letterSpacing: "0.08em",
-  },
-
-  reviewsScore: {
-    color: "#3A2F29",
-    fontSize: "12px",
-  },
-
-  reviewsGrid: {
-    display: "grid",
-    gap: "12px",
-  },
-
-  reviewCard: {
-    borderRadius: "18px",
-    border: "1px solid #E7D8C6",
-    background: "rgba(255,255,255,0.74)",
-    padding: "14px",
-  },
-
-  reviewStars: {
-    display: "block",
-    color: "#B4874A",
-    fontSize: "12px",
-    letterSpacing: "0.08em",
-    marginBottom: "8px",
-  },
-
-  reviewText: {
-    margin: "0 0 10px",
-    color: "#5C4D41",
-    fontSize: "13px",
-    lineHeight: 1.65,
-  },
-
-  reviewAuthor: {
-    display: "block",
-    color: "#3A2F29",
-    fontSize: "13px",
-  },
-
   relatedSection: {
     marginTop: "22px",
     background: "linear-gradient(180deg, #FFFEFC, #FCF7EF)",
@@ -1713,14 +1915,14 @@ const styles: Record<string, CSSProperties> = {
 
   relatedTitle: {
     margin: 0,
-    fontSize: "24px",
+    fontSize: "22px",
     color: "#2F2721",
     lineHeight: 1.15,
   },
 
   relatedGrid: {
     display: "grid",
-    gap: "14px",
+    gap: "12px",
   },
 
   relatedCard: {
@@ -1728,20 +1930,20 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     textDecoration: "none",
     border: "1px solid #E9DCCB",
-    borderRadius: "20px",
+    borderRadius: "18px",
     overflow: "hidden",
     background: "linear-gradient(180deg, #FFFDF9, #F8F0E4)",
-    boxShadow: "0 12px 24px rgba(48,34,20,0.05)",
+    boxShadow: "0 10px 22px rgba(48,34,20,0.045)",
   },
 
   relatedImageWrap: {
-    height: "200px",
+    height: "168px",
     background:
       "radial-gradient(circle at top, rgba(255,255,255,0.98), rgba(247,238,226,0.92) 56%, rgba(240,225,205,0.82) 100%)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "14px",
+    padding: "12px",
     borderBottom: "1px solid #EFE2D3",
   },
 
@@ -1755,8 +1957,8 @@ const styles: Record<string, CSSProperties> = {
   relatedContent: {
     display: "flex",
     flexDirection: "column",
-    gap: "6px",
-    padding: "14px",
+    gap: "5px",
+    padding: "12px",
   },
 
   relatedMeta: {
@@ -1775,15 +1977,15 @@ const styles: Record<string, CSSProperties> = {
 
   relatedName: {
     color: "#2F2721",
-    fontSize: "15px",
-    lineHeight: 1.4,
-    minHeight: "42px",
+    fontSize: "14px",
+    lineHeight: 1.34,
+    minHeight: "38px",
   },
 
   relatedPrice: {
     color: "#9B7441",
-    fontSize: "20px",
-    fontWeight: 700,
+    fontSize: "18px",
+    fontWeight: 800,
     marginTop: "2px",
   },
 
@@ -1846,14 +2048,14 @@ const styles: Record<string, CSSProperties> = {
     position: "fixed",
     left: "10px",
     right: "10px",
-    bottom: "10px",
+    bottom: "calc(8px + env(safe-area-inset-bottom))",
     zIndex: 60,
     background: "rgba(255,252,248,0.98)",
     border: "1px solid #E3D3C0",
-    borderRadius: "22px",
-    boxShadow: "0 20px 40px rgba(48,34,20,0.16)",
+    borderRadius: "20px",
+    boxShadow: "0 18px 34px rgba(48,34,20,0.14)",
     backdropFilter: "blur(12px)",
-    padding: "12px",
+    padding: "10px",
   },
 
   mobileStickyTop: {
@@ -1861,20 +2063,20 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
     gap: "10px",
-    marginBottom: "10px",
+    marginBottom: "8px",
   },
 
   mobileStickyPrice: {
     color: "#9B7441",
-    fontSize: "22px",
+    fontSize: "20px",
     fontWeight: 800,
     lineHeight: 1,
   },
 
   mobileStickyName: {
-    marginTop: "4px",
+    marginTop: "3px",
     color: "#5C4D41",
-    fontSize: "12px",
+    fontSize: "11px",
     fontWeight: 600,
     lineHeight: 1.4,
   },
@@ -1882,7 +2084,7 @@ const styles: Record<string, CSSProperties> = {
   mobileStickyActions: {
     display: "grid",
     gridTemplateColumns: "1fr auto",
-    gap: "10px",
+    gap: "8px",
   },
 
   mobileStickyMainBtn: {
@@ -1890,9 +2092,9 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #C6975F",
     background: "linear-gradient(135deg, #D8B178, #BD9055)",
     color: "#2A2018",
-    borderRadius: "16px",
-    padding: "14px 16px",
-    fontSize: "14px",
+    borderRadius: "14px",
+    padding: "12px 14px",
+    fontSize: "13px",
     fontWeight: 800,
     cursor: "pointer",
   },
@@ -1902,12 +2104,12 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     textDecoration: "none",
-    borderRadius: "16px",
-    padding: "14px 14px",
+    borderRadius: "14px",
+    padding: "12px 12px",
     background: "#1F1A14",
     color: "#FFF7EE",
     fontSize: "13px",
     fontWeight: 700,
-    minWidth: "104px",
+    minWidth: "92px",
   },
 };
