@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -13,7 +14,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -200,6 +200,29 @@ const categorias = [
   "Família Olfativa",
 ];
 
+const trustBadges = [
+  {
+    icon: "✦",
+    title: "Produtos originais",
+    text: "Curadoria premium em perfumes árabes.",
+  },
+  {
+    icon: "🚚",
+    title: "Envio rápido",
+    text: "Fechamento prático pelo WhatsApp.",
+  },
+  {
+    icon: "🔒",
+    title: "Compra segura",
+    text: "Pedido salvo e acompanhamento na conta.",
+  },
+  {
+    icon: "💬",
+    title: "Atendimento VIP",
+    text: "Suporte real para escolher sua fragrância.",
+  },
+];
+
 function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", {
     style: "currency",
@@ -362,11 +385,22 @@ export default function HomePage() {
     estilo: "Intenso",
   });
   const [mounted, setMounted] = useState(false);
+  const [debouncedBusca, setDebouncedBusca] = useState("");
+  const [visibleProductsCount, setVisibleProductsCount] = useState(10);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedBusca(busca);
+    }, 220);
+
+    return () => window.clearTimeout(timer);
+  }, [busca]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -465,13 +499,19 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    const q = query(productsCollection, orderBy("updatedAt", "desc"));
+    let cancelled = false;
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snap) => {
+    async function carregarProdutos() {
+      setLoadingProdutos(true);
+
+      try {
+        const q = query(productsCollection, orderBy("updatedAt", "desc"));
+        const snapshot = await getDocs(q);
+
+        if (cancelled) return;
+
         const arr: ProdutoFirebase[] = [];
-        snap.forEach((d) => {
+        snapshot.forEach((d) => {
           const data = d.data() as any;
           arr.push({
             id: d.id,
@@ -491,41 +531,20 @@ export default function HomePage() {
             imageUrl: data.imageUrl,
           });
         });
-        setProdutos(arr);
-        setLoadingProdutos(false);
-      },
-      async () => {
-        try {
-          const fallback = await getDocs(q);
-          const arr: ProdutoFirebase[] = [];
-          fallback.forEach((d) => {
-            const data = d.data() as any;
-            arr.push({
-              id: d.id,
-              nome: data.nome ?? "",
-              marca: data.marca,
-              volumeMl: data.volumeMl,
-              categoria: data.categoria,
-              precoCompra: data.precoCompra,
-              precoVenda: data.precoVenda,
-              estoque: data.estoque,
-              reservado: data.reservado ?? 0,
-              ativo: data.ativo ?? true,
-              createdAt: data.createdAt,
-              updatedAt: data.updatedAt,
-              observacoes: data.observacoes,
-              imagem: data.imagem,
-              imageUrl: data.imageUrl,
-            });
-          });
-          setProdutos(arr);
-        } finally {
-          setLoadingProdutos(false);
-        }
-      }
-    );
 
-    return () => unsubscribe();
+        setProdutos(arr);
+      } catch (error) {
+        console.error("Erro ao carregar produtos da Home:", error);
+      } finally {
+        if (!cancelled) setLoadingProdutos(false);
+      }
+    }
+
+    carregarProdutos();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const isMobile = windowWidth < 768;
@@ -534,6 +553,20 @@ export default function HomePage() {
   useEffect(() => {
     if (!isMobile) setMobileMenuOpen(false);
   }, [isMobile]);
+
+  useEffect(() => {
+    if (isMobile) {
+      setVisibleProductsCount(6);
+      return;
+    }
+
+    if (isTablet) {
+      setVisibleProductsCount(8);
+      return;
+    }
+
+    setVisibleProductsCount(10);
+  }, [isMobile, isTablet, categoriaAtiva]);
 
   const produtosProntos = useMemo(() => {
     return produtos
@@ -565,7 +598,7 @@ export default function HomePage() {
         id: "maes-1",
         eyebrow: "Campanha Maison Noor",
         title: "Dia das Mães com\nfragrâncias inesquecíveis",
-        subtitle: "",
+        subtitle: "Perfumes árabes premium para transformar momentos especiais em memórias marcantes.",
         ctaLabel: "Ver presentes",
         ctaHref: "#produtos",
         image: "/banners/dia-das-maes-1.jpg",
@@ -575,7 +608,7 @@ export default function HomePage() {
         id: "maes-2",
         eyebrow: "Seleção premium",
         title: "Selecionado para\nsurpreender com\nsofisticação\ne presença.",
-        subtitle: "",
+        subtitle: "Curadoria Maison Noor com fragrâncias elegantes, intensas e presença inesquecível.",
         ctaLabel: "Escolher presente",
         ctaHref: "#produtos",
         image: "/banners/dia-das-maes-2.jpg",
@@ -585,7 +618,7 @@ export default function HomePage() {
         id: "maes-3",
         eyebrow: "Condição especial",
         title: "Aceitamos PIX e\nCartões de Crédito\npara o seu presente ideal.",
-        subtitle: "",
+        subtitle: "Finalize com atendimento humano, pedido salvo e acompanhamento pela sua conta.",
         ctaLabel: "Comprar agora",
         ctaHref: "#produtos",
         image: "/banners/dia-das-maes-3.jpg",
@@ -613,7 +646,7 @@ export default function HomePage() {
   }, []);
 
   const produtosFiltrados = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
+    const termo = debouncedBusca.trim().toLowerCase();
 
     return produtosProntos.filter((produto) => {
       const bateBusca =
@@ -636,7 +669,7 @@ export default function HomePage() {
 
       return bateBusca && bateCategoria;
     });
-  }, [busca, categoriaAtiva, produtosProntos]);
+  }, [debouncedBusca, categoriaAtiva, produtosProntos]);
 
   const produtosPresentes = useMemo(() => {
     return produtosProntos.filter((produto) => {
@@ -651,6 +684,13 @@ export default function HomePage() {
       );
     });
   }, [produtosProntos]);
+
+
+  const produtosVisiveis = useMemo(() => {
+    return produtosFiltrados.slice(0, visibleProductsCount);
+  }, [produtosFiltrados, visibleProductsCount]);
+
+  const canShowMoreProdutos = produtosFiltrados.length > visibleProductsCount;
 
 
   function abrirProduto(produtoId: string) {
@@ -918,9 +958,13 @@ export default function HomePage() {
                 minWidth: isMobile ? undefined : "270px",
               }}
             >
-              <img
+              <Image
                 src="/logo-maison-noor.png"
                 alt="Maison Noor"
+                width={82}
+                height={82}
+                priority
+                sizes="(max-width: 767px) 62px, (max-width: 1100px) 72px, 82px"
                 style={{
                   ...styles.logoImage,
                   height: isMobile ? "62px" : scrolled ? "72px" : "82px",
@@ -1342,10 +1386,36 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section
+        style={{
+          ...styles.trustStripSection,
+          padding: isMobile ? "0 14px 24px" : isTablet ? "0 20px 28px" : "0 28px 30px",
+        }}
+      >
+        <div
+          style={{
+            ...styles.trustStrip,
+            gridTemplateColumns: isMobile ? "1fr 1fr" : isTablet ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+            gap: isMobile ? "10px" : "14px",
+          }}
+        >
+          {trustBadges.map((badge) => (
+            <div key={badge.title} style={styles.trustBadgeCard}>
+              <span style={styles.trustBadgeIcon}>{badge.icon}</span>
+              <div>
+                <strong style={styles.trustBadgeTitle}>{badge.title}</strong>
+                <p style={styles.trustBadgeText}>{badge.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {produtosPresentes.length > 0 && (
         <section
           id="presentes"
           style={{
+            ...styles.deferSection,
             ...styles.section,
             padding: isMobile
               ? "0 14px 28px"
@@ -1419,7 +1489,9 @@ export default function HomePage() {
                       <span style={styles.presentesBadge}>Presente especial</span>
 
                       <img
+                  decoding="async"
                         src={produto.imagemFinal}
+                        loading="lazy"
                         alt={produto.nome}
                         style={{
                           ...styles.cardImage,
@@ -1541,6 +1613,9 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
             >
               Perfumes em destaque
             </h2>
+            <p style={styles.sectionSupportText}>
+              Escolha sua fragrância, adicione à sacola e finalize com atendimento seguro da Maison Noor.
+            </p>
           </div>
           {!isMobile && (
             <div style={styles.selectionInfoCard}>
@@ -1554,9 +1629,9 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
 
         {!loadingProdutos && (busca.trim() || categoriaAtiva !== "Todos") && (
           <p style={styles.searchResultText}>
-            {busca.trim() ? (
+            {debouncedBusca.trim() ? (
               <>
-                Resultados para: <strong>{busca}</strong>
+                Resultados para: <strong>{debouncedBusca}</strong>
               </>
             ) : (
               <>
@@ -1578,10 +1653,7 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
               gap: isMobile ? "16px" : "22px",
             }}
           >
-            {produtosFiltrados.map((produto, index) => {
-              const linkPagamento = getPagBankLink(produto);
-              const linkFallbackPagamento = getFallbackPagamentoWhatsapp(produto);
-
+            {produtosVisiveis.map((produto, index) => {
               return (
                 <article
                   key={produto.id}
@@ -1648,7 +1720,9 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
                       </button>
 
                       <img
+                  decoding="async"
                         src={produto.imagemFinal}
+                        loading="lazy"
                         alt={produto.nome}
                         style={{
                           ...styles.cardImage,
@@ -1690,7 +1764,7 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
 
                       
                       <p style={styles.cardTrust}>
-                        Produto original • Envio rápido 🚚
+                        Original • Envio rápido • Atendimento VIP
                       </p>
                     </div>
 
@@ -1748,6 +1822,23 @@ Pode me passar as opções de pagamento?`
                 </article>
               );
             })}
+          </div>
+        )}
+
+        {!loadingProdutos && canShowMoreProdutos && (
+          <div style={styles.loadMoreWrap}>
+            <button
+              type="button"
+              onClick={() =>
+                setVisibleProductsCount((prev) => prev + (isMobile ? 4 : isTablet ? 4 : 5))
+              }
+              style={styles.loadMoreButton}
+            >
+              Ver mais produtos
+            </button>
+            <p style={styles.loadMoreHint}>
+              Carregamos poucos produtos por vez para manter a experiência mais leve no celular.
+            </p>
           </div>
         )}
 
@@ -1856,7 +1947,10 @@ Pode me passar as opções de pagamento?`
             <Link key={`reco-${produto.id}`} href={`/produto/${produto.id}`} style={styles.recommendCard}>
               <div style={styles.recommendImageWrap}>
                 <img
+                  decoding="async"
                   src={produto.imagemFinal}
+                  loading="lazy"
+
                   alt={produto.nome}
                   style={styles.recommendImage}
                   onError={(e) => {
@@ -2022,7 +2116,15 @@ Pode me passar as opções de pagamento?`
                   textAlign: isMobile ? "center" : "left",
                 }}
               >
-                <img src="/logo-maison-noor.png" alt="Maison Noor" style={styles.footerLogo} />
+                <Image
+                  src="/logo-maison-noor.png"
+                  alt="Maison Noor"
+                  width={76}
+                  height={76}
+                  loading="lazy"
+                  sizes="76px"
+                  style={styles.footerLogo}
+                />
                 <div>
                   <div style={styles.footerBrand}>Maison Noor Parfums</div>
                   <p style={styles.footerDescription}>
@@ -2123,7 +2225,10 @@ Pode me passar as opções de pagamento?`
                     <div key={`${item.id}-${index}`} style={styles.miniCartItem}>
                       <div style={styles.miniCartThumbWrap}>
                         <img
+                  decoding="async"
                           src={item.imagem}
+                          loading="lazy"
+
                           alt={item.nome}
                           style={styles.miniCartThumb}
                           onError={(e) => {
@@ -3015,6 +3120,53 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: "1360px",
     margin: "0 auto",
   },
+  deferSection: {
+    contentVisibility: "auto",
+    containIntrinsicSize: "900px",
+  },
+  trustStripSection: {
+    maxWidth: "1360px",
+    margin: "0 auto",
+  },
+  trustStrip: {
+    display: "grid",
+  },
+  trustBadgeCard: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "12px",
+    borderRadius: "20px",
+    border: "1px solid #E6D7C5",
+    background: "linear-gradient(180deg, rgba(255,252,248,0.96), rgba(244,234,220,0.92))",
+    boxShadow: "0 12px 26px rgba(62, 44, 24, 0.06)",
+    padding: "15px 16px",
+  },
+  trustBadgeIcon: {
+    width: "34px",
+    height: "34px",
+    borderRadius: "999px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+    color: "#241A12",
+    fontSize: "16px",
+    flexShrink: 0,
+    boxShadow: "0 10px 18px rgba(120, 87, 45, 0.10)",
+  },
+  trustBadgeTitle: {
+    display: "block",
+    color: "#3E3027",
+    fontSize: "14px",
+    lineHeight: 1.25,
+    marginBottom: "3px",
+  },
+  trustBadgeText: {
+    margin: 0,
+    color: "#78695B",
+    fontSize: "12px",
+    lineHeight: 1.45,
+  },
   sectionHeaderPremium: {
     display: "flex",
     justifyContent: "space-between",
@@ -3055,6 +3207,13 @@ const styles: Record<string, CSSProperties> = {
     color: "#6D6157",
     fontSize: "16px",
     lineHeight: 1.7,
+  },
+  sectionSupportText: {
+    margin: "2px 0 0",
+    color: "#75685C",
+    fontSize: "14px",
+    lineHeight: 1.6,
+    maxWidth: "560px",
   },
   presentesSectionCard: {
     borderRadius: "28px",
@@ -3373,6 +3532,32 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     color: "#7A6A5C",
     fontSize: "16px",
+  },
+  loadMoreWrap: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: "24px",
+  },
+  loadMoreButton: {
+    minHeight: "48px",
+    borderRadius: "999px",
+    border: "1px solid #D8C1A2",
+    padding: "0 22px",
+    background: "linear-gradient(135deg, #FFF9F1, #F0DFC8)",
+    color: "#6B523A",
+    fontWeight: 700,
+    fontSize: "14px",
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(120, 87, 45, 0.08)",
+  },
+  loadMoreHint: {
+    margin: "10px 0 0",
+    color: "#8B7A6A",
+    fontSize: "12px",
+    lineHeight: 1.5,
+    textAlign: "center",
   },
   aboutSection: {
     maxWidth: "1360px",

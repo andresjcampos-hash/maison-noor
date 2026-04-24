@@ -200,6 +200,29 @@ const categorias = [
   "Família Olfativa",
 ];
 
+const trustBadges = [
+  {
+    icon: "✦",
+    title: "Produtos originais",
+    text: "Curadoria premium em perfumes árabes.",
+  },
+  {
+    icon: "🚚",
+    title: "Envio rápido",
+    text: "Fechamento prático pelo WhatsApp.",
+  },
+  {
+    icon: "🔒",
+    title: "Compra segura",
+    text: "Pedido salvo e acompanhamento na conta.",
+  },
+  {
+    icon: "💬",
+    title: "Atendimento VIP",
+    text: "Suporte real para escolher sua fragrância.",
+  },
+];
+
 function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", {
     style: "currency",
@@ -575,7 +598,7 @@ export default function HomePage() {
         id: "maes-1",
         eyebrow: "Campanha Maison Noor",
         title: "Dia das Mães com\nfragrâncias inesquecíveis",
-        subtitle: "",
+        subtitle: "Perfumes árabes premium para transformar momentos especiais em memórias marcantes.",
         ctaLabel: "Ver presentes",
         ctaHref: "#produtos",
         image: "/banners/dia-das-maes-1.jpg",
@@ -585,7 +608,7 @@ export default function HomePage() {
         id: "maes-2",
         eyebrow: "Seleção premium",
         title: "Selecionado para\nsurpreender com\nsofisticação\ne presença.",
-        subtitle: "",
+        subtitle: "Curadoria Maison Noor com fragrâncias elegantes, intensas e presença inesquecível.",
         ctaLabel: "Escolher presente",
         ctaHref: "#produtos",
         image: "/banners/dia-das-maes-2.jpg",
@@ -595,7 +618,7 @@ export default function HomePage() {
         id: "maes-3",
         eyebrow: "Condição especial",
         title: "Aceitamos PIX e\nCartões de Crédito\npara o seu presente ideal.",
-        subtitle: "",
+        subtitle: "Finalize com atendimento humano, pedido salvo e acompanhamento pela sua conta.",
         ctaLabel: "Comprar agora",
         ctaHref: "#produtos",
         image: "/banners/dia-das-maes-3.jpg",
@@ -901,8 +924,8 @@ export default function HomePage() {
       <header
         style={{
           ...styles.headerShell,
-          top: isMobile ? "10px" : scrolled ? "10px" : "14px",
-          padding: isMobile ? "0 10px" : "0 18px",
+          top: isMobile ? "8px" : scrolled ? "8px" : "14px",
+          padding: isMobile ? "0 8px" : scrolled ? "0 14px" : "0 18px",
         }}
       >
         <div
@@ -917,7 +940,7 @@ export default function HomePage() {
                 ? "12px 16px 12px"
                 : "14px 16px 14px"
               : scrolled
-              ? "12px 20px 12px"
+              ? "9px 18px 9px"
               : "16px 22px 16px",
           }}
         >
@@ -944,8 +967,8 @@ export default function HomePage() {
                 sizes="(max-width: 767px) 62px, (max-width: 1100px) 72px, 82px"
                 style={{
                   ...styles.logoImage,
-                  height: isMobile ? "62px" : scrolled ? "72px" : "82px",
-                  width: isMobile ? "62px" : scrolled ? "72px" : "82px",
+                  height: isMobile ? (scrolled ? "52px" : "62px") : scrolled ? "58px" : "82px",
+                  width: isMobile ? (scrolled ? "52px" : "62px") : scrolled ? "58px" : "82px",
                 }}
               />
 
@@ -954,7 +977,7 @@ export default function HomePage() {
                 <span
                   style={{
                     ...styles.brandTitle,
-                    fontSize: isMobile ? "20px" : scrolled ? "22px" : "25px",
+                    fontSize: isMobile ? (scrolled ? "18px" : "20px") : scrolled ? "20px" : "25px",
                   }}
                 >
                   Parfums
@@ -1149,7 +1172,7 @@ export default function HomePage() {
               style={{
                 ...styles.searchInput,
                 fontSize: isMobile ? "15px" : "16px",
-                height: scrolled && !isMobile ? "50px" : "54px",
+                height: scrolled && !isMobile ? "44px" : "54px",
               }}
             />
             <span style={styles.searchIcon}>⌕</span>
@@ -1261,7 +1284,7 @@ export default function HomePage() {
             : isTablet
             ? "214px 20px 22px"
             : scrolled
-            ? "170px 28px 24px"
+            ? "132px 28px 24px"
             : "238px 28px 24px",
         }}
       >
@@ -1360,6 +1383,31 @@ export default function HomePage() {
               />
             ))}
           </div>
+        </div>
+      </section>
+
+      <section
+        style={{
+          ...styles.trustStripSection,
+          padding: isMobile ? "0 14px 24px" : isTablet ? "0 20px 28px" : "0 28px 30px",
+        }}
+      >
+        <div
+          style={{
+            ...styles.trustStrip,
+            gridTemplateColumns: isMobile ? "1fr 1fr" : isTablet ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+            gap: isMobile ? "10px" : "14px",
+          }}
+        >
+          {trustBadges.map((badge) => (
+            <div key={badge.title} style={styles.trustBadgeCard}>
+              <span style={styles.trustBadgeIcon}>{badge.icon}</span>
+              <div>
+                <strong style={styles.trustBadgeTitle}>{badge.title}</strong>
+                <p style={styles.trustBadgeText}>{badge.text}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -1565,6 +1613,9 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
             >
               Perfumes em destaque
             </h2>
+            <p style={styles.sectionSupportText}>
+              Escolha sua fragrância, adicione à sacola e finalize com atendimento seguro da Maison Noor.
+            </p>
           </div>
           {!isMobile && (
             <div style={styles.selectionInfoCard}>
@@ -1713,7 +1764,7 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
 
                       
                       <p style={styles.cardTrust}>
-                        Produto original • Envio rápido 🚚
+                        Original • Envio rápido • Atendimento VIP
                       </p>
                     </div>
 
@@ -1785,6 +1836,9 @@ Pode me passar as opções de pagamento?`
             >
               Ver mais produtos
             </button>
+            <p style={styles.loadMoreHint}>
+              Carregamos poucos produtos por vez para manter a experiência mais leve no celular.
+            </p>
           </div>
         )}
 
@@ -2419,10 +2473,13 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 18px 45px rgba(47, 34, 20, 0.10), inset 0 1px 0 rgba(255,255,255,0.65)",
     transition: "all 0.28s ease",
     position: "relative",
+    willChange: "transform, padding, box-shadow",
   },
   headerScrolled: {
-    background: "rgba(255, 249, 241, 0.94)",
-    boxShadow: "0 14px 35px rgba(47, 34, 20, 0.12), inset 0 1px 0 rgba(255,255,255,0.72)",
+    background: "rgba(255, 249, 241, 0.96)",
+    boxShadow: "0 12px 32px rgba(47, 34, 20, 0.14), inset 0 1px 0 rgba(255,255,255,0.78)",
+    borderRadius: "22px",
+    transform: "translateY(0)",
   },
   headerAtTop: {
     background: "rgba(255, 249, 241, 0.78)",
@@ -3004,6 +3061,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "16px",
     minWidth: "220px",
     boxShadow: "0 14px 26px rgba(12, 12, 12, 0.18)",
+    transition: "transform 0.22s ease, filter 0.22s ease, box-shadow 0.22s ease",
   },
   heroSecondaryButton: {
     display: "inline-flex",
@@ -3018,6 +3076,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "15px",
     border: "1px solid rgba(255,255,255,0.24)",
     backdropFilter: "blur(8px)",
+    transition: "transform 0.22s ease, background 0.22s ease",
   },
   heroArrow: {
     position: "absolute",
@@ -3070,6 +3129,49 @@ const styles: Record<string, CSSProperties> = {
     contentVisibility: "auto",
     containIntrinsicSize: "900px",
   },
+  trustStripSection: {
+    maxWidth: "1360px",
+    margin: "0 auto",
+  },
+  trustStrip: {
+    display: "grid",
+  },
+  trustBadgeCard: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "12px",
+    borderRadius: "20px",
+    border: "1px solid #E6D7C5",
+    background: "linear-gradient(180deg, rgba(255,252,248,0.96), rgba(244,234,220,0.92))",
+    boxShadow: "0 12px 26px rgba(62, 44, 24, 0.06)",
+    padding: "15px 16px",
+  },
+  trustBadgeIcon: {
+    width: "34px",
+    height: "34px",
+    borderRadius: "999px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+    color: "#241A12",
+    fontSize: "16px",
+    flexShrink: 0,
+    boxShadow: "0 10px 18px rgba(120, 87, 45, 0.10)",
+  },
+  trustBadgeTitle: {
+    display: "block",
+    color: "#3E3027",
+    fontSize: "14px",
+    lineHeight: 1.25,
+    marginBottom: "3px",
+  },
+  trustBadgeText: {
+    margin: 0,
+    color: "#78695B",
+    fontSize: "12px",
+    lineHeight: 1.45,
+  },
   sectionHeaderPremium: {
     display: "flex",
     justifyContent: "space-between",
@@ -3110,6 +3212,13 @@ const styles: Record<string, CSSProperties> = {
     color: "#6D6157",
     fontSize: "16px",
     lineHeight: 1.7,
+  },
+  sectionSupportText: {
+    margin: "2px 0 0",
+    color: "#75685C",
+    fontSize: "14px",
+    lineHeight: 1.6,
+    maxWidth: "560px",
   },
   presentesSectionCard: {
     borderRadius: "28px",
@@ -3431,6 +3540,8 @@ const styles: Record<string, CSSProperties> = {
   },
   loadMoreWrap: {
     display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
     justifyContent: "center",
     marginTop: "24px",
   },
@@ -3445,6 +3556,13 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "14px",
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(120, 87, 45, 0.08)",
+  },
+  loadMoreHint: {
+    margin: "10px 0 0",
+    color: "#8B7A6A",
+    fontSize: "12px",
+    lineHeight: 1.5,
+    textAlign: "center",
   },
   aboutSection: {
     maxWidth: "1360px",
