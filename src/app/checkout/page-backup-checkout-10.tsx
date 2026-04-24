@@ -207,15 +207,13 @@ export default function CheckoutPage() {
     setCarrinho(getCartFromStorage());
 
     const handleResize = () => setIsMobile(window.innerWidth < 980);
-    const handleStorage = () => setCarrinho(getCartFromStorage());
-
     handleResize();
     window.addEventListener("resize", handleResize);
-    window.addEventListener("storage", handleStorage);
+    window.addEventListener("storage", () => setCarrinho(getCartFromStorage()));
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("storage", () => setCarrinho(getCartFromStorage()));
     };
   }, []);
 
@@ -256,8 +254,7 @@ export default function CheckoutPage() {
 
   const pixTotal = subtotal + freteSelecionado;
   const total = subtotal + freteSelecionado;
-  const cepDigits = cep.replace(/\D/g, "");
-  const cepValido = cepDigits.length === 8;
+  const economiaPix = Math.max(0, total - pixTotal);
 
   async function salvarPedido(formaPagamento: "whatsapp" | "pix") {
     if (!carrinho.length) return null;
@@ -445,14 +442,14 @@ export default function CheckoutPage() {
   }
 
   return (
-    <main style={{ ...styles.page, paddingBottom: isMobile && carrinho.length ? 108 : 24 }}>
+    <main style={styles.page}>
       <section style={styles.container}>
         <div style={styles.hero}>
           <div style={{ flex: 1, minWidth: 260 }}>
             <p style={styles.kicker}>Maison Noor</p>
             <h1 style={styles.title}>Checkout Premium</h1>
             <p style={styles.subtitle}>
-              Revise sua seleção, calcule a entrega e garanta seu pedido com atendimento humano Maison Noor.
+              Revise sua seleção, escolha o melhor frete e finalize com um atendimento elegante, rápido e seguro.
             </p>
 
             <div
@@ -463,15 +460,15 @@ export default function CheckoutPage() {
             >
               <div style={styles.heroHighlightCard}>
                 <span style={styles.heroHighlightTitle}>Compra segura</span>
-                <span style={styles.heroHighlightText}>Pedido registrado antes do atendimento</span>
+                <span style={styles.heroHighlightText}>Pedido salvo antes do atendimento</span>
               </div>
               <div style={styles.heroHighlightCard}>
                 <span style={styles.heroHighlightTitle}>Atendimento real</span>
-                <span style={styles.heroHighlightText}>Atendimento humano via WhatsApp</span>
+                <span style={styles.heroHighlightText}>Suporte humano via WhatsApp</span>
               </div>
               <div style={styles.heroHighlightCard}>
                 <span style={styles.heroHighlightTitle}>Envio estimado</span>
-                <span style={styles.heroHighlightText}>Prazo e frete antes de finalizar</span>
+                <span style={styles.heroHighlightText}>Frete em opções mais claras</span>
               </div>
             </div>
           </div>
@@ -571,41 +568,24 @@ export default function CheckoutPage() {
               <div style={styles.cardHeader}>
                 <div>
                   <h2 style={styles.cardTitle}>Entrega e frete</h2>
-                  <p style={styles.cardSubtext}>Calcule prazo e frete para sua região antes de finalizar.</p>
+                  <p style={styles.cardSubtext}>Selecione o CEP e escolha a opção que mais combina com sua urgência.</p>
                 </div>
               </div>
 
               <div style={styles.fieldWrap}>
-                <label style={styles.label}>Informe seu CEP</label>
+                <label style={styles.label}>CEP para calcular frete</label>
                 <div style={styles.cepRow}>
                   <input
                     type="text"
                     value={cep}
                     onChange={(e) => setCep(formatarCep(e.target.value))}
                     placeholder="Digite seu CEP"
-                    inputMode="numeric"
-                    autoComplete="postal-code"
-                    maxLength={9}
                     style={styles.input}
                   />
                   <button
                     type="button"
                     style={styles.calcButton}
-                    onClick={() => {
-                      const digits = cep.replace(/\D/g, "");
-
-                      if (digits.length < 8) {
-                        setFreightOptions([]);
-                        setSelectedFreight("");
-                        setCheckoutFeedback("Digite um CEP válido com 8 números para calcular o frete.");
-                        return;
-                      }
-
-                      const options = calcularFretes(digits, subtotal);
-                      setFreightOptions(options);
-                      setSelectedFreight((prev) => prev || options[1]?.id || options[0]?.id || "");
-                      setCheckoutFeedback("");
-                    }}
+                    onClick={() => setFreightOptions(calcularFretes(cep.replace(/\D/g, ""), subtotal))}
                   >
                     Calcular frete
                   </button>
@@ -640,7 +620,7 @@ export default function CheckoutPage() {
                 </div>
               ) : (
                 <div style={styles.noticeSoftBox}>
-                  Digite seu CEP para liberar as opções estimadas de entrega e finalizar com mais segurança.
+                  Digite seu CEP para exibir as opções estimadas de frete e continuar com mais segurança.
                 </div>
               )}
             </div>
@@ -651,13 +631,8 @@ export default function CheckoutPage() {
               <span style={styles.sectionKicker}>Pagamento</span>
               <h2 style={styles.paymentTitle}>Finalização da compra</h2>
               <p style={styles.paymentText}>
-                Seu pedido fica salvo antes do atendimento. Assim a Maison Noor consegue confirmar tudo com mais rapidez e segurança.
+                Seu pedido é registrado antes da abertura do atendimento, trazendo mais confiança e organização.
               </p>
-
-              <div style={styles.conversionStrip}>
-                <span>🔥 Estoque sujeito à disponibilidade</span>
-                <span>🚚 Envio para todo Brasil</span>
-              </div>
 
               <div
                 style={{
@@ -693,8 +668,8 @@ export default function CheckoutPage() {
 
                 <div style={styles.divider} />
 
-                <div style={styles.summaryTotalBox}>
-                  <span>Total a pagar</span>
+                <div style={styles.summaryRowBig}>
+                  <span>Total</span>
                   <strong>{formatarMoeda(total)}</strong>
                 </div>
               </div>
@@ -708,7 +683,7 @@ export default function CheckoutPage() {
               </div>
 
               <div style={styles.noticeBox}>
-                Seu pedido será organizado e reservado após o envio para o atendimento Maison Noor.
+                Os valores de frete exibidos aqui são estimativas para facilitar a compra. O próximo passo pode receber integração automática com PagBank sem alterar este fluxo atual.  
               </div>
 
               {checkoutFeedback ? <div style={styles.checkoutFeedback}>{checkoutFeedback}</div> : null}
@@ -722,10 +697,8 @@ export default function CheckoutPage() {
                 onClick={finalizarWhatsapp}
                 disabled={savingOrder || !carrinho.length}
               >
-                {savingOrder ? "Salvando pedido..." : "Garantir meu pedido agora"}
+                {savingOrder ? "Salvando pedido..." : "Finalizar no WhatsApp"}
               </button>
-
-              <p style={styles.ctaMicrocopy}>Atendimento rápido pelo WhatsApp • pedido salvo antes do pagamento</p>
 
               <button
                 type="button"
@@ -745,38 +718,18 @@ export default function CheckoutPage() {
                   gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
                 }}
               >
-                <div style={styles.footerSafetyCard}>🔒 Compra protegida</div>
-                <div style={styles.footerSafetyCard}>⭐ Atendimento premium</div>
-                <div style={styles.footerSafetyCard}>✨ Maison Noor</div>
+                <div style={styles.footerSafetyCard}>Compra protegida</div>
+                <div style={styles.footerSafetyCard}>Atendimento premium</div>
+                <div style={styles.footerSafetyCard}>Maison Noor</div>
               </div>
 
               <p style={styles.safeText}>
-                Compra com atendimento humano, pedido organizado e experiência boutique Maison Noor.
+                Pedido salvo antes da abertura do atendimento • checkout mais claro • experiência premium Maison Noor
               </p>
             </div>
           </div>
         </div>
       </section>
-
-      {isMobile && carrinho.length > 0 ? (
-        <div style={styles.mobileStickyBar}>
-          <div style={styles.mobileStickyTotal}>
-            <span>Total</span>
-            <strong>{formatarMoeda(total)}</strong>
-          </div>
-          <button
-            type="button"
-            style={{
-              ...styles.mobileStickyButton,
-              ...((savingOrder || !carrinho.length) ? styles.buttonDisabled : {}),
-            }}
-            onClick={finalizarWhatsapp}
-            disabled={savingOrder || !carrinho.length}
-          >
-            {savingOrder ? "Salvando..." : "Garantir pedido"}
-          </button>
-        </div>
-      ) : null}
     </main>
   );
 }
@@ -907,15 +860,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#6f6052",
     fontSize: 14,
     lineHeight: 1.6,
-  },
-  conversionStrip: {
-    marginTop: 12,
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    color: "#6b4f28",
-    fontSize: 12,
-    fontWeight: 700,
   },
   cardHeader: {
     display: "flex",
@@ -1240,14 +1184,6 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
     boxShadow: "0 14px 26px rgba(120, 87, 45, 0.12)",
   },
-  ctaMicrocopy: {
-    margin: "8px 0 10px",
-    textAlign: "center",
-    color: "#7c6c5d",
-    fontSize: 12.5,
-    lineHeight: 1.35,
-    fontWeight: 600,
-  },
   pixButton: {
     display: "flex",
     justifyContent: "center",
@@ -1289,7 +1225,7 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center",
     marginTop: 14,
     color: "#7c6c5d",
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 1.5,
   },
   lightButton: {
@@ -1302,42 +1238,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#fff",
     fontSize: 14,
     whiteSpace: "nowrap",
-  },
-  mobileStickyBar: {
-    position: "fixed",
-    left: 12,
-    right: 12,
-    bottom: 12,
-    zIndex: 50,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-    borderRadius: 18,
-    border: "1px solid #e0c79f",
-    background: "rgba(255, 250, 244, 0.96)",
-    boxShadow: "0 18px 38px rgba(77, 56, 27, 0.18)",
-    padding: "10px 10px",
-    backdropFilter: "blur(10px)",
-  },
-  mobileStickyTotal: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    color: "#2b2118",
-    minWidth: 110,
-  },
-  mobileStickyButton: {
-    flex: 1,
-    minHeight: 48,
-    border: 0,
-    borderRadius: 15,
-    background: "linear-gradient(180deg, #d8b06a, #c3954d)",
-    color: "#24180f",
-    fontWeight: 900,
-    fontSize: 14,
-    cursor: "pointer",
-    boxShadow: "0 12px 24px rgba(185, 138, 62, 0.34)",
   },
   emptyWrap: {
     minHeight: 180,
