@@ -1289,14 +1289,20 @@ export default function ProdutosPage() {
           justify-content: center;
           padding: 18px;
           z-index: 50;
+          overflow-y: auto;
+          overscroll-behavior: contain;
         }
         .modal {
           width: min(980px, 100%);
+          max-height: calc(100dvh - 36px);
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
           border-radius: 20px;
           border: 1px solid rgba(200, 162, 106, 0.22);
           background: rgba(12, 12, 18, 0.95);
           box-shadow: 0 30px 120px rgba(0, 0, 0, 0.6);
           padding: 14px;
+          padding-bottom: calc(14px + env(safe-area-inset-bottom));
         }
         .modalHead {
           display: flex;
@@ -1360,13 +1366,18 @@ export default function ProdutosPage() {
         }
 
         .modalActions {
+          position: sticky;
+          bottom: 0;
+          z-index: 10;
           display: flex;
           gap: 10px;
           flex-wrap: wrap;
           align-items: center;
-          padding: 12px 8px 8px;
+          padding: 12px 8px calc(12px + env(safe-area-inset-bottom));
           border-top: 1px solid rgba(255, 255, 255, 0.06);
           margin-top: 10px;
+          background: rgba(12, 12, 18, 0.98);
+          backdrop-filter: blur(10px);
         }
         .spacer {
           flex: 1;
@@ -1404,6 +1415,100 @@ export default function ProdutosPage() {
           font-size: 12px;
           opacity: 0.7;
         }
+
+        @media (max-width: 640px) {
+          .page {
+            padding: 14px;
+            padding-bottom: calc(90px + env(safe-area-inset-bottom));
+          }
+
+          .head {
+            padding: 14px;
+          }
+
+          .headRight,
+          .toolbar {
+            width: 100%;
+          }
+
+          .headRight .btn {
+            flex: 1 1 calc(50% - 8px);
+            min-height: 46px;
+          }
+
+          .toolbar .field,
+          .toolbar .check {
+            width: 100%;
+            min-width: 0;
+          }
+
+          .summary {
+            grid-template-columns: 1fr;
+          }
+
+          .erpTable {
+            margin-left: -4px;
+            margin-right: -4px;
+          }
+
+          .modalOverlay {
+            align-items: flex-end;
+            justify-content: center;
+            padding: 10px;
+            padding-bottom: calc(10px + env(safe-area-inset-bottom));
+          }
+
+          .modal {
+            width: 100%;
+            max-height: 88dvh;
+            border-radius: 22px 22px 0 0;
+            padding: 12px;
+            padding-bottom: 0;
+          }
+
+          .modalHead {
+            position: sticky;
+            top: 0;
+            z-index: 9;
+            background: rgba(12, 12, 18, 0.98);
+            backdrop-filter: blur(10px);
+            padding-top: 10px;
+          }
+
+          .modalGrid {
+            padding: 14px 6px 18px;
+          }
+
+          .field {
+            min-width: 0;
+          }
+
+          .input,
+          .textarea {
+            font-size: 16px;
+          }
+
+          .modalActions {
+            padding-left: 6px;
+            padding-right: 6px;
+          }
+
+          .spacer {
+            display: none;
+          }
+
+          .btnSmallPrimary,
+          .btnDanger {
+            flex: 1 1 100%;
+            min-height: 48px;
+            font-size: 14px;
+          }
+
+          .modalFoot {
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
+          }
+        }
+
       `}</style>
     </main>
   );
