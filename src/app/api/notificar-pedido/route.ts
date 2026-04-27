@@ -19,6 +19,7 @@ export async function POST(req: Request) {
       to: [
         "maison.noor.parfums@gmail.com",
         "andre_lbatista@outlook.com",
+        "andresjcampos@gmail.com",
       ],
       subject: `🛍️ Novo Pedido Maison Noor`,
       html: `
