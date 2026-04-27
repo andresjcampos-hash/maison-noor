@@ -16,11 +16,7 @@ export async function POST(req: Request) {
 
     await resend.emails.send({
       from: "Maison Noor <onboarding@resend.dev>",
-      to: [
-        "maison.noor.parfums@gmail.com",
-        "andre_lbatista@outlook.com",
-        "andresjcampos@gmail.com",
-      ],
+      to: ["andresjcampos@gmail.com"],
       subject: `🛍️ Novo Pedido Maison Noor`,
       html: `
         <h2>Novo Pedido Recebido</h2>
