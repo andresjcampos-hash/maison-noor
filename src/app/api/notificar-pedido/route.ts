@@ -19,12 +19,18 @@ function dataAgora() {
   });
 }
 
+/* STATUS CORRIGIDO */
 function traduzStatus(status: string) {
   const s = String(status || "").toLowerCase();
 
-  if (s.includes("pag")) return "🟢 Pago";
-  if (s.includes("env")) return "📦 Enviado";
-  if (s.includes("cancel")) return "🔴 Cancelado";
+  if (s === "pago") return "🟢 Pago";
+  if (s === "enviado") return "📦 Enviado";
+  if (s === "entregue") return "✅ Entregue";
+  if (s === "cancelado") return "🔴 Cancelado";
+  if (s === "rascunho") return "⚪ Rascunho";
+  if (s === "aguardando_pagamento")
+    return "🟡 Aguardando Pagamento";
+
   return "🟡 Aguardando Pagamento";
 }
 
@@ -61,12 +67,20 @@ export async function POST(req: Request) {
           .map((item: any) => {
             const nome = item.nome || "Produto";
             const qtd = item.qtd || item.quantidade || 1;
-            const preco = item.preco || item.precoUnitario || 0;
+            const preco =
+              item.preco ||
+              item.precoUnitario ||
+              item.valor ||
+              0;
 
             return `
               <tr>
-                <td style="padding:14px;border-bottom:1px solid #eee;">${nome}</td>
-                <td style="padding:14px;border-bottom:1px solid #eee;text-align:center;">${qtd}</td>
+                <td style="padding:14px;border-bottom:1px solid #eee;">
+                  ${nome}
+                </td>
+                <td style="padding:14px;border-bottom:1px solid #eee;text-align:center;">
+                  ${qtd}
+                </td>
                 <td style="padding:14px;border-bottom:1px solid #eee;text-align:right;font-weight:700;">
                   ${formatBRL(preco)}
                 </td>
@@ -76,7 +90,9 @@ export async function POST(req: Request) {
           .join("")
       : `
         <tr>
-          <td colspan="3" style="padding:14px;">Itens não informados</td>
+          <td colspan="3" style="padding:14px;">
+            Itens não informados
+          </td>
         </tr>
       `;
 
@@ -93,18 +109,25 @@ export async function POST(req: Request) {
       <div style="margin:0;padding:0;background:#fcf2e5;font-family:Arial,Helvetica,sans-serif;">
         <div style="max-width:760px;margin:auto;padding:30px 18px;">
 
-          <div style="text-align:center;margin-bottom:20px;">
-            <img src="https://www.maisonnoor.com.br/logo.png"
-                 style="width:88px;height:88px;border-radius:50%;object-fit:contain;" />
-            <div style="font-size:28px;font-weight:900;letter-spacing:3px;color:#1b1712;margin-top:8px;">
+          <!-- LOGO CORRIGIDO -->
+          <div style="text-align:center;margin-bottom:22px;">
+            <img
+              src="https://www.maisonnoor.com.br/logo.png"
+              alt="Maison Noor"
+              width="90"
+              style="display:block;margin:0 auto 10px auto;width:90px;height:90px;object-fit:contain;"
+            />
+
+            <div style="font-size:30px;font-weight:900;letter-spacing:3px;color:#15120f;">
               MAISON NOOR
             </div>
-            <div style="font-size:12px;letter-spacing:4px;color:#b8914b;">
+
+            <div style="font-size:12px;letter-spacing:4px;color:#b8914b;margin-top:4px;">
               PERFUMES ÁRABES PREMIUM
             </div>
           </div>
 
-          <div style="background:#fff;border-radius:24px;overflow:hidden;border:1px solid #d9bb7a;box-shadow:0 12px 30px rgba(0,0,0,.08);">
+          <div style="background:#ffffff;border-radius:24px;overflow:hidden;border:1px solid #d9bb7a;box-shadow:0 12px 30px rgba(0,0,0,.08);">
 
             <div style="padding:26px;background:linear-gradient(135deg,#14110e,#3a2a16);color:#fff;">
               <div style="font-size:12px;letter-spacing:2px;color:#d8b36d;font-weight:700;">
