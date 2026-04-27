@@ -28,8 +28,15 @@ type FreightOption = {
 type SavedOrderItem = {
   produtoId: string;
   nome: string;
+
+  // ✅ Compatível com checkout/site
   quantidade: number;
   precoUnitario: number;
+
+  // ✅ Compatível com CRM Pedidos
+  qtd: number;
+  preco: number;
+
   subtotal: number;
   imagem: string;
 };
@@ -52,6 +59,8 @@ function mapOrderItems(items: CartItem[]): SavedOrderItem[] {
       nome: item.nome,
       quantidade,
       precoUnitario,
+      qtd: quantidade,
+      preco: precoUnitario,
       subtotal: precoUnitario * quantidade,
       imagem: String(item.imagem || item.imageUrl || ""),
     };
@@ -263,47 +272,83 @@ export default function CheckoutPage() {
     if (!carrinho.length) return null;
 
     const user = auth.currentUser;
+    const nowIso = new Date().toISOString();
     const itensPedido = mapOrderItems(carrinho);
     const freteAtualInterno = freightOptions.find((opt) => opt.id === selectedFreight);
     const numeroPedido = gerarNumeroPedido();
 
+    // ✅ Payload compatível com o CRM Pedidos
+    // Caminho usado pelo CRM: pedidos/default/lista/{pedidoId}
     const payload = {
-      numero: numeroPedido,
+      id: "",
+
+      // Site usa número em texto; CRM também recebe numeroPedido/numeroSite
       numeroPedido,
+      numeroSite: numeroPedido,
+
+      clienteNome: user?.displayName || "Cliente do site",
+      telefone: "",
       clienteUid: user?.uid || "",
       uid: user?.uid || "",
       userId: user?.uid || "",
       usuarioId: user?.uid || "",
       clienteEmail: user?.email || "",
       email: user?.email || "",
+
       status: "aguardando_pagamento",
       formaPagamento,
-      origem: "checkout-site",
+      origem: "site",
+
       cep: cep || "",
+      frete: freteSelecionado,
+      freteValor: freteSelecionado,
       freteId: selectedFreight || "",
       freteNome: freteAtualInterno?.nome || "",
       fretePrazo: freteAtualInterno?.prazo || "",
-      freteValor: freteSelecionado,
+
+      desconto: 0,
       subtotal,
       total,
       valorTotal: total,
       totalPix: pixTotal,
+
       itens: itensPedido,
       items: itensPedido,
       itemCount: itensPedido.reduce((acc, item) => acc + item.quantidade, 0),
+
+      pagamentos: [
+        {
+          forma: formaPagamento === "pix" ? "pix" : "outros",
+          valor: total,
+        },
+      ],
+
       moeda: "BRL",
       rastreio: "",
-      createdAt: serverTimestamp(),
-      atualizadoEm: serverTimestamp(),
-      createdAtIso: new Date().toISOString(),
-      expiresAtIso: getExpiracaoPedidoIso(24),
+      estoqueBaixado: false,
       statusPagamento: "pendente",
+
+      // ✅ CRM ordena por createdAt; por isso aqui precisa ser string ISO
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      atualizadoEm: nowIso,
+      createdAtIso: nowIso,
+      expiresAtIso: getExpiracaoPedidoIso(24),
+
+      observacoes: `Pedido criado automaticamente pelo checkout do site. Forma solicitada: ${formaPagamento}.`,
     };
 
     const ref = await addDoc(collection(db, "pedidos", "default", "lista"), payload);
+
+    // ✅ Garante que o documento também tenha o próprio ID salvo no campo id
+    await setDoc(
+      doc(db, "pedidos", "default", "lista", ref.id),
+      { id: ref.id, updatedAt: new Date().toISOString() },
+      { merge: true }
+    );
+
     return { id: ref.id, numeroPedido };
   }
-
 
 
   async function limparSacolaAposPedido() {
