@@ -28,15 +28,8 @@ type FreightOption = {
 type SavedOrderItem = {
   produtoId: string;
   nome: string;
-
-  // ✅ Compatível com checkout/site
   quantidade: number;
   precoUnitario: number;
-
-  // ✅ Compatível com CRM Pedidos
-  qtd: number;
-  preco: number;
-
   subtotal: number;
   imagem: string;
 };
@@ -59,8 +52,6 @@ function mapOrderItems(items: CartItem[]): SavedOrderItem[] {
       nome: item.nome,
       quantidade,
       precoUnitario,
-      qtd: quantidade,
-      preco: precoUnitario,
       subtotal: precoUnitario * quantidade,
       imagem: String(item.imagem || item.imageUrl || ""),
     };
@@ -199,6 +190,23 @@ function formatarCep(value: string) {
 
 function getExpiracaoPedidoIso(hours = 24) {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
+
+async function notificarPedidoPorEmail(payload: any) {
+  try {
+    const response = await fetch("/api/notificar-pedido", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      console.warn("Alerta de e-mail não enviado:", await response.text());
+    }
+  } catch (error) {
+    console.error("Erro ao enviar alerta de pedido por e-mail:", error);
+  }
 }
 
 export default function CheckoutPage() {
@@ -347,8 +355,15 @@ export default function CheckoutPage() {
       { merge: true }
     );
 
+    // ✅ Envia alerta por e-mail sem travar o pedido caso o e-mail falhe
+    void notificarPedidoPorEmail({
+      ...payload,
+      id: ref.id,
+    });
+
     return { id: ref.id, numeroPedido };
   }
+
 
 
   async function limparSacolaAposPedido() {
