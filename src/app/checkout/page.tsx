@@ -455,11 +455,17 @@ export default function CheckoutPage() {
       .join("\n");
 
     const freteTexto = freightOptions.length
-      ? `${freightOptions.find((opt) => opt.id === selectedFreight)?.nome ?? "Frete"} - ${formatarMoeda(freteSelecionado)}`
+      ? `${freightOptions.find((opt) => opt.id === selectedFreight)?.nome ?? "Frete"} - ${formatarMoeda(
+          freteSelecionado
+        )}`
       : "Ainda não calculado";
 
     const fallbackTexto = encodeURIComponent(
-      `Olá! Quero receber a chave Pix / link de pagamento do meu pedido na Maison Noor.\n\nCEP: ${cep || "não informado"}\nFrete: ${freteTexto}\n\nPedido:\n${itens || "Sacola vazia"}\n\nSubtotal: ${formatarMoeda(subtotal)}\nTotal no Pix: ${formatarMoeda(pixTotal)}`
+      `Olá! Quero receber a chave Pix / link de pagamento do meu pedido na Maison Noor.\n\nCEP: ${
+        cep || "não informado"
+      }\nFrete: ${freteTexto}\n\nPedido:\n${itens || "Sacola vazia"}\n\nSubtotal: ${formatarMoeda(
+        subtotal
+      )}\nTotal no Pix: ${formatarMoeda(pixTotal)}`
     );
 
     try {
@@ -467,9 +473,53 @@ export default function CheckoutPage() {
       setCheckoutFeedback("");
 
       const pedidoSalvo = await salvarPedido("pix");
-      const pedidoNumeroTexto = pedidoSalvo?.numeroPedido ? `#${pedidoSalvo.numeroPedido}` : "a gerar";
 
-      if (typeof window !== "undefined" && pedidoSalvo?.id) {
+      if (!pedidoSalvo?.id) {
+        throw new Error("Pedido não foi salvo corretamente.");
+      }
+
+      const response = await fetch("/api/pagbank-pix", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          numeroPedido: pedidoSalvo.numeroPedido,
+          nome: auth.currentUser?.displayName || "Cliente Maison Noor",
+          email: auth.currentUser?.email || "cliente@maisonnoor.com.br",
+          produto: "Pedido Maison Noor",
+          total: pixTotal,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Erro ao gerar Pix no PagBank.");
+      }
+
+      const data = await response.json();
+
+      const qr =
+        data?.qr_codes?.[0]?.links?.find((link: any) => link.rel === "QRCODE.PNG")?.href || "";
+
+      const copia = data?.qr_codes?.[0]?.text || "";
+
+      if (!qr && !copia) {
+        throw new Error("PagBank não retornou QR Code Pix.");
+      }
+
+      await setDoc(
+        doc(db, "pedidos", "default", "lista", pedidoSalvo.id),
+        {
+          pagbankPix: data,
+          pixQrCode: qr,
+          pixCopiaCola: copia,
+          statusPagamento: "pendente",
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      if (typeof window !== "undefined") {
         window.sessionStorage.setItem(
           "maison_noor_checkout_last_order",
           JSON.stringify({
@@ -480,24 +530,34 @@ export default function CheckoutPage() {
             expiresAtIso: getExpiracaoPedidoIso(24),
           })
         );
-      }
 
-      const texto = encodeURIComponent(
-        `Olá! Quero receber a chave Pix / link de pagamento do meu pedido na Maison Noor.\n\nPedido: ${pedidoNumeroTexto}\nCEP: ${cep || "não informado"}\nFrete: ${freteTexto}\n\nPedido:\n${itens || "Sacola vazia"}\n\nSubtotal: ${formatarMoeda(subtotal)}\nTotal no Pix: ${formatarMoeda(pixTotal)}`
-      );
+        window.sessionStorage.setItem(
+          "maison_noor_pix_pagbank",
+          JSON.stringify({
+            qr,
+            copia,
+            pedidoId: pedidoSalvo.id,
+            numeroPedido: pedidoSalvo.numeroPedido,
+            pedido: `#${pedidoSalvo.numeroPedido}`,
+            total: pixTotal,
+            criadoEm: new Date().toISOString(),
+          })
+        );
+      }
 
       await limparSacolaAposPedido();
 
-      setCheckoutFeedback(`Pedido ${pedidoNumeroTexto} salvo com sucesso. Abrindo o atendimento Pix...`);
-      window.open(`https://wa.me/5512982627108?text=${texto}`, "_blank");
+      setCheckoutFeedback(`Pedido #${pedidoSalvo.numeroPedido} salvo com sucesso.`);
 
-      if (typeof window !== "undefined") {
-        const target = `/checkout/sucesso?pedido=${encodeURIComponent(String(pedidoSalvo?.numeroPedido || ""))}&forma=pix`;
-        window.location.replace(target);
-      }
+      window.location.href = "/checkout/pix";
+      return;
     } catch (error) {
-      console.error("Erro ao salvar pedido Pix:", error);
-      setCheckoutFeedback("Não foi possível salvar o pedido automaticamente. Você ainda pode solicitar o Pix pelo WhatsApp.");
+      console.error("Erro ao gerar Pix:", error);
+
+      setCheckoutFeedback(
+        "Não foi possível gerar o Pix automático. Você ainda pode solicitar pelo WhatsApp."
+      );
+
       window.open(`https://wa.me/5512982627108?text=${fallbackTexto}`, "_blank");
     } finally {
       setSavingOrder(false);
@@ -779,13 +839,13 @@ export default function CheckoutPage() {
                   ...styles.mainButton,
                   ...((savingOrder || !carrinho.length) ? styles.buttonDisabled : {}),
                 }}
-                onClick={finalizarWhatsapp}
+                onClick={solicitarPix}
                 disabled={savingOrder || !carrinho.length}
               >
-                {savingOrder ? "Salvando pedido..." : "Garantir meu pedido agora"}
+                {savingOrder ? "Gerando Pix..." : "Garantir meu pedido agora"}
               </button>
 
-              <p style={styles.ctaMicrocopy}>Atendimento rápido pelo WhatsApp • pedido salvo antes do pagamento</p>
+              <p style={styles.ctaMicrocopy}>Pix automático PagBank • pedido salvo antes do pagamento</p>
 
               <button
                 type="button"
@@ -796,7 +856,7 @@ export default function CheckoutPage() {
                 }}
                 disabled={savingOrder || !carrinho.length}
               >
-                {savingOrder ? "Salvando pedido..." : "Solicitar pagamento Pix"}
+                {savingOrder ? "Gerando Pix..." : "Solicitar pagamento Pix"}
               </button>
 
               <div
@@ -830,10 +890,10 @@ export default function CheckoutPage() {
               ...styles.mobileStickyButton,
               ...((savingOrder || !carrinho.length) ? styles.buttonDisabled : {}),
             }}
-            onClick={finalizarWhatsapp}
+            onClick={solicitarPix}
             disabled={savingOrder || !carrinho.length}
           >
-            {savingOrder ? "Salvando..." : "Garantir pedido"}
+            {savingOrder ? "Gerando Pix..." : "Garantir pedido"}
           </button>
         </div>
       ) : null}
