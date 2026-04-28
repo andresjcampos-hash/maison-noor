@@ -303,6 +303,7 @@ export default function CheckoutPage() {
   const [cardValidade, setCardValidade] = useState("");
   const [cardCvv, setCardCvv] = useState("");
   const [cardCpf, setCardCpf] = useState("");
+  const [pixCpf, setPixCpf] = useState("");
   const [cardParcelas, setCardParcelas] = useState("1");
 
   useEffect(() => {
@@ -595,133 +596,148 @@ export default function CheckoutPage() {
   }
 
   async function solicitarPix() {
-  const itens = carrinho
-    .map(
-      (item) =>
-        `• ${item.nome} - Qtd: ${Number(
-          item.qtd || item.quantidade || 1
-        )} - ${formatarMoeda(
-          Number(item.preco || item.precoVenda || 0) *
-            Number(item.qtd || item.quantidade || 1)
-        )}`
-    )
-    .join("\n");
-
-  const freteTexto = freightOptions.length
-    ? `${
-        freightOptions.find((opt) => opt.id === selectedFreight)?.nome ??
-        "Frete"
-      } - ${formatarMoeda(freteSelecionado)}`
-    : "Ainda não calculado";
-
-  const fallbackTexto = encodeURIComponent(
-    `Olá! Quero receber a chave Pix / link de pagamento do meu pedido na Maison Noor.\n\nCEP: ${
-      cep || "não informado"
-    }\nFrete: ${freteTexto}\n\nPedido:\n${
-      itens || "Sacola vazia"
-    }\n\nSubtotal: ${formatarMoeda(
-      subtotal
-    )}\nTotal no Pix: ${formatarMoeda(pixTotal)}`
-  );
-
-  try {
-    setSavingOrder(true);
-    setCheckoutFeedback("");
-
-    const pedidoSalvo = await salvarPedido("pix");
-
-    const pedidoNumeroTexto = pedidoSalvo?.numeroPedido
-      ? `#${pedidoSalvo.numeroPedido}`
-      : "a gerar";
-
-    if (typeof window !== "undefined" && pedidoSalvo?.id) {
-      window.sessionStorage.setItem(
-        "maison_noor_checkout_last_order",
-        JSON.stringify({
-          id: pedidoSalvo.id,
-          numeroPedido: pedidoSalvo.numeroPedido,
-          formaPagamento: "pix",
-          createdAt: new Date().toISOString(),
-          expiresAtIso: getExpiracaoPedidoIso(24),
-        })
-      );
+    if (!carrinho.length) {
+      setCheckoutFeedback("Sua sacola está vazia.");
+      return;
     }
 
-    // NOVO PIX PAGBANK
-    const response = await fetch("/api/pagbank-pix", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        numeroPedido: pedidoSalvo?.numeroPedido,
-        nome: "Cliente Maison Noor",
-        email: "cliente@maisonnoor.com.br",
-        produto: "Pedido Maison Noor",
-        total: pixTotal,
-      }),
-    });
+    const pixCpfDigits = pixCpf.replace(/\D/g, "");
 
-    const data = await response.json();
+    if (pixCpfDigits.length !== 11) {
+      setCheckoutFeedback("Informe um CPF válido com 11 números para gerar o Pix automático PagBank.");
+      return;
+    }
 
-    const qr =
-      data?.qr_codes?.[0]?.links?.find(
-        (link: any) => link.rel === "QRCODE.PNG"
-      )?.href || "";
+    if (!pixTotal || pixTotal <= 0) {
+      setCheckoutFeedback("Valor inválido para gerar Pix. Revise sua sacola antes de continuar.");
+      return;
+    }
 
-    const copia = data?.qr_codes?.[0]?.text || "";
+    if (savingOrder) return;
 
-    await limparSacolaAposPedido();
+    try {
+      setSavingOrder(true);
+      setCheckoutFeedback("Gerando Pix seguro pelo PagBank...");
 
-    setCheckoutFeedback(
-      `Pedido ${pedidoNumeroTexto} salvo com sucesso.`
-    );
+      const pedidoSalvo = await salvarPedido("pix");
 
-    if (qr) {
+      if (!pedidoSalvo?.numeroPedido) {
+        throw new Error("Pedido não foi salvo corretamente antes de gerar o Pix.");
+      }
+
       if (typeof window !== "undefined") {
-  sessionStorage.setItem(
-    "maison_noor_pix_pagbank",
-    JSON.stringify({
-      qr,
-      copia,
-      pedido: pedidoNumeroTexto,
-      total: pixTotal,
-      criadoEm: new Date().toISOString(),
-    })
-  );
+        window.sessionStorage.setItem(
+          "maison_noor_checkout_last_order",
+          JSON.stringify({
+            id: pedidoSalvo.id,
+            numeroPedido: pedidoSalvo.numeroPedido,
+            formaPagamento: "pix",
+            createdAt: new Date().toISOString(),
+            expiresAtIso: getExpiracaoPedidoIso(24),
+          })
+        );
+      }
 
-  window.location.href = "/checkout/pix";
-  return;
-}
-    } else {
-      window.open(
-        `https://wa.me/5512982627108?text=${fallbackTexto}`,
-        "_blank"
+      const response = await fetch("/api/pagbank-pix", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          numeroPedido: pedidoSalvo.numeroPedido,
+          nome: auth.currentUser?.displayName || "Cliente Maison Noor",
+          email: auth.currentUser?.email || "cliente@maisonnoor.com.br",
+          cpf: pixCpfDigits,
+          produto: "Pedido Maison Noor",
+          total: pixTotal,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || data?.erro) {
+        console.error("Erro PagBank Pix:", data);
+        const detalhesPagBank =
+          data?.detalhes?.error_messages
+            ?.map((item: any) => item?.description || item?.message || item?.code)
+            ?.filter(Boolean)
+            ?.join(" | ") ||
+          data?.error_messages
+            ?.map((item: any) => item?.description || item?.message || item?.code)
+            ?.filter(Boolean)
+            ?.join(" | ");
+
+        const mensagemDetalhada =
+          data?.mensagem ||
+          detalhesPagBank ||
+          data?.message ||
+          "Erro ao gerar Pix no PagBank.";
+
+        setCheckoutFeedback(mensagemDetalhada);
+        return;
+      }
+
+      const qrCode = data?.qr_codes?.[0];
+
+      const qr =
+        qrCode?.links?.find((link: any) =>
+          String(link?.rel || "").toUpperCase().includes("QRCODE")
+        )?.href ||
+        qrCode?.links?.find((link: any) =>
+          String(link?.media || "").toLowerCase().includes("image")
+        )?.href ||
+        qrCode?.links?.[0]?.href ||
+        data?.qr ||
+        data?.qrCode ||
+        data?.qrcode ||
+        "";
+
+      const copia =
+        qrCode?.text ||
+        data?.copia ||
+        data?.copiaECola ||
+        data?.codigoPix ||
+        data?.textoPix ||
+        "";
+
+      if (!qr && !copia) {
+        console.error("Resposta Pix sem QR Code:", data);
+        setCheckoutFeedback("O PagBank respondeu, mas não retornou QR Code Pix. Tente novamente em instantes.");
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(
+          "maison_noor_pix_pagbank",
+          JSON.stringify({
+            qr,
+            copia,
+            pedido: `#${pedidoSalvo.numeroPedido}`,
+            numeroPedido: pedidoSalvo.numeroPedido,
+            pedidoId: pedidoSalvo.id,
+            total: pixTotal,
+            criadoEm: new Date().toISOString(),
+            raw: data,
+          })
+        );
+      }
+
+      setCheckoutFeedback(`Pix gerado com sucesso para o pedido #${pedidoSalvo.numeroPedido}.`);
+
+      if (typeof window !== "undefined") {
+        window.location.href = "/checkout/pix";
+      }
+    } catch (error) {
+      console.error("Erro ao gerar Pix:", error);
+      setCheckoutFeedback(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível gerar o Pix automático. Tente novamente."
       );
+    } finally {
+      setSavingOrder(false);
     }
-
-    if (typeof window !== "undefined") {
-      const target = `/checkout/sucesso?pedido=${encodeURIComponent(
-        String(pedidoSalvo?.numeroPedido || "")
-      )}&forma=pix`;
-
-      window.location.replace(target);
-    }
-  } catch (error) {
-    console.error("Erro ao gerar Pix:", error);
-
-    setCheckoutFeedback(
-      "Não foi possível gerar o Pix automático. Você ainda pode solicitar pelo WhatsApp."
-    );
-
-    window.open(
-      `https://wa.me/5512982627108?text=${fallbackTexto}`,
-      "_blank"
-    );
-  } finally {
-    setSavingOrder(false);
   }
-}
 
   async function pagarCartao() {
     const cpfDigits = cardCpf.replace(/\D/g, "");
@@ -1175,13 +1191,31 @@ export default function CheckoutPage() {
               </div>
 
               {formaPagamentoSelecionada === "pix" ? (
-                <div style={styles.pixHighlightCard}>
-                  <div>
-                    <span style={styles.pixHighlightLabel}>Pix Maison Noor</span>
-                    <strong style={styles.pixHighlightTitle}>QR Code Pix automático</strong>
+                <>
+                  <div style={styles.pixHighlightCard}>
+                    <div>
+                      <span style={styles.pixHighlightLabel}>Pix Maison Noor</span>
+                      <strong style={styles.pixHighlightTitle}>QR Code Pix automático</strong>
+                    </div>
+                    <span style={styles.pixHighlightValue}>{formatarMoeda(pixTotal)}</span>
                   </div>
-                  <span style={styles.pixHighlightValue}>{formatarMoeda(pixTotal)}</span>
-                </div>
+
+                  <div style={styles.pixCpfBox}>
+                    <label style={styles.label}>CPF para gerar o Pix</label>
+                    <input
+                      type="text"
+                      value={pixCpf}
+                      onChange={(e) => setPixCpf(formatarCpf(e.target.value))}
+                      placeholder="000.000.000-00"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      style={styles.input}
+                    />
+                    <span style={styles.pixCpfHint}>
+                      O PagBank exige CPF válido para gerar Pix em produção.
+                    </span>
+                  </div>
+                </>
               ) : (
                 <div style={styles.cardPaymentBox}>
                   <div style={styles.cardFieldsGrid}>
@@ -1327,10 +1361,16 @@ export default function CheckoutPage() {
               ...styles.mobileStickyButton,
               ...((savingOrder || !carrinho.length) ? styles.buttonDisabled : {}),
             }}
-            onClick={finalizarWhatsapp}
+            onClick={formaPagamentoSelecionada === "pix" ? solicitarPix : pagarCartao}
             disabled={savingOrder || !carrinho.length}
           >
-            {savingOrder ? "Salvando..." : "Garantir pedido"}
+            {savingOrder
+              ? formaPagamentoSelecionada === "pix"
+                ? "Gerando Pix..."
+                : "Processando..."
+              : formaPagamentoSelecionada === "pix"
+                ? "Gerar Pix agora"
+                : "Pagar com cartão"}
           </button>
         </div>
       ) : null}
@@ -1779,6 +1819,17 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 20,
     fontWeight: 800,
     whiteSpace: "nowrap",
+  },
+  pixCpfBox: {
+    marginTop: 10,
+    marginBottom: 14,
+    display: "grid",
+    gap: 8,
+  },
+  pixCpfHint: {
+    color: "#7c6c5d",
+    fontSize: 11.5,
+    lineHeight: 1.4,
   },
   noticeBox: {
     marginTop: 14,
