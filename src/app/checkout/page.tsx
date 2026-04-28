@@ -1,9 +1,29 @@
 "use client";
 
 import Link from "next/link";
+import Script from "next/script";
 import { useEffect, useMemo, useState } from "react";
 import { auth, db } from "@/lib/firebase";
 import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
+
+declare global {
+  interface Window {
+    PagSeguro?: {
+      encryptCard: (params: {
+        publicKey: string;
+        holder: string;
+        number: string;
+        expMonth: string;
+        expYear: string;
+        securityCode: string;
+      }) => {
+        encryptedCard?: string;
+        hasErrors?: boolean;
+        errors?: Array<{ code?: string; message?: string }>;
+      };
+    };
+  }
+}
 
 type CartItem = {
   id?: string;
@@ -28,6 +48,10 @@ type FreightOption = {
 type SavedOrderItem = {
   produtoId: string;
   nome: string;
+  // ✅ Campos que o CRM Pedidos usa para calcular total
+  qtd: number;
+  preco: number;
+  // ✅ Campos extras mantidos para compatibilidade com checkout/site
   quantidade: number;
   precoUnitario: number;
   subtotal: number;
@@ -50,6 +74,10 @@ function mapOrderItems(items: CartItem[]): SavedOrderItem[] {
     return {
       produtoId: String(item.id || item.produtoId || item.nome),
       nome: item.nome,
+      // ✅ O CRM Pedidos calcula valor por: preco * qtd
+      qtd: quantidade,
+      preco: precoUnitario,
+      // ✅ Mantém compatibilidade com outras telas
       quantidade,
       precoUnitario,
       subtotal: precoUnitario * quantidade,
@@ -108,6 +136,35 @@ function clearCartStorage() {
 
   for (const key of CART_KEYS) {
     window.localStorage.removeItem(key);
+  }
+
+  window.dispatchEvent(new Event("storage"));
+}
+
+function saveCartToStorage(items: CartItem[]) {
+  if (typeof window === "undefined") return;
+
+  if (!items.length) {
+    clearCartStorage();
+    return;
+  }
+
+  const payload = JSON.stringify(
+    items.map((item) => ({
+      id: item.id || item.produtoId || item.nome,
+      produtoId: item.produtoId || item.id || item.nome,
+      nome: item.nome,
+      preco: Number(item.preco || item.precoVenda || 0),
+      precoVenda: Number(item.precoVenda || item.preco || 0),
+      qtd: Number(item.qtd || item.quantidade || 1),
+      quantidade: Number(item.quantidade || item.qtd || 1),
+      imagem: item.imagem || item.imageUrl || "",
+      imageUrl: item.imageUrl || item.imagem || "",
+    }))
+  );
+
+  for (const key of CART_KEYS) {
+    window.localStorage.setItem(key, payload);
   }
 
   window.dispatchEvent(new Event("storage"));
@@ -187,6 +244,28 @@ function formatarCep(value: string) {
   return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }
 
+function formatarCpf(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function formatarNumeroCartao(value: string) {
+  return value
+    .replace(/\D/g, "")
+    .slice(0, 19)
+    .replace(/(.{4})/g, "$1 ")
+    .trim();
+}
+
+function formatarValidadeCartao(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
 
 function getExpiracaoPedidoIso(hours = 24) {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
@@ -218,6 +297,13 @@ export default function CheckoutPage() {
   const [selectedFreight, setSelectedFreight] = useState<string>("");
   const [savingOrder, setSavingOrder] = useState(false);
   const [checkoutFeedback, setCheckoutFeedback] = useState("");
+  const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<"pix" | "cartao">("pix");
+  const [cardNome, setCardNome] = useState("");
+  const [cardNumero, setCardNumero] = useState("");
+  const [cardValidade, setCardValidade] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [cardCpf, setCardCpf] = useState("");
+  const [cardParcelas, setCardParcelas] = useState("1");
 
   useEffect(() => {
     setMounted(true);
@@ -276,7 +362,24 @@ export default function CheckoutPage() {
   const cepDigits = cep.replace(/\D/g, "");
   const cepValido = cepDigits.length === 8;
 
-  async function salvarPedido(formaPagamento: "whatsapp" | "pix") {
+  function removerItemCarrinho(index: number) {
+    setCarrinho((prev) => {
+      const next = prev.filter((_, itemIndex) => itemIndex !== index);
+      saveCartToStorage(next);
+
+      if (!next.length) {
+        setFreightOptions([]);
+        setSelectedFreight("");
+        setCheckoutFeedback("Sua sacola ficou vazia. Adicione produtos para continuar.");
+      } else {
+        setCheckoutFeedback("Produto removido da sacola.");
+      }
+
+      return next;
+    });
+  }
+
+  async function salvarPedido(formaPagamento: "whatsapp" | "pix" | "cartao") {
     if (!carrinho.length) return null;
 
     const user = auth.currentUser;
@@ -285,14 +388,26 @@ export default function CheckoutPage() {
     const freteAtualInterno = freightOptions.find((opt) => opt.id === selectedFreight);
     const numeroPedido = gerarNumeroPedido();
 
+    // ✅ O CRM Pedidos espera `numero` como number.
+    // O número legível do site continua em `numeroPedido`/`numeroSite`.
+    const numeroCrm = Number(numeroPedido.replace(/\D/g, "").slice(-6)) || Date.now();
+
     // ✅ Payload compatível com o CRM Pedidos
     // Caminho usado pelo CRM: pedidos/default/lista/{pedidoId}
     const payload = {
       id: "",
 
-      // Site usa número em texto; CRM também recebe numeroPedido/numeroSite
+      // ✅ Número do pedido em vários formatos para compatibilidade com o CRM
       numeroPedido,
       numeroSite: numeroPedido,
+      numero: numeroCrm,
+      pedido: numeroPedido,
+      codigo: numeroPedido,
+      codigoPedido: numeroPedido,
+      pedidoNumero: numeroPedido,
+      numeroVenda: numeroPedido,
+      numeroFormatado: numeroPedido,
+      numeroDoPedido: numeroPedido,
 
       clienteNome: user?.displayName || "Cliente do site",
       telefone: "",
@@ -316,9 +431,19 @@ export default function CheckoutPage() {
 
       desconto: 0,
       subtotal,
+      subTotal: subtotal,
+      valorSubtotal: subtotal,
       total,
+      valor: total,
       valorTotal: total,
-      totalPix: pixTotal,
+      totalPedido: total,
+      totalGeral: total,
+      totalCompra: total,
+      valorPedido: total,
+      valorFinal: total,
+      valorVenda: total,
+      totalCartao: formaPagamento === "cartao" ? total : 0,
+      totalPix: formaPagamento === "pix" ? pixTotal : 0,
 
       itens: itensPedido,
       items: itensPedido,
@@ -326,7 +451,7 @@ export default function CheckoutPage() {
 
       pagamentos: [
         {
-          forma: formaPagamento === "pix" ? "pix" : "outros",
+          forma: formaPagamento === "pix" ? "pix" : formaPagamento === "cartao" ? "cartao" : "outros",
           valor: total,
         },
       ],
@@ -351,7 +476,32 @@ export default function CheckoutPage() {
     // ✅ Garante que o documento também tenha o próprio ID salvo no campo id
     await setDoc(
       doc(db, "pedidos", "default", "lista", ref.id),
-      { id: ref.id, updatedAt: new Date().toISOString() },
+      {
+        id: ref.id,
+        numeroPedido,
+        numeroSite: numeroPedido,
+      numero: numeroCrm,
+        pedido: numeroPedido,
+        codigo: numeroPedido,
+        codigoPedido: numeroPedido,
+        pedidoNumero: numeroPedido,
+        numeroVenda: numeroPedido,
+        numeroFormatado: numeroPedido,
+        numeroDoPedido: numeroPedido,
+        subtotal,
+        subTotal: subtotal,
+        valorSubtotal: subtotal,
+        total,
+        valor: total,
+        valorTotal: total,
+        totalPedido: total,
+        totalGeral: total,
+        totalCompra: total,
+        valorPedido: total,
+        valorFinal: total,
+        valorVenda: total,
+        updatedAt: new Date().toISOString(),
+      },
       { merge: true }
     );
 
@@ -361,7 +511,7 @@ export default function CheckoutPage() {
       id: ref.id,
     });
 
-    return { id: ref.id, numeroPedido };
+    return { id: ref.id, numeroPedido, numeroCrm };
   }
 
 
@@ -445,75 +595,261 @@ export default function CheckoutPage() {
   }
 
   async function solicitarPix() {
-    const itens = carrinho
-      .map(
-        (item) =>
-          `• ${item.nome} - Qtd: ${Number(item.qtd || item.quantidade || 1)} - ${formatarMoeda(
-            Number(item.preco || item.precoVenda || 0) * Number(item.qtd || item.quantidade || 1)
-          )}`
-      )
-      .join("\n");
-
-    const freteTexto = freightOptions.length
-      ? `${freightOptions.find((opt) => opt.id === selectedFreight)?.nome ?? "Frete"} - ${formatarMoeda(
-          freteSelecionado
+  const itens = carrinho
+    .map(
+      (item) =>
+        `• ${item.nome} - Qtd: ${Number(
+          item.qtd || item.quantidade || 1
+        )} - ${formatarMoeda(
+          Number(item.preco || item.precoVenda || 0) *
+            Number(item.qtd || item.quantidade || 1)
         )}`
-      : "Ainda não calculado";
+    )
+    .join("\n");
 
-    const fallbackTexto = encodeURIComponent(
-      `Olá! Quero receber a chave Pix / link de pagamento do meu pedido na Maison Noor.\n\nCEP: ${
-        cep || "não informado"
-      }\nFrete: ${freteTexto}\n\nPedido:\n${itens || "Sacola vazia"}\n\nSubtotal: ${formatarMoeda(
-        subtotal
-      )}\nTotal no Pix: ${formatarMoeda(pixTotal)}`
+  const freteTexto = freightOptions.length
+    ? `${
+        freightOptions.find((opt) => opt.id === selectedFreight)?.nome ??
+        "Frete"
+      } - ${formatarMoeda(freteSelecionado)}`
+    : "Ainda não calculado";
+
+  const fallbackTexto = encodeURIComponent(
+    `Olá! Quero receber a chave Pix / link de pagamento do meu pedido na Maison Noor.\n\nCEP: ${
+      cep || "não informado"
+    }\nFrete: ${freteTexto}\n\nPedido:\n${
+      itens || "Sacola vazia"
+    }\n\nSubtotal: ${formatarMoeda(
+      subtotal
+    )}\nTotal no Pix: ${formatarMoeda(pixTotal)}`
+  );
+
+  try {
+    setSavingOrder(true);
+    setCheckoutFeedback("");
+
+    const pedidoSalvo = await salvarPedido("pix");
+
+    const pedidoNumeroTexto = pedidoSalvo?.numeroPedido
+      ? `#${pedidoSalvo.numeroPedido}`
+      : "a gerar";
+
+    if (typeof window !== "undefined" && pedidoSalvo?.id) {
+      window.sessionStorage.setItem(
+        "maison_noor_checkout_last_order",
+        JSON.stringify({
+          id: pedidoSalvo.id,
+          numeroPedido: pedidoSalvo.numeroPedido,
+          formaPagamento: "pix",
+          createdAt: new Date().toISOString(),
+          expiresAtIso: getExpiracaoPedidoIso(24),
+        })
+      );
+    }
+
+    // NOVO PIX PAGBANK
+    const response = await fetch("/api/pagbank-pix", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        numeroPedido: pedidoSalvo?.numeroPedido,
+        nome: "Cliente Maison Noor",
+        email: "cliente@maisonnoor.com.br",
+        produto: "Pedido Maison Noor",
+        total: pixTotal,
+      }),
+    });
+
+    const data = await response.json();
+
+    const qr =
+      data?.qr_codes?.[0]?.links?.find(
+        (link: any) => link.rel === "QRCODE.PNG"
+      )?.href || "";
+
+    const copia = data?.qr_codes?.[0]?.text || "";
+
+    await limparSacolaAposPedido();
+
+    setCheckoutFeedback(
+      `Pedido ${pedidoNumeroTexto} salvo com sucesso.`
     );
+
+    if (qr) {
+      if (typeof window !== "undefined") {
+  sessionStorage.setItem(
+    "maison_noor_pix_pagbank",
+    JSON.stringify({
+      qr,
+      copia,
+      pedido: pedidoNumeroTexto,
+      total: pixTotal,
+      criadoEm: new Date().toISOString(),
+    })
+  );
+
+  window.location.href = "/checkout/pix";
+  return;
+}
+    } else {
+      window.open(
+        `https://wa.me/5512982627108?text=${fallbackTexto}`,
+        "_blank"
+      );
+    }
+
+    if (typeof window !== "undefined") {
+      const target = `/checkout/sucesso?pedido=${encodeURIComponent(
+        String(pedidoSalvo?.numeroPedido || "")
+      )}&forma=pix`;
+
+      window.location.replace(target);
+    }
+  } catch (error) {
+    console.error("Erro ao gerar Pix:", error);
+
+    setCheckoutFeedback(
+      "Não foi possível gerar o Pix automático. Você ainda pode solicitar pelo WhatsApp."
+    );
+
+    window.open(
+      `https://wa.me/5512982627108?text=${fallbackTexto}`,
+      "_blank"
+    );
+  } finally {
+    setSavingOrder(false);
+  }
+}
+
+  async function pagarCartao() {
+    const cpfDigits = cardCpf.replace(/\D/g, "");
+    const numeroDigits = cardNumero.replace(/\D/g, "");
+    const [expMonthRaw, expYearRaw] = cardValidade.split("/");
+    const expMonth = String(expMonthRaw || "").padStart(2, "0");
+    const expYear = expYearRaw?.length === 2 ? `20${expYearRaw}` : String(expYearRaw || "");
+
+    if (!carrinho.length) {
+      setCheckoutFeedback("Sua sacola está vazia.");
+      return;
+    }
+
+    if (!cardNome.trim() || numeroDigits.length < 13 || !expMonthRaw || !expYearRaw || cardCvv.length < 3 || cpfDigits.length !== 11) {
+      setCheckoutFeedback("Preencha os dados do cartão corretamente antes de finalizar.");
+      return;
+    }
 
     try {
       setSavingOrder(true);
-      setCheckoutFeedback("");
+      setCheckoutFeedback("Criptografando cartão com segurança...");
 
-      const pedidoSalvo = await salvarPedido("pix");
+      const publicKeyResponse = await fetch("/api/pagbank-public-key", { cache: "no-store" });
+      const publicKeyData = await publicKeyResponse.json();
+
+      if (!publicKeyResponse.ok || !publicKeyData?.public_key) {
+        throw new Error(publicKeyData?.mensagem || "Não foi possível obter a chave pública do PagBank.");
+      }
+
+      if (!window.PagSeguro?.encryptCard) {
+        throw new Error("SDK do PagBank ainda não foi carregado. Atualize a página e tente novamente.");
+      }
+
+      const encrypted = window.PagSeguro.encryptCard({
+        publicKey: publicKeyData.public_key,
+        holder: cardNome.trim(),
+        number: numeroDigits,
+        expMonth,
+        expYear,
+        securityCode: cardCvv.replace(/\D/g, ""),
+      });
+
+      if (encrypted.hasErrors || !encrypted.encryptedCard) {
+        throw new Error(
+          encrypted.errors?.map((error) => error.message || error.code).join(" | ") ||
+            "Erro ao criptografar cartão."
+        );
+      }
+
+      setCheckoutFeedback("Pedido salvo. Enviando pagamento para o PagBank...");
+
+      const pedidoSalvo = await salvarPedido("cartao");
 
       if (!pedidoSalvo?.id) {
         throw new Error("Pedido não foi salvo corretamente.");
       }
 
-      const response = await fetch("/api/pagbank-pix", {
+      const response = await fetch("/api/pagbank-cartao", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           numeroPedido: pedidoSalvo.numeroPedido,
-          nome: auth.currentUser?.displayName || "Cliente Maison Noor",
+          nome: auth.currentUser?.displayName || cardNome.trim() || "Cliente Maison Noor",
           email: auth.currentUser?.email || "cliente@maisonnoor.com.br",
+          cpf: cpfDigits,
           produto: "Pedido Maison Noor",
-          total: pixTotal,
+          total,
+          installments: Number(cardParcelas || 1),
+          encryptedCard: encrypted.encryptedCard,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("Erro ao gerar Pix no PagBank.");
-      }
-
       const data = await response.json();
 
-      const qr =
-        data?.qr_codes?.[0]?.links?.find((link: any) => link.rel === "QRCODE.PNG")?.href || "";
-
-      const copia = data?.qr_codes?.[0]?.text || "";
-
-      if (!qr && !copia) {
-        throw new Error("PagBank não retornou QR Code Pix.");
+      if (!response.ok) {
+        throw new Error(data?.mensagem || data?.error_messages?.[0]?.description || "Pagamento não aprovado pelo PagBank.");
       }
+
+      const chargeStatus = String(data?.charges?.[0]?.status || "").toUpperCase();
+      const aprovado = chargeStatus === "PAID" || chargeStatus === "AUTHORIZED";
 
       await setDoc(
         doc(db, "pedidos", "default", "lista", pedidoSalvo.id),
         {
-          pagbankPix: data,
-          pixQrCode: qr,
-          pixCopiaCola: copia,
-          statusPagamento: "pendente",
+          pagbankCartao: data,
+          pagbankStatus: chargeStatus || "PROCESSING",
+
+          status: aprovado ? "pago" : "aguardando_pagamento",
+          statusPagamento: aprovado ? "pago" : "aguardando_pagamento",
+          formaPagamento: "cartao",
+
+          subtotal,
+          frete: freteSelecionado,
+          freteValor: freteSelecionado,
+          total,
+          valor: total,
+          valorTotal: total,
+          totalPedido: total,
+          totalGeral: total,
+          totalCompra: total,
+          valorPedido: total,
+          valorFinal: total,
+          valorVenda: total,
+          totalCartao: total,
+          itens: mapOrderItems(carrinho),
+          items: mapOrderItems(carrinho),
+          numeroPedido: pedidoSalvo.numeroPedido,
+          numeroSite: pedidoSalvo.numeroPedido,
+          numero: pedidoSalvo.numeroCrm,
+          pedido: pedidoSalvo.numeroPedido,
+          codigo: pedidoSalvo.numeroPedido,
+          codigoPedido: pedidoSalvo.numeroPedido,
+          pedidoNumero: pedidoSalvo.numeroPedido,
+          numeroVenda: pedidoSalvo.numeroPedido,
+          numeroFormatado: pedidoSalvo.numeroPedido,
+          numeroDoPedido: pedidoSalvo.numeroPedido,
+
+          pagamentos: [
+            {
+              forma: "cartao",
+              valor: total,
+              parcelas: Number(cardParcelas || 1),
+              status: aprovado ? "pago" : "aguardando_pagamento",
+            },
+          ],
+
+          parcelas: Number(cardParcelas || 1),
+          pagoEm: aprovado ? new Date().toISOString() : null,
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
@@ -525,47 +861,33 @@ export default function CheckoutPage() {
           JSON.stringify({
             id: pedidoSalvo.id,
             numeroPedido: pedidoSalvo.numeroPedido,
-            formaPagamento: "pix",
+            formaPagamento: "cartao",
+            statusPagamento: aprovado ? "pago" : "aguardando_pagamento",
             createdAt: new Date().toISOString(),
             expiresAtIso: getExpiracaoPedidoIso(24),
-          })
-        );
-
-        window.sessionStorage.setItem(
-          "maison_noor_pix_pagbank",
-          JSON.stringify({
-            qr,
-            copia,
-            pedidoId: pedidoSalvo.id,
-            numeroPedido: pedidoSalvo.numeroPedido,
-            pedido: `#${pedidoSalvo.numeroPedido}`,
-            total: pixTotal,
-            criadoEm: new Date().toISOString(),
           })
         );
       }
 
       await limparSacolaAposPedido();
 
-      setCheckoutFeedback(`Pedido #${pedidoSalvo.numeroPedido} salvo com sucesso.`);
-
-      window.location.href = "/checkout/pix";
-      return;
-    } catch (error) {
-      console.error("Erro ao gerar Pix:", error);
-
-      setCheckoutFeedback(
-        "Não foi possível gerar o Pix automático. Você ainda pode solicitar pelo WhatsApp."
-      );
-
-      window.open(`https://wa.me/5512982627108?text=${fallbackTexto}`, "_blank");
+      if (typeof window !== "undefined") {
+        window.location.href = `/checkout/sucesso?pedido=${encodeURIComponent(
+          String(pedidoSalvo.numeroPedido || "")
+        )}&forma=cartao`;
+      }
+    } catch (error: any) {
+      console.error("Erro ao pagar com cartão:", error);
+      setCheckoutFeedback(error?.message || "Não foi possível pagar com cartão. Tente Pix ou WhatsApp.");
     } finally {
       setSavingOrder(false);
     }
   }
 
+
   return (
     <main style={{ ...styles.page, paddingBottom: isMobile && carrinho.length ? 108 : 24 }}>
+      <Script src="https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/browser/pagseguro.min.js" strategy="afterInteractive" />
       <section style={styles.container}>
         <div style={styles.hero}>
           <div style={{ flex: 1, minWidth: 260 }}>
@@ -660,6 +982,16 @@ export default function CheckoutPage() {
                             Number(item.preco || item.precoVenda || 0) * Number(item.qtd || item.quantidade || 1)
                           )}
                         </strong>
+
+                        <button
+                          type="button"
+                          onClick={() => removerItemCarrinho(i)}
+                          style={styles.itemRemoveButton}
+                          aria-label={`Remover ${item.nome} da sacola`}
+                          title="Remover produto"
+                        >
+                          ×
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -819,16 +1151,123 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <div style={styles.pixHighlightCard}>
-                <div>
-                  <span style={styles.pixHighlightLabel}>Pix Maison Noor</span>
-                  <strong style={styles.pixHighlightTitle}>Solicite sua chave Pix com pedido já salvo</strong>
-                </div>
-                <span style={styles.pixHighlightValue}>{formatarMoeda(pixTotal)}</span>
+              <div style={styles.paymentSelector}>
+                <button
+                  type="button"
+                  onClick={() => setFormaPagamentoSelecionada("pix")}
+                  style={{
+                    ...styles.paymentMethodButton,
+                    ...(formaPagamentoSelecionada === "pix" ? styles.paymentMethodButtonActive : {}),
+                  }}
+                >
+                  Pix PagBank
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormaPagamentoSelecionada("cartao")}
+                  style={{
+                    ...styles.paymentMethodButton,
+                    ...(formaPagamentoSelecionada === "cartao" ? styles.paymentMethodButtonActive : {}),
+                  }}
+                >
+                  Cartão de crédito
+                </button>
               </div>
 
+              {formaPagamentoSelecionada === "pix" ? (
+                <div style={styles.pixHighlightCard}>
+                  <div>
+                    <span style={styles.pixHighlightLabel}>Pix Maison Noor</span>
+                    <strong style={styles.pixHighlightTitle}>QR Code Pix automático</strong>
+                  </div>
+                  <span style={styles.pixHighlightValue}>{formatarMoeda(pixTotal)}</span>
+                </div>
+              ) : (
+                <div style={styles.cardPaymentBox}>
+                  <div style={styles.cardFieldsGrid}>
+                    <div style={styles.cardFieldFull}>
+                      <label style={styles.label}>Nome impresso no cartão</label>
+                      <input
+                        type="text"
+                        value={cardNome}
+                        onChange={(e) => setCardNome(e.target.value.toUpperCase())}
+                        placeholder="NOME SOBRENOME"
+                        autoComplete="cc-name"
+                        style={styles.input}
+                      />
+                    </div>
+
+                    <div style={styles.cardFieldFull}>
+                      <label style={styles.label}>Número do cartão</label>
+                      <input
+                        type="text"
+                        value={cardNumero}
+                        onChange={(e) => setCardNumero(formatarNumeroCartao(e.target.value))}
+                        placeholder="0000 0000 0000 0000"
+                        inputMode="numeric"
+                        autoComplete="cc-number"
+                        style={styles.input}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={styles.label}>Validade</label>
+                      <input
+                        type="text"
+                        value={cardValidade}
+                        onChange={(e) => setCardValidade(formatarValidadeCartao(e.target.value))}
+                        placeholder="MM/AA"
+                        inputMode="numeric"
+                        autoComplete="cc-exp"
+                        style={styles.input}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={styles.label}>CVV</label>
+                      <input
+                        type="text"
+                        value={cardCvv}
+                        onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                        placeholder="123"
+                        inputMode="numeric"
+                        autoComplete="cc-csc"
+                        style={styles.input}
+                      />
+                    </div>
+
+                    <div style={styles.cardFieldFull}>
+                      <label style={styles.label}>CPF do titular</label>
+                      <input
+                        type="text"
+                        value={cardCpf}
+                        onChange={(e) => setCardCpf(formatarCpf(e.target.value))}
+                        placeholder="000.000.000-00"
+                        inputMode="numeric"
+                        style={styles.input}
+                      />
+                    </div>
+
+                    <div style={styles.cardFieldFull}>
+                      <label style={styles.label}>Parcelamento sem juros</label>
+                      <select
+                        value={cardParcelas}
+                        onChange={(e) => setCardParcelas(e.target.value)}
+                        style={styles.input}
+                      >
+                        <option value="1">1x de {formatarMoeda(total)}</option>
+                        <option value="2">2x de {formatarMoeda(total / 2)}</option>
+                        <option value="3">3x de {formatarMoeda(total / 3)}</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={styles.noticeBox}>
-                Seu pedido será organizado e reservado após o envio para o atendimento Maison Noor.
+                {formaPagamentoSelecionada === "pix"
+                  ? "O QR Code Pix será gerado pelo PagBank e o pedido ficará salvo no CRM Maison Noor."
+                  : "Os dados do cartão são criptografados pelo SDK oficial do PagBank antes do envio."}
               </div>
 
               {checkoutFeedback ? <div style={styles.checkoutFeedback}>{checkoutFeedback}</div> : null}
@@ -839,25 +1278,23 @@ export default function CheckoutPage() {
                   ...styles.mainButton,
                   ...((savingOrder || !carrinho.length) ? styles.buttonDisabled : {}),
                 }}
-                onClick={solicitarPix}
+                onClick={formaPagamentoSelecionada === "pix" ? solicitarPix : pagarCartao}
                 disabled={savingOrder || !carrinho.length}
               >
-                {savingOrder ? "Gerando Pix..." : "Garantir meu pedido agora"}
+                {savingOrder
+                  ? formaPagamentoSelecionada === "pix"
+                    ? "Gerando Pix..."
+                    : "Processando cartão..."
+                  : formaPagamentoSelecionada === "pix"
+                    ? "Gerar Pix agora"
+                    : "Pagar com cartão"}
               </button>
 
-              <p style={styles.ctaMicrocopy}>Pix automático PagBank • pedido salvo antes do pagamento</p>
-
-              <button
-                type="button"
-                onClick={solicitarPix}
-                style={{
-                  ...styles.pixButton,
-                  ...((savingOrder || !carrinho.length) ? styles.buttonDisabled : {}),
-                }}
-                disabled={savingOrder || !carrinho.length}
-              >
-                {savingOrder ? "Gerando Pix..." : "Solicitar pagamento Pix"}
-              </button>
+              <p style={styles.ctaMicrocopy}>
+                {formaPagamentoSelecionada === "pix"
+                  ? "Pix automático PagBank • pedido salvo antes do pagamento"
+                  : "Cartão direto no site • até 3x sem juros"}
+              </p>
 
               <div
                 style={{
@@ -890,10 +1327,10 @@ export default function CheckoutPage() {
               ...styles.mobileStickyButton,
               ...((savingOrder || !carrinho.length) ? styles.buttonDisabled : {}),
             }}
-            onClick={solicitarPix}
+            onClick={finalizarWhatsapp}
             disabled={savingOrder || !carrinho.length}
           >
-            {savingOrder ? "Gerando Pix..." : "Garantir pedido"}
+            {savingOrder ? "Salvando..." : "Garantir pedido"}
           </button>
         </div>
       ) : null}
@@ -1075,6 +1512,23 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     padding: "12px 0",
     borderBottom: "1px solid #eee0ca",
+  },
+  itemRemoveButton: {
+    width: 38,
+    height: 38,
+    minWidth: 38,
+    borderRadius: 12,
+    border: "1px solid #e0c79f",
+    background: "rgba(255,255,255,0.86)",
+    color: "#2b2118",
+    fontSize: 22,
+    lineHeight: 1,
+    fontWeight: 800,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 8px 16px rgba(77, 56, 27, 0.05)",
   },
   thumbWrap: {
     width: 60,
@@ -1381,6 +1835,46 @@ const styles: Record<string, React.CSSProperties> = {
     background: "linear-gradient(180deg, #fffdf9, #f7ecd8)",
     fontSize: 14,
     cursor: "pointer",
+  },
+
+  paymentSelector: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 14,
+  },
+  paymentMethodButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    border: "1px solid #e0c79f",
+    background: "rgba(255,255,255,0.78)",
+    color: "#6b5c4e",
+    fontWeight: 800,
+    fontSize: 13,
+    cursor: "pointer",
+  },
+  paymentMethodButtonActive: {
+    border: "1px solid #b98a3e",
+    background: "linear-gradient(135deg, rgba(212,175,119,0.22), rgba(255,250,244,0.96))",
+    color: "#2b2118",
+    boxShadow: "0 10px 20px rgba(120, 87, 45, 0.08)",
+  },
+  cardPaymentBox: {
+    marginTop: 16,
+    marginBottom: 14,
+    borderRadius: 18,
+    padding: 13,
+    border: "1px solid rgba(212, 175, 119, 0.38)",
+    background: "rgba(255,255,255,0.74)",
+  },
+  cardFieldsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+  cardFieldFull: {
+    gridColumn: "1 / -1",
   },
   buttonDisabled: {
     opacity: 0.65,

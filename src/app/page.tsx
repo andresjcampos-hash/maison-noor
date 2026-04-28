@@ -2262,49 +2262,21 @@ Pode me passar as opções de pagamento?`
                 </div>
 
                 <div style={styles.miniCartFooterActions}>
-                  {sacola.length === 1 ? (
-                    <a
-                      href={`https://wa.me/5512982627108?text=${encodeURIComponent(
-                        `Olá! Quero comprar o perfume ${sacola[0].nome} 😍
-
-Vi no site e fiquei interessado.
-Valor: ${formatarMoeda(sacola[0].preco)}
-
-Pode me passar o frete e as opções de pagamento?`
-                      )}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.miniCartPayButton}
-                    >
-                      Solicitar pagamento
-                    </a>
-                  ) : (
-                    <a
-                      href={`https://wa.me/5512982627108?text=${encodeURIComponent(
-                        "Olá! Quero finalizar minha seleção Maison Noor:\n\n" +
-                          sacola.map((item) => `${item.nome} - ${formatarMoeda(item.preco)}`).join("\n") +
-                          "\n\nTotal: " + formatarMoeda(totalSacola)
-                      )}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.miniCartPayButton}
-                    >
-                      Solicitar pagamento
-                    </a>
-                  )}
-
-                  <a
-                    href={`https://wa.me/5512982627108?text=${encodeURIComponent(
-                      "Olá! Quero finalizar minha seleção Maison Noor:\n\n" +
-                        sacola.map((item) => `${item.nome} - ${formatarMoeda(item.preco)}`).join("\n") +
-                        "\n\nTotal: " + formatarMoeda(totalSacola)
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={styles.miniCartCheckout}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveCartToStorage(sacola);
+                      setShowMiniCart(false);
+                      window.location.href = "/checkout";
+                    }}
+                    style={{
+                      ...styles.miniCartPayButton,
+                      width: "100%",
+                      cursor: "pointer",
+                    }}
                   >
-                    Finalizar no WhatsApp
-                  </a>
+                    Ir para o checkout
+                  </button>
                 </div>
               </div>            </>
           )}
