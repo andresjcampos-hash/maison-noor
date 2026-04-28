@@ -7,6 +7,9 @@ const PAGBANK_API_URL =
     ? "https://api.pagseguro.com"
     : "https://sandbox.api.pagseguro.com";
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://www.maisonnoor.com.br";
+
 export async function POST(req: Request) {
   try {
     const token = process.env.PAGBANK_TOKEN;
@@ -19,6 +22,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+
     const valor = Math.round(Number(body.total || 0) * 100);
     const parcelas = Math.min(Math.max(Number(body.installments || 1), 1), 3);
     const cpf = String(body.cpf || "").replace(/\D/g, "");
@@ -77,13 +81,7 @@ export async function POST(req: Request) {
         },
       ],
 
-      ...(process.env.NEXT_PUBLIC_SITE_URL?.startsWith("https://")
-        ? {
-            notification_urls: [
-              `${process.env.NEXT_PUBLIC_SITE_URL}/api/pagbank-webhook`,
-            ],
-          }
-        : {}),
+      notification_urls: [`${SITE_URL}/api/pagbank-webhook`],
     };
 
     const res = await fetch(`${PAGBANK_API_URL}/orders`, {

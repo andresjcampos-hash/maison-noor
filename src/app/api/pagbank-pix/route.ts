@@ -8,7 +8,13 @@ export async function POST(req: Request) {
 
     const valor = Math.round(Number(body.total || 0) * 100);
 
-    const res = await fetch("https://sandbox.api.pagseguro.com/orders", {
+    // 🔥 CONTROLE AUTOMÁTICO DE AMBIENTE
+    const PAGBANK_API_URL =
+      process.env.PAGBANK_ENV === "production"
+        ? "https://api.pagseguro.com"
+        : "https://sandbox.api.pagseguro.com";
+
+    const res = await fetch(`${PAGBANK_API_URL}/orders`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -38,6 +44,11 @@ export async function POST(req: Request) {
               value: valor,
             },
           },
+        ],
+
+        // 🔥 WEBHOOK ATIVADO
+        notification_urls: [
+          "https://www.maisonnoor.com.br/api/pagbank-webhook",
         ],
       }),
     });
