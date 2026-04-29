@@ -604,7 +604,7 @@ export default function CheckoutPage() {
     const pixCpfDigits = pixCpf.replace(/\D/g, "");
 
     if (pixCpfDigits.length !== 11) {
-      setCheckoutFeedback("Informe um CPF válido com 11 números para gerar o Pix automático PagBank.");
+      setCheckoutFeedback("Informe um CPF válido com 11 números para gerar o Pix automático Asaas.");
       return;
     }
 
@@ -617,7 +617,7 @@ export default function CheckoutPage() {
 
     try {
       setSavingOrder(true);
-      setCheckoutFeedback("Gerando Pix seguro pelo PagBank...");
+      setCheckoutFeedback("Gerando Pix seguro pelo Asaas...");
 
       const pedidoSalvo = await salvarPedido("pix");
 
@@ -638,7 +638,7 @@ export default function CheckoutPage() {
         );
       }
 
-      const response = await fetch("/api/pagbank-pix", {
+      const response = await fetch("/api/asaas-pix", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -656,8 +656,8 @@ export default function CheckoutPage() {
       const data = await response.json().catch(() => null);
 
       if (!response.ok || data?.erro) {
-        console.error("Erro PagBank Pix:", data);
-        const detalhesPagBank =
+        console.error("Erro Asaas Pix:", data);
+        const detalhesAsaas =
           data?.detalhes?.error_messages
             ?.map((item: any) => item?.description || item?.message || item?.code)
             ?.filter(Boolean)
@@ -669,9 +669,9 @@ export default function CheckoutPage() {
 
         const mensagemDetalhada =
           data?.mensagem ||
-          detalhesPagBank ||
+          detalhesAsaas ||
           data?.message ||
-          "Erro ao gerar Pix no PagBank.";
+          "Erro ao gerar Pix no Asaas.";
 
         setCheckoutFeedback(mensagemDetalhada);
         return;
@@ -702,7 +702,7 @@ export default function CheckoutPage() {
 
       if (!qr && !copia) {
         console.error("Resposta Pix sem QR Code:", data);
-        setCheckoutFeedback("O PagBank respondeu, mas não retornou QR Code Pix. Tente novamente em instantes.");
+        setCheckoutFeedback("O Asaas respondeu, mas não retornou QR Code Pix. Tente novamente em instantes.");
         return;
       }
 
@@ -813,7 +813,7 @@ export default function CheckoutPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data?.mensagem || data?.error_messages?.[0]?.description || "Pagamento não aprovado pelo PagBank.");
+        throw new Error(data?.mensagem || data?.error_messages?.[0]?.description || "Pagamento não aprovado pelo Asaas.");
       }
 
       const chargeStatus = String(data?.charges?.[0]?.status || "").toUpperCase();
@@ -1176,7 +1176,7 @@ export default function CheckoutPage() {
                     ...(formaPagamentoSelecionada === "pix" ? styles.paymentMethodButtonActive : {}),
                   }}
                 >
-                  Pix PagBank
+                  Pix Asaas
                 </button>
                 <button
                   type="button"
@@ -1212,7 +1212,7 @@ export default function CheckoutPage() {
                       style={styles.input}
                     />
                     <span style={styles.pixCpfHint}>
-                      O PagBank exige CPF válido para gerar Pix em produção.
+                      O Asaas exige CPF válido para gerar Pix em produção.
                     </span>
                   </div>
                 </>
@@ -1300,7 +1300,7 @@ export default function CheckoutPage() {
 
               <div style={styles.noticeBox}>
                 {formaPagamentoSelecionada === "pix"
-                  ? "O QR Code Pix será gerado pelo PagBank e o pedido ficará salvo no CRM Maison Noor."
+                  ? "O QR Code Pix será gerado pelo Asaas e o pedido ficará salvo no CRM Maison Noor."
                   : "Os dados do cartão são criptografados pelo SDK oficial do PagBank antes do envio."}
               </div>
 
@@ -1326,7 +1326,7 @@ export default function CheckoutPage() {
 
               <p style={styles.ctaMicrocopy}>
                 {formaPagamentoSelecionada === "pix"
-                  ? "Pix automático PagBank • pedido salvo antes do pagamento"
+                  ? "Pix automático Asaas • pedido salvo antes do pagamento"
                   : "Cartão direto no site • até 3x sem juros"}
               </p>
 
