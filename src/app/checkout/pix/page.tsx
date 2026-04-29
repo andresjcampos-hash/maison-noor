@@ -142,6 +142,8 @@ export default function CheckoutPixPage() {
     if (!pix?.numeroPedido) return;
     if (statusPago(statusPedido)) return;
 
+    const numeroPedidoAtual = pix.numeroPedido;
+
     let ativo = true;
     let tentativas = 0;
     let interval: number | null = null;
@@ -157,7 +159,7 @@ export default function CheckoutPixPage() {
 
         const response = await fetch(
           `/api/pedido-status?numeroPedido=${encodeURIComponent(
-            String(pix.numeroPedido)
+            String(numeroPedidoAtual)
           )}`,
           { cache: "no-store" }
         );
