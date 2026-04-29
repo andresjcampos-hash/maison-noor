@@ -608,6 +608,16 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!cepValido) {
+      setCheckoutFeedback("Informe um CEP válido com 8 números antes de gerar o Pix.");
+      return;
+    }
+
+    if (!freteAtual || !selectedFreight) {
+      setCheckoutFeedback("Calcule o frete e selecione uma opção de entrega antes de gerar o Pix.");
+      return;
+    }
+
     if (!pixTotal || pixTotal <= 0) {
       setCheckoutFeedback("Valor inválido para gerar Pix. Revise sua sacola antes de continuar.");
       return;
@@ -755,6 +765,16 @@ export default function CheckoutPage() {
       setCheckoutFeedback("Preencha os dados do cartão corretamente antes de finalizar.");
       return;
     }
+    if (!cepValido) {
+      setCheckoutFeedback("Informe um CEP válido com 8 números antes de pagar com cartão.");
+      return;
+    }
+
+    if (!freteAtual || !selectedFreight) {
+      setCheckoutFeedback("Calcule o frete e selecione uma opção de entrega antes de pagar com cartão.");
+      return;
+    }
+
 
     try {
       setSavingOrder(true);
@@ -1212,7 +1232,7 @@ export default function CheckoutPage() {
                       style={styles.input}
                     />
                     <span style={styles.pixCpfHint}>
-                      O Asaas exige CPF válido para gerar Pix em produção.
+                      Informe CPF válido. O CEP e o frete também são obrigatórios antes do pagamento.
                     </span>
                   </div>
                 </>
@@ -1300,7 +1320,7 @@ export default function CheckoutPage() {
 
               <div style={styles.noticeBox}>
                 {formaPagamentoSelecionada === "pix"
-                  ? "O QR Code Pix será gerado pelo Asaas e o pedido ficará salvo no CRM Maison Noor."
+                  ? "O QR Code Pix será gerado pelo Asaas após calcular o frete; o pedido ficará salvo no CRM Maison Noor."
                   : "Os dados do cartão são criptografados pelo SDK oficial do PagBank antes do envio."}
               </div>
 
