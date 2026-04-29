@@ -2,17 +2,26 @@ import { NextResponse } from "next/server";
 import admin from "@/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
-
-const db = admin.firestore();
+export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   try {
+    // 🔥 BLOQUEIO TOTAL DE FIREBASE NO BUILD
+    if (!admin.apps.length) {
+      return NextResponse.json({
+        ok: false,
+        mensagem: "Firebase não inicializado (build/local).",
+      });
+    }
+
+    const db = admin.firestore();
+
     const { searchParams } = new URL(req.url);
     const numeroPedido = searchParams.get("numeroPedido");
 
     if (!numeroPedido) {
       return NextResponse.json(
-        { ok: false, mensagem: "numeroPedido não informado." },
+        { ok: false, mensagem: "numeroPedido não informado" },
         { status: 400 }
       );
     }
@@ -29,11 +38,7 @@ export async function GET(req: Request) {
 
     if (snapshot.empty) {
       return NextResponse.json(
-        {
-          ok: false,
-          mensagem: "Pedido não encontrado.",
-          numeroPedido,
-        },
+        { ok: false, mensagem: "Pedido não encontrado" },
         { status: 404 }
       );
     }
@@ -42,20 +47,16 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      numeroPedido,
-      status: pedido.status || pedido.pagamentoStatus || "aguardando_pagamento",
-      pagamentoStatus:
-        pedido.pagamentoStatus || pedido.status || "aguardando_pagamento",
-      formaPagamento: pedido.formaPagamento || null,
-      atualizadoEm: pedido.atualizadoEm || null,
+      status: pedido.status,
+      pagamentoStatus: pedido.pagamentoStatus,
     });
   } catch (error: any) {
-    console.error("Erro ao consultar status do pedido:", error);
+    console.error("ERRO PEDIDO STATUS:", error);
 
     return NextResponse.json(
       {
         ok: false,
-        mensagem: "Erro interno ao consultar status do pedido.",
+        mensagem: "Erro ao consultar pedido",
         erro: error?.message || String(error),
       },
       { status: 500 }
