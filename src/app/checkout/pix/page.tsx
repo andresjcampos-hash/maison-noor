@@ -14,7 +14,13 @@ type PixData = {
   criadoEm?: string;
 };
 
-type StatusPedido = "aguardando_pagamento" | "pendente" | "pago" | "cancelado" | "vencido" | string;
+type StatusPedido =
+  | "aguardando_pagamento"
+  | "pendente"
+  | "pago"
+  | "cancelado"
+  | "vencido"
+  | string;
 
 function formatarMoeda(valor?: number) {
   return Number(valor || 0).toLocaleString("pt-BR", {
@@ -58,7 +64,12 @@ function normalizarPixData(data: any): PixData {
   return {
     qr: qrLink,
     copia,
-    pedido: data?.pedido || data?.numeroPedido || data?.reference_id || data?.id || "Pedido Maison Noor",
+    pedido:
+      data?.pedido ||
+      data?.numeroPedido ||
+      data?.reference_id ||
+      data?.id ||
+      "Pedido Maison Noor",
     numeroPedido: data?.numeroPedido || pedidoLimpo || undefined,
     pedidoId: data?.pedidoId || data?.id || undefined,
     total:
@@ -88,8 +99,11 @@ function tocarSomPagamentoAprovado() {
 export default function CheckoutPixPage() {
   const [pix, setPix] = useState<PixData | null>(null);
   const [copiado, setCopiado] = useState(false);
-  const [statusPedido, setStatusPedido] = useState<StatusPedido>("aguardando_pagamento");
-  const [statusMensagem, setStatusMensagem] = useState("Aguardando confirmação do pagamento...");
+  const [statusPedido, setStatusPedido] =
+    useState<StatusPedido>("aguardando_pagamento");
+  const [statusMensagem, setStatusMensagem] = useState(
+    "Aguardando confirmação do pagamento..."
+  );
   const [consultando, setConsultando] = useState(false);
   const somPagamentoTocadoRef = useRef(false);
 
@@ -125,15 +139,26 @@ export default function CheckoutPixPage() {
   }, []);
 
   useEffect(() => {
-    if (!pix?.numeroPedido || statusPago(statusPedido)) return;
+    if (!pix?.numeroPedido) return;
+    if (statusPago(statusPedido)) return;
 
     let ativo = true;
+    let tentativas = 0;
+    let interval: number | null = null;
+
+    const LIMITE_TENTATIVAS = 60;
 
     async function consultarStatus() {
+      if (!ativo) return;
+
       try {
+        tentativas += 1;
         setConsultando(true);
+
         const response = await fetch(
-          `/api/pedido-status?numeroPedido=${encodeURIComponent(String(pix?.numeroPedido || ""))}`,
+          `/api/pedido-status?numeroPedido=${encodeURIComponent(
+            String(pix.numeroPedido)
+          )}`,
           { cache: "no-store" }
         );
 
@@ -141,19 +166,45 @@ export default function CheckoutPixPage() {
         if (!ativo) return;
 
         if (response.ok && data?.ok) {
-          const novoStatus = data.pagamentoStatus || data.status || "aguardando_pagamento";
+          const novoStatus =
+            data.pagamentoStatus || data.status || "aguardando_pagamento";
+
           setStatusPedido(novoStatus);
 
           if (statusPago(novoStatus)) {
-            setStatusMensagem("Pagamento aprovado! Seu pedido foi confirmado com sucesso.");
+            setStatusMensagem(
+              "Pagamento aprovado! Seu pedido foi confirmado com sucesso."
+            );
 
             if (!somPagamentoTocadoRef.current) {
               somPagamentoTocadoRef.current = true;
               tocarSomPagamentoAprovado();
             }
-          } else {
-            setStatusMensagem("Aguardando confirmação do pagamento...");
+
+            if (interval) window.clearInterval(interval);
+            return;
           }
+
+          if (
+            novoStatus === "cancelado" ||
+            novoStatus === "vencido" ||
+            novoStatus === "cancelled" ||
+            novoStatus === "overdue"
+          ) {
+            setStatusMensagem("Pagamento não confirmado ou expirado.");
+            if (interval) window.clearInterval(interval);
+            return;
+          }
+
+          setStatusMensagem("Aguardando confirmação do pagamento...");
+        }
+
+        if (tentativas >= LIMITE_TENTATIVAS) {
+          setStatusMensagem(
+            "Ainda aguardando confirmação. Você pode acompanhar pela sua conta."
+          );
+
+          if (interval) window.clearInterval(interval);
         }
       } catch (error) {
         console.error("Erro ao consultar status do pedido:", error);
@@ -163,13 +214,13 @@ export default function CheckoutPixPage() {
     }
 
     consultarStatus();
-    const interval = window.setInterval(consultarStatus, 5000);
+    interval = window.setInterval(consultarStatus, 5000);
 
     return () => {
       ativo = false;
-      window.clearInterval(interval);
+      if (interval) window.clearInterval(interval);
     };
-  }, [pix?.numeroPedido, statusPedido]);
+  }, [pix?.numeroPedido]);
 
   const valor = useMemo(() => formatarMoeda(pix?.total), [pix?.total]);
   const pago = statusPago(statusPedido);
@@ -276,7 +327,7 @@ export default function CheckoutPixPage() {
 
         <p style={styles.note}>
           {pago
-            ? "Seu pedido será preparado pela Maison Noor. Você também pode acompanhar pelo atendimento." 
+            ? "Seu pedido será preparado pela Maison Noor. Você também pode acompanhar pelo atendimento."
             : "Após o pagamento, a confirmação pode levar alguns instantes. Esta tela verifica automaticamente o status do pedido."}
         </p>
       </section>
