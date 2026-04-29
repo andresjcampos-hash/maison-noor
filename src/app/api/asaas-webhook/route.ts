@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 const db = admin.firestore();
 
-function normalizarStatus(evento: string) {
+function statusPorEvento(evento: string) {
   if (evento === "PAYMENT_RECEIVED" || evento === "PAYMENT_CONFIRMED") {
     return "pago";
   }
@@ -22,7 +22,7 @@ function normalizarStatus(evento: string) {
     return "cancelado";
   }
 
-  return "aguardando_pagamento";
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -33,36 +33,41 @@ export async function POST(req: Request) {
     const payment = body?.payment;
 
     if (!evento || !payment) {
-      return NextResponse.json(
-        { ok: false, mensagem: "Payload inválido." },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: true, mensagem: "Payload ignorado." });
     }
 
-    const numeroPedido =
-      payment.externalReference ||
-      payment.external_reference ||
-      payment.description ||
-      "";
+    const numeroPedido = payment.externalReference || "";
+    const asaasPaymentId = payment.id || "";
 
-    const asaasPaymentId = payment.id;
-    const status = normalizarStatus(evento);
+    // Eventos como PAYMENT_CREATED não devem quebrar nem atualizar como pago
+    const novoStatus = statusPorEvento(evento);
+
+    if (!novoStatus) {
+      return NextResponse.json({
+        ok: true,
+        mensagem: `Evento ${evento} recebido e ignorado.`,
+        pedido: numeroPedido,
+      });
+    }
 
     if (!numeroPedido) {
-      return NextResponse.json(
-        { ok: false, mensagem: "Pedido sem externalReference." },
-        { status: 200 }
-      );
+      return NextResponse.json({
+        ok: true,
+        mensagem: "Webhook recebido sem externalReference.",
+      });
     }
 
-    const pedidosRef = db.collection("pedidos").doc("default").collection("lista");
+    const pedidosRef = db
+      .collection("pedidos")
+      .doc("default")
+      .collection("lista");
 
-    const query = await pedidosRef
+    const snapshot = await pedidosRef
       .where("numeroPedido", "==", numeroPedido)
       .limit(1)
       .get();
 
-    if (query.empty) {
+    if (snapshot.empty) {
       await db.collection("asaas_webhooks_nao_encontrados").add({
         evento,
         numeroPedido,
@@ -73,15 +78,16 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         ok: true,
-        mensagem: "Pedido não encontrado, webhook salvo para análise.",
+        mensagem: "Pedido não encontrado. Webhook salvo para análise.",
+        pedido: numeroPedido,
       });
     }
 
-    const pedidoDoc = query.docs[0];
+    const pedidoDoc = snapshot.docs[0];
 
     await pedidoDoc.ref.update({
-      status,
-      pagamentoStatus: status,
+      status: novoStatus,
+      pagamentoStatus: novoStatus,
       formaPagamento: "Pix Asaas",
       asaasPaymentId,
       asaasEvento: evento,
@@ -91,15 +97,19 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      mensagem: "Webhook Asaas processado.",
+      mensagem: "Webhook Asaas processado com sucesso.",
       pedido: numeroPedido,
-      status,
+      status: novoStatus,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro webhook Asaas:", error);
 
     return NextResponse.json(
-      { ok: false, mensagem: "Erro interno no webhook Asaas." },
+      {
+        ok: false,
+        mensagem: "Erro interno no webhook Asaas.",
+        erro: error?.message || String(error),
+      },
       { status: 500 }
     );
   }
