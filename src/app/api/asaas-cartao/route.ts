@@ -34,7 +34,6 @@ function obterChaveAsaas() {
   return chavePadrao || chaveProducao || chaveLegada;
 }
 
-const ASAAS_API_KEY = obterChaveAsaas();
 
 function hojeISO() {
   return new Date().toISOString().slice(0, 10);
@@ -103,11 +102,22 @@ function getRemoteIp(req: Request) {
 }
 
 async function asaasFetch(path: string, payload: any) {
+  // Lê a chave em runtime, dentro da função, para evitar problema no Vercel/serverless.
+  const apiKey = obterChaveAsaas();
+
+  if (!apiKey) {
+    throw new Error(
+      ASAAS_ENV === "production"
+        ? "ASAAS_API_KEY_PROD não configurada no Vercel."
+        : "ASAAS_API_KEY não configurada."
+    );
+  }
+
   return fetch(`${ASAAS_API_URL}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      access_token: ASAAS_API_KEY,
+      access_token: apiKey,
     },
     body: JSON.stringify(payload),
   });
@@ -136,13 +146,6 @@ export async function POST(req: Request) {
     const numeroEndereco = normalizarTexto(body?.numeroEndereco || body?.addressNumber, "0");
     const { expiryMonth, expiryYear } = separarValidade(validade);
     const remoteIp = getRemoteIp(req);
-
-    if (!ASAAS_API_KEY) {
-      return NextResponse.json(
-        { erro: true, mensagem: ASAAS_ENV === "production" ? "ASAAS_API_KEY_PROD não configurada no Vercel." : "ASAAS_API_KEY não configurada." },
-        { status: 500 }
-      );
-    }
 
     if (!valor || valor <= 0) {
       return NextResponse.json({ erro: true, mensagem: "Valor inválido." }, { status: 400 });
