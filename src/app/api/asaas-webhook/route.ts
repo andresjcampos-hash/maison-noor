@@ -10,6 +10,9 @@ function statusPorEvento(evento: string) {
     case "PAYMENT_RECEIVED":
       return "pago";
 
+    case "PAYMENT_AWAITING_RISK_ANALYSIS":
+      return "em_analise";
+
     case "PAYMENT_OVERDUE":
       return "vencido";
 
@@ -19,11 +22,22 @@ function statusPorEvento(evento: string) {
       return "cancelado";
 
     case "PAYMENT_CREATED":
+    case "PAYMENT_UPDATED":
       return "aguardando_pagamento";
 
     default:
       return null;
   }
+}
+
+function formaPagamentoPorBillingType(billingType?: string) {
+  const tipo = String(billingType || "").toUpperCase();
+
+  if (tipo === "CREDIT_CARD") return "cartao";
+  if (tipo === "PIX") return "pix";
+  if (tipo === "BOLETO") return "boleto";
+
+  return "asaas";
 }
 
 export async function POST(req: Request) {
@@ -41,7 +55,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const evento = body?.event;
+    const evento = String(body?.event || "");
     const payment = body?.payment;
 
     if (!evento || !payment) {
@@ -62,6 +76,8 @@ export async function POST(req: Request) {
 
     const asaasPaymentId = String(payment?.id || "");
     const externalReference = String(payment?.externalReference || "").trim();
+    const billingType = String(payment?.billingType || "");
+    const formaPagamento = formaPagamentoPorBillingType(billingType);
 
     if (!externalReference && !asaasPaymentId) {
       return NextResponse.json({
@@ -70,10 +86,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const pedidosRef = db
-      .collection("pedidos")
-      .doc("default")
-      .collection("lista");
+    const pedidosRef = db.collection("pedidos").doc("default").collection("lista");
 
     let pedidoDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
 
@@ -84,6 +97,15 @@ export async function POST(req: Request) {
         .get();
 
       if (!snapNumero.empty) pedidoDoc = snapNumero.docs[0];
+    }
+
+    if (!pedidoDoc && externalReference) {
+      const snapNumeroSite = await pedidosRef
+        .where("numeroSite", "==", externalReference)
+        .limit(1)
+        .get();
+
+      if (!snapNumeroSite.empty) pedidoDoc = snapNumeroSite.docs[0];
     }
 
     if (!pedidoDoc && asaasPaymentId) {
@@ -100,7 +122,10 @@ export async function POST(req: Request) {
         evento,
         externalReference,
         asaasPaymentId,
+        billingType,
+        formaPagamento,
         payment,
+        body,
         recebidoEm: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -114,19 +139,25 @@ export async function POST(req: Request) {
 
     const updateData: any = {
       status: novoStatus,
+      statusPagamento: novoStatus,
       pagamentoStatus: novoStatus,
-      formaPagamento: "Pix Asaas",
+      formaPagamento,
+      billingType,
       asaasPaymentId,
+      asaasStatus: payment?.status || "",
       asaasEvento: evento,
       asaasUltimoWebhook: payment,
+      asaasWebhookBody: body,
       atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: new Date().toISOString(),
     };
 
     if (novoStatus === "pago") {
       updateData.pagoEm = admin.firestore.FieldValue.serverTimestamp();
+      updateData.dataPagamento = new Date().toISOString();
     }
 
-    await pedidoDoc.ref.update(updateData);
+    await pedidoDoc.ref.set(updateData, { merge: true });
 
     return NextResponse.json({
       ok: true,
@@ -135,15 +166,19 @@ export async function POST(req: Request) {
       externalReference,
       asaasPaymentId,
       status: novoStatus,
+      formaPagamento,
     });
   } catch (error: any) {
     console.error("ERRO WEBHOOK ASAAS:", error);
 
-    return NextResponse.json({
-      ok: false,
-      mensagem: "Erro interno capturado no webhook Asaas.",
-      erro: error?.message || String(error),
-    });
+    return NextResponse.json(
+      {
+        ok: false,
+        mensagem: "Erro interno capturado no webhook Asaas.",
+        erro: error?.message || String(error),
+      },
+      { status: 500 }
+    );
   }
 }
 
