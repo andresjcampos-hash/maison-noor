@@ -35,6 +35,29 @@ function obterChaveAsaas() {
 }
 
 
+function logDiagnosticoAsaas() {
+  const chaveProducao = limparEnv(process.env.ASAAS_API_KEY_PROD);
+  const chavePadrao = limparEnv(process.env.ASAAS_API_KEY);
+  const chaveLegada = limparEnv(process.env.ASAAS_TOKEN);
+  const chaveSelecionada = obterChaveAsaas();
+
+  console.log("ASAAS DEBUG ENV:", {
+    ASAAS_ENV,
+    ASAAS_API_URL,
+    ASAAS_API_KEY_PROD_existe: Boolean(chaveProducao),
+    ASAAS_API_KEY_PROD_prefixo: chaveProducao.slice(0, 12),
+    ASAAS_API_KEY_PROD_tamanho: chaveProducao.length,
+    ASAAS_API_KEY_existe: Boolean(chavePadrao),
+    ASAAS_API_KEY_prefixo: chavePadrao.slice(0, 12),
+    ASAAS_API_KEY_tamanho: chavePadrao.length,
+    ASAAS_TOKEN_existe: Boolean(chaveLegada),
+    ASAAS_TOKEN_prefixo: chaveLegada.slice(0, 12),
+    ASAAS_TOKEN_tamanho: chaveLegada.length,
+    chaveSelecionada_prefixo: chaveSelecionada.slice(0, 12),
+    chaveSelecionada_tamanho: chaveSelecionada.length,
+  });
+}
+
 function hojeISO() {
   return new Date().toISOString().slice(0, 10);
 }
