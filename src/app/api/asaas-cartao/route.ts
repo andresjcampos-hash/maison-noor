@@ -9,25 +9,25 @@ type AsaasError = {
   description?: string;
 };
 
-function limparEnv(valor: unknown) {
-  return String(valor || "")
-    .trim()
-    .replace(/^['\"]|['\"]$/g, "");
-}
-
 const ASAAS_ENV = limparEnv(process.env.ASAAS_ENV || "sandbox").toLowerCase();
 const ASAAS_API_URL =
   ASAAS_ENV === "production"
     ? "https://api.asaas.com/v3"
     : "https://api-sandbox.asaas.com/v3";
 
-// Local/teste usa ASAAS_API_KEY. Produção pode usar ASAAS_API_KEY_PROD.
-// Assim você não precisa apagar a chave de produção do .env.local.
-const ASAAS_API_KEY = limparEnv(
-  ASAAS_ENV === "production"
-    ? process.env.ASAAS_API_KEY_PROD || process.env.ASAAS_API_KEY
-    : process.env.ASAAS_API_KEY
-);
+function obterChaveAsaas() {
+  const chaveProducao = limparEnv(process.env.ASAAS_API_KEY_PROD);
+  const chavePadrao = limparEnv(process.env.ASAAS_API_KEY);
+  const chaveLegada = limparEnv(process.env.ASAAS_TOKEN);
+
+  if (ASAAS_ENV === "production") {
+    return chaveProducao || chavePadrao || chaveLegada;
+  }
+
+  return chavePadrao || chaveProducao || chaveLegada;
+}
+
+const ASAAS_API_KEY = obterChaveAsaas();
 
 function hojeISO() {
   return new Date().toISOString().slice(0, 10);
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
     const pedidoId = normalizarTexto(body?.pedidoId);
 
     const nome = normalizarTexto(body?.nome || body?.cardNome, "Cliente Maison Noor");
-    const cardNome = normalizarTexto(body?.cardNome || body?.nome, nome).toUpperCase();
+    const cardNome = normalizarTexto(body?.cardNome || body?.nome, nome);
     const email = normalizarTexto(body?.email, "cliente@maisonnoor.com.br");
     const cpfCnpj = somenteNumeros(body?.cpf || body?.cpfCnpj);
     const telefone = somenteNumeros(body?.telefone || body?.phone || body?.mobilePhone);
@@ -130,21 +130,9 @@ export async function POST(req: Request) {
     const { expiryMonth, expiryYear } = separarValidade(validade);
     const remoteIp = getRemoteIp(req);
 
-    console.log("ASAAS CONFIG SEGURO:", {
-      ambiente: ASAAS_ENV,
-      url: ASAAS_API_URL,
-      chaveConfigurada: Boolean(ASAAS_API_KEY),
-      prefixoChave: ASAAS_API_KEY ? ASAAS_API_KEY.slice(0, 12) : "vazio",
-    });
-
     if (!ASAAS_API_KEY) {
       return NextResponse.json(
-        {
-          erro: true,
-          mensagem:
-            "ASAAS_API_KEY não configurada. No .env.local, como a chave começa com $, use ASAAS_API_KEY=\\$aact_hmlg_... e reinicie o npm run dev.",
-          ambienteAtual: ASAAS_ENV,
-        },
+        { erro: true, mensagem: "ASAAS_API_KEY não configurada." },
         { status: 500 }
       );
     }
@@ -231,7 +219,8 @@ export async function POST(req: Request) {
       notificationDisabled: true,
     };
 
-    // Não envie phone e mobilePhone juntos com o mesmo número.
+    // IMPORTANTE: não envie phone e mobilePhone com o mesmo número.
+    // 10 dígitos = fixo; 11 dígitos = celular.
     if (telefone.length === 11) {
       customerPayload.mobilePhone = telefone;
     } else {
@@ -250,8 +239,8 @@ export async function POST(req: Request) {
             erro: true,
             mensagem:
               ASAAS_ENV === "production"
-                ? "A chave usada não pertence à produção. Verifique ASAAS_ENV e ASAAS_API_KEY_PROD."
-                : "A chave usada não pertence ao sandbox. Verifique ASAAS_ENV e ASAAS_API_KEY.",
+                ? "A chave ASAAS_API_KEY é de Sandbox, mas ASAAS_ENV está como production. Use uma chave de produção ou troque ASAAS_ENV para sandbox."
+                : "A chave ASAAS_API_KEY é de Produção, mas ASAAS_ENV está como sandbox. Use uma chave do Sandbox ou troque ASAAS_ENV para production.",
             ambienteAtual: ASAAS_ENV,
             urlAtual: ASAAS_API_URL,
             detalhe: customerData,
@@ -309,7 +298,7 @@ export async function POST(req: Request) {
 
     console.log("ASAAS CARTAO PAYLOAD SEGURO:", {
       ambiente: ASAAS_ENV,
-      url: `${ASAAS_API_URL}/payments`,
+      url: ASAAS_API_URL,
       customer: customerData.id,
       value: valor,
       numeroPedido,
