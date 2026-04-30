@@ -9,6 +9,13 @@ type AsaasError = {
   description?: string;
 };
 
+function limparEnv(valor: unknown) {
+  return String(valor || "")
+    .trim()
+    .replace(/^['\"]|['\"]$/g, "")
+    .replace(/^\\\$/, "$");
+}
+
 const ASAAS_ENV = limparEnv(process.env.ASAAS_ENV || "sandbox").toLowerCase();
 const ASAAS_API_URL =
   ASAAS_ENV === "production"
@@ -132,7 +139,7 @@ export async function POST(req: Request) {
 
     if (!ASAAS_API_KEY) {
       return NextResponse.json(
-        { erro: true, mensagem: "ASAAS_API_KEY não configurada." },
+        { erro: true, mensagem: ASAAS_ENV === "production" ? "ASAAS_API_KEY_PROD não configurada no Vercel." : "ASAAS_API_KEY não configurada." },
         { status: 500 }
       );
     }
