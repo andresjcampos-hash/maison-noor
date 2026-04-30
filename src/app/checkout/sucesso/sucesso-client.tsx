@@ -7,12 +7,13 @@ import { useSearchParams } from "next/navigation";
 type PedidoSalvo = {
   id?: string;
   numeroPedido?: string;
-  formaPagamento?: "pix" | "whatsapp" | string;
+  formaPagamento?: "pix" | "whatsapp" | "cartao" | string;
   createdAt?: string;
 };
 
 function formatarFormaPagamento(forma?: string) {
   if (forma === "pix") return "Pix";
+  if (forma === "cartao") return "Cartão de crédito";
   if (forma === "whatsapp") return "WhatsApp";
   return "Atendimento";
 }
@@ -105,9 +106,9 @@ export default function CheckoutSucessoClient() {
       <section style={styles.container}>
         <div style={styles.heroCard}>
           <p style={styles.kicker}>Maison Noor</p>
-          <h1 style={styles.title}>Pedido criado com sucesso</h1>
+          <h1 style={styles.title}>Pedido confirmado com sucesso</h1>
           <p style={styles.subtitle}>
-            Seu pedido foi registrado e o atendimento foi iniciado. Você também pode
+            Seu pagamento foi aprovado e seu pedido já está em preparação. Você também pode
             acompanhar tudo pela sua área do cliente.
           </p>
         </div>
@@ -121,8 +122,8 @@ export default function CheckoutSucessoClient() {
             </h2>
 
             <p style={styles.sectionText}>
-              Tudo certo por aqui. Seu pedido foi salvo com sucesso e a Maison Noor
-              seguirá com o atendimento pela forma escolhida.
+              Tudo certo por aqui. Sua compra foi confirmada com sucesso e a Maison Noor
+              já está organizando seu pedido com todo cuidado.
             </p>
 
             <div style={styles.infoGrid}>
@@ -141,9 +142,9 @@ export default function CheckoutSucessoClient() {
               <div style={styles.timelineItem}>
                 <div style={styles.timelineDotActive} />
                 <div>
-                  <strong style={styles.timelineTitle}>Pedido recebido</strong>
+                  <strong style={styles.timelineTitle}>Pagamento aprovado</strong>
                   <p style={styles.timelineText}>
-                    Seu pedido já está salvo no sistema da Maison Noor.
+                    Seu pagamento foi processado com sucesso e confirmado pelo sistema.
                   </p>
                 </div>
               </div>
@@ -151,9 +152,9 @@ export default function CheckoutSucessoClient() {
               <div style={styles.timelineItem}>
                 <div style={styles.timelineDot} />
                 <div>
-                  <strong style={styles.timelineTitle}>Atendimento em andamento</strong>
+                  <strong style={styles.timelineTitle}>Preparando envio</strong>
                   <p style={styles.timelineText}>
-                    Você pode continuar pelo WhatsApp para concluir pagamento e próximos passos.
+                    Seu pedido já está em separação e será preparado para envio o mais rápido possível.
                   </p>
                 </div>
               </div>
@@ -161,9 +162,9 @@ export default function CheckoutSucessoClient() {
               <div style={styles.timelineItem}>
                 <div style={styles.timelineDot} />
                 <div>
-                  <strong style={styles.timelineTitle}>Acompanhe em Minha Conta</strong>
+                  <strong style={styles.timelineTitle}>Acompanhe seu pedido</strong>
                   <p style={styles.timelineText}>
-                    O histórico e o status do pedido ficarão disponíveis na sua conta.
+                    Você pode acompanhar o status completo na sua área do cliente.
                   </p>
                 </div>
               </div>
@@ -172,7 +173,7 @@ export default function CheckoutSucessoClient() {
 
           <aside style={styles.sideCard}>
             <span style={styles.sideKicker}>Próximos passos</span>
-            <h3 style={styles.sideTitle}>Sua compra segue organizada</h3>
+            <h3 style={styles.sideTitle}>Compra confirmada</h3>
 
             <div style={styles.actionList}>
               <a href={whatsappHref} target="_blank" rel="noreferrer" style={styles.primaryButton}>
@@ -191,7 +192,7 @@ export default function CheckoutSucessoClient() {
             <div style={styles.noticeCard}>
               <span style={styles.noticeLabel}>Atendimento premium</span>
               <p style={styles.noticeText}>
-                Seu pedido fica salvo para facilitar o acompanhamento, pagamento e suporte.
+                Seu pedido está seguro e já está sendo preparado para envio com todo o cuidado Maison Noor.
               </p>
             </div>
           </aside>

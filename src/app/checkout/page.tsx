@@ -1,29 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import Script from "next/script";
 import { useEffect, useMemo, useState } from "react";
 import { auth, db } from "@/lib/firebase";
 import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
-
-declare global {
-  interface Window {
-    PagSeguro?: {
-      encryptCard: (params: {
-        publicKey: string;
-        holder: string;
-        number: string;
-        expMonth: string;
-        expYear: string;
-        securityCode: string;
-      }) => {
-        encryptedCard?: string;
-        hasErrors?: boolean;
-        errors?: Array<{ code?: string; message?: string }>;
-      };
-    };
-  }
-}
 
 type CartItem = {
   id?: string;
@@ -252,6 +232,18 @@ function formatarCpf(value: string) {
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 }
 
+function formatarTelefone(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
 function formatarNumeroCartao(value: string) {
   return value
     .replace(/\D/g, "")
@@ -303,6 +295,8 @@ export default function CheckoutPage() {
   const [cardValidade, setCardValidade] = useState("");
   const [cardCvv, setCardCvv] = useState("");
   const [cardCpf, setCardCpf] = useState("");
+  const [cardTelefone, setCardTelefone] = useState("");
+  const [numeroEndereco, setNumeroEndereco] = useState("");
   const [pixCpf, setPixCpf] = useState("");
   const [cardParcelas, setCardParcelas] = useState("1");
 
@@ -751,22 +745,60 @@ export default function CheckoutPage() {
 
   async function pagarCartao() {
     const cpfDigits = cardCpf.replace(/\D/g, "");
+    const telefoneDigits = cardTelefone.replace(/\D/g, "");
     const numeroDigits = cardNumero.replace(/\D/g, "");
-    const [expMonthRaw, expYearRaw] = cardValidade.split("/");
-    const expMonth = String(expMonthRaw || "").padStart(2, "0");
-    const expYear = expYearRaw?.length === 2 ? `20${expYearRaw}` : String(expYearRaw || "");
+    const validadeDigits = cardValidade.replace(/\D/g, "");
+    const cvvDigits = cardCvv.replace(/\D/g, "");
+    const parcelasNumero = Math.max(1, Number(cardParcelas || 1));
 
     if (!carrinho.length) {
       setCheckoutFeedback("Sua sacola está vazia.");
       return;
     }
 
-    if (!cardNome.trim() || numeroDigits.length < 13 || !expMonthRaw || !expYearRaw || cardCvv.length < 3 || cpfDigits.length !== 11) {
-      setCheckoutFeedback("Preencha os dados do cartão corretamente antes de finalizar.");
+    if (!cardNome.trim()) {
+      setCheckoutFeedback("Informe o nome impresso no cartão.");
       return;
     }
+
+    if (numeroDigits.length < 13) {
+      setCheckoutFeedback("Informe um número de cartão válido.");
+      return;
+    }
+
+    if (validadeDigits.length !== 4) {
+      setCheckoutFeedback("Informe a validade do cartão no formato MM/AA.");
+      return;
+    }
+
+    const mes = Number(validadeDigits.slice(0, 2));
+    if (mes < 1 || mes > 12) {
+      setCheckoutFeedback("Informe um mês de validade válido.");
+      return;
+    }
+
+    if (cvvDigits.length < 3) {
+      setCheckoutFeedback("Informe o CVV do cartão.");
+      return;
+    }
+
+    if (cpfDigits.length !== 11) {
+      setCheckoutFeedback("Informe um CPF válido com 11 números para o pagamento no cartão.");
+      return;
+    }
+
+    if (telefoneDigits.length < 10 || telefoneDigits.length > 11) {
+      setCheckoutFeedback("Informe o telefone do titular com DDD para validar o pagamento no cartão.");
+      return;
+    }
+
     if (!cepValido) {
       setCheckoutFeedback("Informe um CEP válido com 8 números antes de pagar com cartão.");
+      return;
+    }
+
+    if (!numeroEndereco.trim()) {
+      setCheckoutFeedback("Informe o número do endereço para validar o pagamento no cartão.");
       return;
     }
 
@@ -775,83 +807,119 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!total || total <= 0) {
+      setCheckoutFeedback("Valor inválido para pagamento. Revise sua sacola antes de continuar.");
+      return;
+    }
+
+    if (savingOrder) return;
 
     try {
       setSavingOrder(true);
-      setCheckoutFeedback("Criptografando cartão com segurança...");
-
-      const publicKeyResponse = await fetch("/api/pagbank-public-key", { cache: "no-store" });
-      const publicKeyData = await publicKeyResponse.json();
-
-      if (!publicKeyResponse.ok || !publicKeyData?.public_key) {
-        throw new Error(publicKeyData?.mensagem || "Não foi possível obter a chave pública do PagBank.");
-      }
-
-      if (!window.PagSeguro?.encryptCard) {
-        throw new Error("SDK do PagBank ainda não foi carregado. Atualize a página e tente novamente.");
-      }
-
-      const encrypted = window.PagSeguro.encryptCard({
-        publicKey: publicKeyData.public_key,
-        holder: cardNome.trim(),
-        number: numeroDigits,
-        expMonth,
-        expYear,
-        securityCode: cardCvv.replace(/\D/g, ""),
-      });
-
-      if (encrypted.hasErrors || !encrypted.encryptedCard) {
-        throw new Error(
-          encrypted.errors?.map((error) => error.message || error.code).join(" | ") ||
-            "Erro ao criptografar cartão."
-        );
-      }
-
-      setCheckoutFeedback("Pedido salvo. Enviando pagamento para o PagBank...");
+      setCheckoutFeedback("Processando pagamento com cartão pelo Asaas...");
 
       const pedidoSalvo = await salvarPedido("cartao");
 
-      if (!pedidoSalvo?.id) {
-        throw new Error("Pedido não foi salvo corretamente.");
+      if (!pedidoSalvo?.id || !pedidoSalvo?.numeroPedido) {
+        throw new Error("Pedido não foi salvo corretamente antes de processar o cartão.");
       }
 
-      const response = await fetch("/api/pagbank-cartao", {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(
+          "maison_noor_checkout_last_order",
+          JSON.stringify({
+            id: pedidoSalvo.id,
+            numeroPedido: pedidoSalvo.numeroPedido,
+            formaPagamento: "cartao",
+            statusPagamento: "processando",
+            createdAt: new Date().toISOString(),
+            expiresAtIso: getExpiracaoPedidoIso(24),
+          })
+        );
+      }
+
+      const response = await fetch("/api/asaas-cartao", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          pedidoId: pedidoSalvo.id,
           numeroPedido: pedidoSalvo.numeroPedido,
+          valor: total,
+          total,
           nome: auth.currentUser?.displayName || cardNome.trim() || "Cliente Maison Noor",
           email: auth.currentUser?.email || "cliente@maisonnoor.com.br",
           cpf: cpfDigits,
-          produto: "Pedido Maison Noor",
-          total,
-          installments: Number(cardParcelas || 1),
-          encryptedCard: encrypted.encryptedCard,
+          cpfCnpj: cpfDigits,
+          telefone: telefoneDigits,
+          phone: telefoneDigits,
+          mobilePhone: telefoneDigits,
+          cep: cepDigits,
+          numeroEndereco: numeroEndereco.trim(),
+          parcelas: parcelasNumero,
+          installments: parcelasNumero,
+          cardNumero: numeroDigits,
+          cardValidade,
+          cardCvv: cvvDigits,
+          cardNome: cardNome.trim(),
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
+      const erroAsaas =
+        data?.mensagem ||
+        data?.erro ||
+        data?.message ||
+        data?.error ||
+        data?.detalhes?.errors?.[0]?.description ||
+        data?.detalhe?.errors?.[0]?.description ||
+        data?.errors?.[0]?.description ||
+        data?.error_messages?.[0]?.description;
 
-      if (!response.ok) {
-        throw new Error(data?.mensagem || data?.error_messages?.[0]?.description || "Pagamento não aprovado pelo Asaas.");
+      if (!response.ok || data?.erro || data?.error) {
+        await setDoc(
+          doc(db, "pedidos", "default", "lista", pedidoSalvo.id),
+          {
+            asaasCartao: data || null,
+            asaasStatus: data?.status || "RECUSADO",
+            status: "aguardando_pagamento",
+            statusPagamento: "recusado",
+            pagamentoStatus: "recusado",
+            formaPagamento: "cartao",
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+        throw new Error(erroAsaas || "Pagamento recusado. Revise os dados do cartão ou tente outro cartão.");
       }
 
-      const chargeStatus = String(data?.charges?.[0]?.status || "").toUpperCase();
-      const aprovado = chargeStatus === "PAID" || chargeStatus === "AUTHORIZED";
+      const statusAsaas = String(data?.status || data?.payment?.status || data?.cobranca?.status || "").toUpperCase();
+      const asaasPaymentId = data?.asaasPaymentId || data?.paymentId || data?.id || data?.payment?.id || data?.cobranca?.id || "";
+      const aprovado = ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"].includes(statusAsaas);
+      const emAnalise = ["PENDING", "AWAITING_RISK_ANALYSIS"].includes(statusAsaas);
 
       await setDoc(
         doc(db, "pedidos", "default", "lista", pedidoSalvo.id),
         {
-          pagbankCartao: data,
-          pagbankStatus: chargeStatus || "PROCESSING",
-
+          asaasCartao: data,
+          asaasPaymentId,
+          asaasCustomerId: data?.asaasCustomerId || data?.customer || data?.customerId || "",
+          asaasStatus: statusAsaas || data?.status || "",
           status: aprovado ? "pago" : "aguardando_pagamento",
-          statusPagamento: aprovado ? "pago" : "aguardando_pagamento",
+          statusPagamento: aprovado ? "pago" : emAnalise ? "em_analise" : "recusado",
+          pagamentoStatus: aprovado ? "pago" : emAnalise ? "em_analise" : "recusado",
           formaPagamento: "cartao",
-
+          cpf: cpfDigits,
+          telefone: telefoneDigits,
+          phone: telefoneDigits,
+          cep: cepDigits,
+          numeroEndereco: numeroEndereco.trim(),
+          parcelas: parcelasNumero,
           subtotal,
           frete: freteSelecionado,
           freteValor: freteSelecionado,
+          freteId: selectedFreight || "",
+          freteNome: freteAtual?.nome || "",
+          fretePrazo: freteAtual?.prazo || "",
           total,
           valor: total,
           valorTotal: total,
@@ -874,22 +942,25 @@ export default function CheckoutPage() {
           numeroVenda: pedidoSalvo.numeroPedido,
           numeroFormatado: pedidoSalvo.numeroPedido,
           numeroDoPedido: pedidoSalvo.numeroPedido,
-
           pagamentos: [
             {
               forma: "cartao",
               valor: total,
-              parcelas: Number(cardParcelas || 1),
-              status: aprovado ? "pago" : "aguardando_pagamento",
+              parcelas: parcelasNumero,
+              status: aprovado ? "pago" : emAnalise ? "em_analise" : "recusado",
+              asaasPaymentId,
             },
           ],
-
-          parcelas: Number(cardParcelas || 1),
           pagoEm: aprovado ? new Date().toISOString() : null,
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
       );
+
+      if (!aprovado && !emAnalise) {
+        const motivo = erroAsaas || data?.description || data?.statusDescription;
+        throw new Error(motivo || "Pagamento recusado. Confira os dados do cartão ou tente outro cartão.");
+      }
 
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(
@@ -898,23 +969,27 @@ export default function CheckoutPage() {
             id: pedidoSalvo.id,
             numeroPedido: pedidoSalvo.numeroPedido,
             formaPagamento: "cartao",
-            statusPagamento: aprovado ? "pago" : "aguardando_pagamento",
+            statusPagamento: aprovado ? "pago" : "em_analise",
+            asaasPaymentId,
+            total,
             createdAt: new Date().toISOString(),
-            expiresAtIso: getExpiracaoPedidoIso(24),
           })
         );
       }
 
-      await limparSacolaAposPedido();
-
-      if (typeof window !== "undefined") {
-        window.location.href = `/checkout/sucesso?pedido=${encodeURIComponent(
-          String(pedidoSalvo.numeroPedido || "")
-        )}&forma=cartao`;
+      if (aprovado) {
+        await limparSacolaAposPedido();
+        setCheckoutFeedback(`Pagamento aprovado! Pedido #${pedidoSalvo.numeroPedido} confirmado com sucesso.`);
+        if (typeof window !== "undefined") {
+          window.location.href = `/checkout/sucesso?pedido=${encodeURIComponent(pedidoSalvo.numeroPedido)}&forma=cartao`;
+        }
+        return;
       }
+
+      setCheckoutFeedback(`Pagamento enviado para análise pelo Asaas. Pedido #${pedidoSalvo.numeroPedido} registrado com segurança.`);
     } catch (error: any) {
-      console.error("Erro ao pagar com cartão:", error);
-      setCheckoutFeedback(error?.message || "Não foi possível pagar com cartão. Tente Pix ou WhatsApp.");
+      console.error("Erro ao processar pagamento com cartão Asaas:", error);
+      setCheckoutFeedback(error?.message || "Pagamento recusado. Revise os dados do cartão ou tente Pix.");
     } finally {
       setSavingOrder(false);
     }
@@ -923,7 +998,6 @@ export default function CheckoutPage() {
 
   return (
     <main style={{ ...styles.page, paddingBottom: isMobile && carrinho.length ? 108 : 24 }}>
-      <Script src="https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/browser/pagseguro.min.js" strategy="afterInteractive" />
       <section style={styles.container}>
         <div style={styles.hero}>
           <div style={{ flex: 1, minWidth: 260 }}>
@@ -1238,14 +1312,22 @@ export default function CheckoutPage() {
                 </>
               ) : (
                 <div style={styles.cardPaymentBox}>
+                  <div style={styles.pixHighlightCard}>
+                    <div>
+                      <span style={styles.pixHighlightLabel}>Cartão via Asaas</span>
+                      <strong style={styles.pixHighlightTitle}>Pagamento direto no checkout</strong>
+                    </div>
+                    <span style={styles.pixHighlightValue}>{formatarMoeda(total)}</span>
+                  </div>
+
                   <div style={styles.cardFieldsGrid}>
                     <div style={styles.cardFieldFull}>
                       <label style={styles.label}>Nome impresso no cartão</label>
                       <input
                         type="text"
                         value={cardNome}
-                        onChange={(e) => setCardNome(e.target.value.toUpperCase())}
-                        placeholder="NOME SOBRENOME"
+                        onChange={(e) => setCardNome(e.target.value)}
+                        placeholder="Nome como está no cartão"
                         autoComplete="cc-name"
                         style={styles.input}
                       />
@@ -1273,6 +1355,7 @@ export default function CheckoutPage() {
                         placeholder="MM/AA"
                         inputMode="numeric"
                         autoComplete="cc-exp"
+                        maxLength={5}
                         style={styles.input}
                       />
                     </div>
@@ -1290,7 +1373,7 @@ export default function CheckoutPage() {
                       />
                     </div>
 
-                    <div style={styles.cardFieldFull}>
+                    <div>
                       <label style={styles.label}>CPF do titular</label>
                       <input
                         type="text"
@@ -1298,12 +1381,38 @@ export default function CheckoutPage() {
                         onChange={(e) => setCardCpf(formatarCpf(e.target.value))}
                         placeholder="000.000.000-00"
                         inputMode="numeric"
+                        autoComplete="off"
+                        style={styles.input}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={styles.label}>Telefone do titular</label>
+                      <input
+                        type="text"
+                        value={cardTelefone}
+                        onChange={(e) => setCardTelefone(formatarTelefone(e.target.value))}
+                        placeholder="(12) 99999-9999"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        style={styles.input}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={styles.label}>Nº do endereço</label>
+                      <input
+                        type="text"
+                        value={numeroEndereco}
+                        onChange={(e) => setNumeroEndereco(e.target.value.replace(/[^0-9A-Za-z\-/ ]/g, "").slice(0, 12))}
+                        placeholder="Ex: 120"
+                        autoComplete="address-line2"
                         style={styles.input}
                       />
                     </div>
 
                     <div style={styles.cardFieldFull}>
-                      <label style={styles.label}>Parcelamento sem juros</label>
+                      <label style={styles.label}>Parcelas</label>
                       <select
                         value={cardParcelas}
                         onChange={(e) => setCardParcelas(e.target.value)}
@@ -1312,16 +1421,23 @@ export default function CheckoutPage() {
                         <option value="1">1x de {formatarMoeda(total)}</option>
                         <option value="2">2x de {formatarMoeda(total / 2)}</option>
                         <option value="3">3x de {formatarMoeda(total / 3)}</option>
+                        <option value="4">4x de {formatarMoeda(total / 4)}</option>
+                        <option value="5">5x de {formatarMoeda(total / 5)}</option>
+                        <option value="6">6x de {formatarMoeda(total / 6)}</option>
                       </select>
                     </div>
                   </div>
+
+                  <span style={styles.pixCpfHint}>
+                    Informe o telefone com DDD do titular. O cartão será processado diretamente pelo Asaas e o pedido já fica salvo no CRM antes da tentativa de pagamento.
+                  </span>
                 </div>
               )}
 
               <div style={styles.noticeBox}>
                 {formaPagamentoSelecionada === "pix"
                   ? "O QR Code Pix será gerado pelo Asaas após calcular o frete; o pedido ficará salvo no CRM Maison Noor."
-                  : "Os dados do cartão são criptografados pelo SDK oficial do PagBank antes do envio."}
+                  : "O pagamento com cartão será processado diretamente no checkout pelo Asaas."}
               </div>
 
               {checkoutFeedback ? <div style={styles.checkoutFeedback}>{checkoutFeedback}</div> : null}
@@ -1341,13 +1457,13 @@ export default function CheckoutPage() {
                     : "Processando cartão..."
                   : formaPagamentoSelecionada === "pix"
                     ? "Gerar Pix agora"
-                    : "Pagar com cartão"}
+                    : "Pagar com cartão agora"}
               </button>
 
               <p style={styles.ctaMicrocopy}>
                 {formaPagamentoSelecionada === "pix"
                   ? "Pix automático Asaas • pedido salvo antes do pagamento"
-                  : "Cartão direto no site • até 3x sem juros"}
+                  : "Cartão processado direto pelo Asaas"}
               </p>
 
               <div
