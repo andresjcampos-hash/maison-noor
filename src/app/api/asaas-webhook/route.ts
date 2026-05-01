@@ -1,33 +1,46 @@
 import { NextResponse } from "next/server";
-import admin from "@/lib/firebase-admin";
+import admin, { adminDb } from "@/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function statusPorEvento(evento: string) {
-  switch (evento) {
-    case "PAYMENT_CONFIRMED":
-    case "PAYMENT_RECEIVED":
-      return "pago";
+function statusPorEvento(evento: string, statusAsaas?: string) {
+  const eventoUpper = String(evento || "").toUpperCase();
+  const statusUpper = String(statusAsaas || "").toUpperCase();
 
-    case "PAYMENT_AWAITING_RISK_ANALYSIS":
-      return "em_analise";
-
-    case "PAYMENT_OVERDUE":
-      return "vencido";
-
-    case "PAYMENT_DELETED":
-    case "PAYMENT_REFUNDED":
-    case "PAYMENT_PARTIALLY_REFUNDED":
-      return "cancelado";
-
-    case "PAYMENT_CREATED":
-    case "PAYMENT_UPDATED":
-      return "aguardando_pagamento";
-
-    default:
-      return null;
+  if (
+    eventoUpper.includes("CONFIRMED") ||
+    eventoUpper.includes("RECEIVED") ||
+    statusUpper === "CONFIRMED" ||
+    statusUpper === "RECEIVED" ||
+    statusUpper === "RECEIVED_IN_CASH"
+  ) {
+    return "pago";
   }
+
+  if (
+    eventoUpper.includes("REFUSED") ||
+    eventoUpper.includes("REFUNDED") ||
+    eventoUpper.includes("DELETED") ||
+    statusUpper === "REFUSED" ||
+    statusUpper === "REFUNDED" ||
+    statusUpper === "CANCELLED"
+  ) {
+    return "recusado";
+  }
+
+  if (
+    eventoUpper.includes("AWAITING_RISK_ANALYSIS") ||
+    statusUpper === "AWAITING_RISK_ANALYSIS"
+  ) {
+    return "em_analise";
+  }
+
+  if (eventoUpper.includes("OVERDUE") || statusUpper === "OVERDUE") {
+    return "vencido";
+  }
+
+  return "aguardando_pagamento";
 }
 
 function formaPagamentoPorBillingType(billingType?: string) {
@@ -46,13 +59,14 @@ export async function POST(req: Request) {
 
     console.log("ASAAS WEBHOOK RECEBIDO:", JSON.stringify(body, null, 2));
 
-    const db = admin.apps.length ? admin.firestore() : null;
-
-    if (!db) {
-      return NextResponse.json({
-        ok: false,
-        mensagem: "Firebase Admin não inicializado.",
-      });
+    if (!adminDb) {
+      return NextResponse.json(
+        {
+          ok: false,
+          mensagem: "Firebase Admin não inicializado.",
+        },
+        { status: 500 }
+      );
     }
 
     const evento = String(body?.event || "");
@@ -61,68 +75,58 @@ export async function POST(req: Request) {
     if (!evento || !payment) {
       return NextResponse.json({
         ok: true,
-        mensagem: "Payload ignorado. Evento ou payment ausente.",
-      });
-    }
-
-    const novoStatus = statusPorEvento(evento);
-
-    if (!novoStatus) {
-      return NextResponse.json({
-        ok: true,
-        mensagem: `Evento ${evento} ignorado.`,
+        mensagem: "Webhook ignorado: evento ou pagamento ausente.",
       });
     }
 
     const asaasPaymentId = String(payment?.id || "");
     const externalReference = String(payment?.externalReference || "").trim();
     const billingType = String(payment?.billingType || "");
+    const asaasStatus = String(payment?.status || "");
     const formaPagamento = formaPagamentoPorBillingType(billingType);
+    const novoStatus = statusPorEvento(evento, asaasStatus);
 
-    if (!externalReference && !asaasPaymentId) {
-      return NextResponse.json({
-        ok: true,
-        mensagem: "Webhook sem externalReference e sem paymentId.",
-      });
-    }
+    const pedidosRef = adminDb
+      .collection("pedidos")
+      .doc("default")
+      .collection("lista");
 
-    const pedidosRef = db.collection("pedidos").doc("default").collection("lista");
-
-    let pedidoDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+    let pedidoDoc: any = null;
 
     if (externalReference) {
-      const snapNumero = await pedidosRef
+      const snap = await pedidosRef
         .where("numeroPedido", "==", externalReference)
         .limit(1)
         .get();
 
-      if (!snapNumero.empty) pedidoDoc = snapNumero.docs[0];
+      if (!snap.empty) pedidoDoc = snap.docs[0];
     }
 
     if (!pedidoDoc && externalReference) {
-      const snapNumeroSite = await pedidosRef
+      const snap = await pedidosRef
         .where("numeroSite", "==", externalReference)
         .limit(1)
         .get();
 
-      if (!snapNumeroSite.empty) pedidoDoc = snapNumeroSite.docs[0];
+      if (!snap.empty) pedidoDoc = snap.docs[0];
     }
 
     if (!pedidoDoc && asaasPaymentId) {
-      const snapAsaas = await pedidosRef
+      const snap = await pedidosRef
         .where("asaasPaymentId", "==", asaasPaymentId)
         .limit(1)
         .get();
 
-      if (!snapAsaas.empty) pedidoDoc = snapAsaas.docs[0];
+      if (!snap.empty) pedidoDoc = snap.docs[0];
     }
 
     if (!pedidoDoc) {
-      await db.collection("asaas_webhooks_nao_encontrados").add({
+      await adminDb.collection("asaas_webhooks_nao_encontrados").add({
         evento,
         externalReference,
         asaasPaymentId,
         billingType,
+        asaasStatus,
         formaPagamento,
         payment,
         body,
@@ -137,14 +141,23 @@ export async function POST(req: Request) {
       });
     }
 
+    const pedidoAtual = pedidoDoc.data() || {};
+    const statusAtual = String(pedidoAtual?.status || "");
+
+    // Proteção: não rebaixa pedido já pago para aguardando por evento atrasado.
+    const statusFinal =
+      statusAtual === "pago" && novoStatus === "aguardando_pagamento"
+        ? "pago"
+        : novoStatus;
+
     const updateData: any = {
-      status: novoStatus,
-      statusPagamento: novoStatus,
-      pagamentoStatus: novoStatus,
+      status: statusFinal,
+      statusPagamento: statusFinal,
+      pagamentoStatus: statusFinal,
       formaPagamento,
       billingType,
       asaasPaymentId,
-      asaasStatus: payment?.status || "",
+      asaasStatus,
       asaasEvento: evento,
       asaasUltimoWebhook: payment,
       asaasWebhookBody: body,
@@ -152,12 +165,30 @@ export async function POST(req: Request) {
       updatedAt: new Date().toISOString(),
     };
 
-    if (novoStatus === "pago") {
+    if (statusFinal === "pago") {
       updateData.pagoEm = admin.firestore.FieldValue.serverTimestamp();
       updateData.dataPagamento = new Date().toISOString();
     }
 
+    if (statusFinal === "recusado") {
+      updateData.recusadoEm = admin.firestore.FieldValue.serverTimestamp();
+      updateData.motivoRecusa =
+        payment?.description ||
+        payment?.statusDescription ||
+        "Pagamento recusado pelo Asaas/banco.";
+    }
+
     await pedidoDoc.ref.set(updateData, { merge: true });
+
+    console.log("ASAAS WEBHOOK PEDIDO ATUALIZADO:", {
+      pedidoId: pedidoDoc.id,
+      numeroPedido: pedidoAtual?.numeroPedido,
+      evento,
+      asaasStatus,
+      statusFinal,
+      formaPagamento,
+      asaasPaymentId,
+    });
 
     return NextResponse.json({
       ok: true,
@@ -165,7 +196,7 @@ export async function POST(req: Request) {
       pedidoId: pedidoDoc.id,
       externalReference,
       asaasPaymentId,
-      status: novoStatus,
+      status: statusFinal,
       formaPagamento,
     });
   } catch (error: any) {
