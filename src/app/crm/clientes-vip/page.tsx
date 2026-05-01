@@ -542,84 +542,75 @@ export default function ClientesVipPage() {
               <div className="cardCount">{filtered.length} registro(s)</div>
             </div>
 
-            <div className="tableWrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Cliente</th>
-                    <th>Contato</th>
-                    <th>Status</th>
-                    <th>Resumo</th>
-                    <th>Ações rápidas</th>
-                  </tr>
-                </thead>
+            {!loading && filtered.length === 0 ? (
+              <div className="emptyState vipEmpty">
+                <div className="emptyTitle">Nenhum cliente VIP encontrado</div>
+                <div className="emptySub">
+                  Ajuste a busca ou crie um novo VIP para começar sua gestão comercial.
+                </div>
+              </div>
+            ) : (
+              <div className="vipGrid">
+                {filtered.map((item) => {
+                  const inicial = String(item.nome || "V").trim().slice(0, 1).toUpperCase() || "V";
+                  const ticket = Number(item.ticketMedio || 0).toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  });
+                  const compras = Number(item.totalCompras || 0).toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  });
 
-                <tbody>
-                  {!loading && filtered.length === 0 ? (
-                    <tr>
-                      <td colSpan={5}>
-                        <div className="emptyState">
-                          <div className="emptyTitle">Nenhum cliente VIP encontrado</div>
-                          <div className="emptySub">
-                            Ajuste a busca ou crie um novo VIP para começar sua gestão comercial.
+                  return (
+                    <article className="vipCard" key={item.id}>
+                      <div className="vipGlow" />
+
+                      <div className="vipTop">
+                        <div className="vipIdentity">
+                          <div className="vipAvatar">{inicial}</div>
+                          <div className="vipNameBox">
+                            <div className="name">{item.nome}</div>
+                            <div className="meta">{item.cidade || "Cidade não informada"}</div>
                           </div>
                         </div>
-                      </td>
-                    </tr>
-                  ) : null}
 
-                  {filtered.map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        <div className="name">{item.nome}</div>
-                        <div className="meta">
-                          {item.cidade || "Cidade não informada"}
-                        </div>
-                      </td>
-
-                      <td>
-                        <div className="mono">{item.telefone || "—"}</div>
-                        <div className="meta">
-                          {item.instagram ? `@${item.instagram}` : "Sem Instagram"}
-                        </div>
-                      </td>
-
-                      <td>
                         <span className={`statusBadge ${statusClass(item.status)}`}>
                           <span className="statusDot" />
                           {statusLabel(item.status)}
                         </span>
-                      </td>
+                      </div>
 
-                      <td>
-                        <div className="summaryList">
-                          <div>
-                            Ticket médio:{" "}
-                            <strong>
-                              {Number(item.ticketMedio || 0).toLocaleString("pt-BR", {
-                                style: "currency",
-                                currency: "BRL",
-                              })}
-                            </strong>
-                          </div>
-                          <div>
-                            Total compras:{" "}
-                            <strong>
-                              {Number(item.totalCompras || 0).toLocaleString("pt-BR", {
-                                style: "currency",
-                                currency: "BRL",
-                              })}
-                            </strong>
-                          </div>
-                          <div className="meta">
-                            Atualizado em{" "}
-                            {new Date(item.updatedAt || item.createdAt).toLocaleString("pt-BR")}
-                          </div>
+                      <div className="vipInfoGrid">
+                        <div className="vipInfoBox">
+                          <span>Telefone</span>
+                          <strong className="mono">{item.telefone || "—"}</strong>
                         </div>
-                      </td>
+                        <div className="vipInfoBox">
+                          <span>Instagram</span>
+                          <strong>{item.instagram ? `@${item.instagram}` : "—"}</strong>
+                        </div>
+                        <div className="vipInfoBox">
+                          <span>Ticket médio</span>
+                          <strong className="goldText">{ticket}</strong>
+                        </div>
+                        <div className="vipInfoBox">
+                          <span>Total compras</span>
+                          <strong className="goldText">{compras}</strong>
+                        </div>
+                      </div>
 
-                      <td>
-                        <div className="actions">
+                      {item.observacoes ? (
+                        <div className="vipNote">
+                          {item.observacoes}
+                        </div>
+                      ) : null}
+
+                      <div className="vipFooter">
+                        <div className="vipUpdated">
+                          Atualizado em {new Date(item.updatedAt || item.createdAt).toLocaleDateString("pt-BR")}
+                        </div>
+                        <div className="actions vipActions">
                           <button className="miniBtn" type="button" onClick={() => void abrirWhatsApp(item)}>
                             WhatsApp
                           </button>
@@ -630,18 +621,18 @@ export default function ClientesVipPage() {
                             Comprou
                           </button>
                           <button className="miniBtn accent" type="button" onClick={() => void onConverterLead(item)}>
-                            Converter Lead
+                            Converter
                           </button>
                           <button className="miniBtn" type="button" onClick={() => abrirEditar(item)}>
                             Editar
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </section>
         </div>
       </main>
@@ -1257,6 +1248,217 @@ export default function ClientesVipPage() {
             padding: 16px;
           }
         }
+
+        /* ======================================================
+           ✅ CLIENTES VIP — SaaS Premium Compacto 10/10
+           ✅ Mantém toda a lógica, Firestore, modal e ações
+           ✅ Apenas corrige densidade visual para seguir Pedidos/Financeiro
+        ====================================================== */
+        .page { min-height: 100% !important; color: #f5f2ea !important; overflow-x: hidden !important; }
+        .pageShell { max-width: 1120px !important; margin: 0 auto !important; padding: 10px 14px 22px !important; }
+        .pageHeader { display: flex !important; justify-content: space-between !important; align-items: center !important; gap: 12px !important; margin-bottom: 10px !important; padding: 12px 14px !important; border-radius: 18px !important; border: 1px solid rgba(200, 162, 106, 0.18) !important; background: radial-gradient(circle at top left, rgba(200, 162, 106, 0.11), transparent 30%), linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012)) !important; box-shadow: 0 18px 44px rgba(0, 0, 0, 0.16) !important; }
+        .pageHeaderLeft { max-width: 720px !important; min-width: 0 !important; }
+        .kicker { font-size: 10px !important; letter-spacing: 0.16em !important; margin-bottom: 4px !important; }
+        .pageTitle { font-size: 23px !important; line-height: 1.04 !important; letter-spacing: -0.025em !important; }
+        .pageSub { margin-top: 7px !important; font-size: 12.5px !important; line-height: 1.35 !important; max-width: 680px !important; color: rgba(245, 242, 234, 0.72) !important; }
+        .pageHeaderRight { flex: 0 0 auto !important; }
+        .actionsTop { gap: 7px !important; }
+        .btn, .btnPrimary, .miniBtn, .closeBtn { height: 34px !important; min-height: 34px !important; padding: 0 11px !important; border-radius: 12px !important; font-size: 11.5px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; white-space: nowrap !important; }
+        .btnPrimary { background: linear-gradient(180deg, rgba(215, 177, 119, 0.95), rgba(185, 139, 73, 0.95)) !important; color: #160f07 !important; }
+        .toast { position: fixed !important; top: 16px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 9999 !important; margin: 0 !important; max-width: min(900px, 92vw) !important; padding: 10px 12px !important; border-radius: 14px !important; font-size: 12px !important; }
+        .statsGrid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important; gap: 8px !important; margin-bottom: 10px !important; }
+        .statCard { min-height: 68px !important; padding: 9px !important; border-radius: 14px !important; display: grid !important; grid-template-columns: 30px minmax(0, 1fr) !important; grid-template-areas: "icon label" "icon value" "icon meta" !important; gap: 2px 8px !important; align-items: center !important; overflow: hidden !important; transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease !important; }
+        .statCard:hover { transform: translateY(-2px) !important; border-color: rgba(200, 162, 106, 0.42) !important; background: linear-gradient(180deg, rgba(200, 162, 106, 0.11), rgba(255,255,255,0.024)), rgba(15, 15, 20, 0.94) !important; }
+        .statIcon { grid-area: icon !important; width: 30px !important; height: 30px !important; border-radius: 10px !important; margin: 0 !important; font-size: 13px !important; }
+        .statLabel { grid-area: label !important; font-size: 9px !important; line-height: 1.1 !important; text-transform: uppercase !important; letter-spacing: 0.08em !important; font-weight: 900 !important; }
+        .statValue { grid-area: value !important; margin: 0 !important; font-size: 16px !important; line-height: 1.08 !important; color: rgba(200, 162, 106, 0.98) !important; }
+        .statMeta { grid-area: meta !important; margin: 0 !important; font-size: 9.5px !important; line-height: 1.1 !important; }
+        .card { margin-bottom: 10px !important; padding: 10px !important; border-radius: 18px !important; background: radial-gradient(circle at top left, rgba(200, 162, 106, 0.09), transparent 28%), linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)) !important; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18) !important; }
+        .toolbar { grid-template-columns: minmax(0, 1fr) 230px !important; gap: 10px !important; align-items: end !important; }
+        .field { gap: 5px !important; }
+        .field label { font-size: 9.5px !important; letter-spacing: 0.1em !important; }
+        .field input, .field select, .field textarea { min-height: 36px !important; height: 36px !important; padding: 0 11px !important; border-radius: 12px !important; font-size: 12px !important; margin-top: 0 !important; background: rgba(15, 15, 22, 0.9) !important; }
+        .field textarea { height: auto !important; min-height: 78px !important; padding-top: 10px !important; }
+        .cardHead { margin-bottom: 9px !important; gap: 10px !important; }
+        .cardTitle { font-size: 19px !important; line-height: 1.05 !important; letter-spacing: -0.02em !important; }
+        .cardSub { margin-top: 4px !important; font-size: 12px !important; line-height: 1.3 !important; opacity: 0.72 !important; }
+        .cardCount { min-height: 28px !important; padding: 0 9px !important; border-radius: 999px !important; border: 1px solid rgba(200, 162, 106, 0.32) !important; background: rgba(200, 162, 106, 0.10) !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-size: 10.5px !important; }
+        .tableWrap { border-radius: 16px !important; overflow-x: auto !important; background: rgba(0, 0, 0, 0.18) !important; }
+        .table { min-width: 980px !important; }
+        .table thead th { padding: 9px 11px !important; font-size: 9.5px !important; letter-spacing: 0.08em !important; }
+        .table tbody td { padding: 10px 11px !important; font-size: 12px !important; }
+        .name { font-size: 13px !important; line-height: 1.2 !important; }
+        .meta { margin-top: 3px !important; font-size: 10.5px !important; line-height: 1.2 !important; }
+        .mono { font-size: 11.5px !important; }
+        .summaryList { gap: 4px !important; font-size: 11.5px !important; line-height: 1.25 !important; }
+        .statusBadge { min-height: 22px !important; padding: 0 8px !important; font-size: 9.5px !important; gap: 6px !important; }
+        .statusDot { width: 6px !important; height: 6px !important; }
+        .actions { gap: 5px !important; flex-wrap: wrap !important; }
+        .miniBtn { height: 28px !important; min-height: 28px !important; padding: 0 8px !important; border-radius: 9px !important; font-size: 9.8px !important; }
+        .emptyState { padding: 34px 10px !important; }
+        .emptyTitle { font-size: 16px !important; margin-bottom: 6px !important; }
+        .emptySub { font-size: 12px !important; }
+        .modalOverlay { padding: 14px !important; }
+        .modalCard { width: min(880px, 96vw) !important; max-height: 92vh !important; overflow-y: auto !important; border-radius: 20px !important; }
+        .modalHead { padding: 12px !important; }
+        .closeBtn { width: 34px !important; height: 34px !important; font-size: 18px !important; }
+        .modalBody { padding: 12px !important; gap: 10px !important; }
+        .row { gap: 8px !important; }
+        .modalActions { gap: 8px !important; padding-top: 4px !important; }
+        @media (max-width: 1280px) { .pageShell { max-width: 1060px !important; } .statsGrid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important; } }
+        @media (max-width: 920px) { .pageShell { padding: 10px !important; } .pageHeader { align-items: stretch !important; flex-direction: column !important; } .pageHeaderRight { justify-content: flex-start !important; } .actionsTop { justify-content: flex-start !important; } .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } .toolbar, .row { grid-template-columns: 1fr !important; } }
+        @media (max-width: 560px) { .pageTitle { font-size: 22px !important; } .statsGrid { grid-template-columns: 1fr !important; } .actionsTop, .modalActions { grid-template-columns: 1fr !important; display: grid !important; } .btn, .btnPrimary { width: 100% !important; } }
+
+        /* ======================================================
+           ✅ CLIENTES VIP — Cards compactos sem barra horizontal
+           ✅ Substitui tabela larga por cards SaaS premium
+        ====================================================== */
+        .vipGrid {
+          display: grid !important;
+          grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)) !important;
+          gap: 9px !important;
+        }
+        .vipCard {
+          position: relative !important;
+          overflow: hidden !important;
+          border-radius: 16px !important;
+          border: 1px solid rgba(255, 255, 255, 0.08) !important;
+          background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.014)), rgba(0,0,0,0.22) !important;
+          padding: 10px !important;
+          display: grid !important;
+          gap: 8px !important;
+          box-shadow: 0 14px 34px rgba(0,0,0,0.18) !important;
+          transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease !important;
+        }
+        .vipCard:hover {
+          transform: translateY(-2px) !important;
+          border-color: rgba(200,162,106,0.36) !important;
+          background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.018)), rgba(0,0,0,0.24) !important;
+        }
+        .vipGlow {
+          position: absolute !important;
+          inset: -58px auto auto -58px !important;
+          width: 140px !important;
+          height: 140px !important;
+          border-radius: 999px !important;
+          background: radial-gradient(circle, rgba(200,162,106,0.16), transparent 64%) !important;
+          pointer-events: none !important;
+        }
+        .vipTop {
+          position: relative !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 8px !important;
+        }
+        .vipIdentity {
+          min-width: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 8px !important;
+        }
+        .vipAvatar {
+          width: 32px !important;
+          height: 32px !important;
+          border-radius: 11px !important;
+          border: 1px solid rgba(200,162,106,0.28) !important;
+          background: linear-gradient(180deg, rgba(200,162,106,0.18), rgba(200,162,106,0.06)) !important;
+          color: rgba(200,162,106,0.98) !important;
+          display: grid !important;
+          place-items: center !important;
+          font-size: 14px !important;
+          font-weight: 1000 !important;
+          flex: 0 0 auto !important;
+        }
+        .vipNameBox { min-width: 0 !important; }
+        .vipNameBox .name {
+          max-width: 260px !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+        .vipInfoGrid {
+          display: grid !important;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          gap: 5px !important;
+        }
+        .vipInfoBox {
+          min-width: 0 !important;
+          border-radius: 11px !important;
+          border: 1px solid rgba(255,255,255,0.075) !important;
+          background: rgba(0,0,0,0.18) !important;
+          padding: 6px 7px !important;
+        }
+        .vipInfoBox span {
+          display: block !important;
+          opacity: 0.55 !important;
+          font-size: 7.8px !important;
+          font-weight: 900 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.07em !important;
+        }
+        .vipInfoBox strong {
+          display: block !important;
+          margin-top: 2px !important;
+          font-size: 10px !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+        .goldText { color: rgba(200,162,106,0.98) !important; }
+        .vipNote {
+          border-radius: 11px !important;
+          border: 1px solid rgba(200,162,106,0.12) !important;
+          background: rgba(200,162,106,0.045) !important;
+          padding: 7px 8px !important;
+          color: rgba(245,242,234,0.72) !important;
+          font-size: 10.5px !important;
+          line-height: 1.25 !important;
+          max-height: 42px !important;
+          overflow: hidden !important;
+        }
+        .vipFooter {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 8px !important;
+          padding-top: 8px !important;
+          border-top: 1px solid rgba(255,255,255,0.07) !important;
+        }
+        .vipUpdated {
+          color: rgba(245,242,234,0.56) !important;
+          font-size: 10px !important;
+          line-height: 1.15 !important;
+          white-space: nowrap !important;
+        }
+        .vipActions {
+          justify-content: flex-end !important;
+          flex-wrap: wrap !important;
+        }
+        .vipEmpty {
+          border-radius: 16px !important;
+          border: 1px dashed rgba(255,255,255,0.14) !important;
+          background: rgba(0,0,0,0.16) !important;
+          min-height: 180px !important;
+          display: grid !important;
+          place-content: center !important;
+        }
+        .tableWrap { display: none !important; }
+        @media (max-width: 1280px) {
+          .vipGrid { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)) !important; }
+          .vipInfoGrid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+        }
+        @media (max-width: 760px) {
+          .vipGrid { grid-template-columns: 1fr !important; }
+          .vipFooter { align-items: flex-start !important; flex-direction: column !important; }
+          .vipActions { justify-content: flex-start !important; }
+          .vipUpdated { white-space: normal !important; }
+        }
+        @media (max-width: 520px) {
+          .vipInfoGrid { grid-template-columns: 1fr !important; }
+          .vipTop { align-items: flex-start !important; flex-direction: column !important; }
+        }
+
       `}</style>
     </>
   );

@@ -195,6 +195,11 @@ export default function ProdutosPage() {
     setFObs("");
   }
 
+  function openEtiqueta(id: string): void {
+    if (typeof window === "undefined") return;
+    window.open(`/api/etiqueta?id=${encodeURIComponent(id)}`, "_blank");
+  }
+
   function openEdit(id: string): void {
     const p = items.find((x) => x.id === id);
     if (!p) return;
@@ -546,276 +551,292 @@ export default function ProdutosPage() {
           </p>
         </div>
 
-        <div className="headRight">
-          <button className="btn" onClick={openNew} type="button">
-            + Novo
-          </button>
-          <button className="btn" onClick={refresh} type="button">
-            Atualizar
-          </button>
-          <button className="btn" onClick={exportJSON} type="button">
-            Exportar
-          </button>
-          <button
-            className="btn"
-            onClick={() => fileRef.current?.click()}
-            type="button"
-          >
-            Importar
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) importJSON(f);
-            }}
-          />
+        <div className="headRight headRightCompact">
+          <span className="heroBadge">Catálogo em tempo real</span>
         </div>
       </header>
 
       {toast ? <div className="toast">{toast}</div> : null}
 
-      <section className="toolbar">
-        <div className="field">
-          <label>Busca</label>
-          <input
-            className="input"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Ex: Afeef, Lattafa..."
-          />
-        </div>
-
-        <div className="field">
-          <label>Categoria</label>
-          <select
-            className="input"
-            value={cat}
-            onChange={(e) => setCat(e.target.value as "todas" | Categoria)}
-          >
-            <option value="todas">Todas</option>
-            <option value="masculino">Masculino</option>
-            <option value="feminino">Feminino</option>
-            <option value="unissex">Unissex</option>
-            <option value="kits-presente">Kits Presente</option>
-          </select>
-        </div>
-
-        <div className="field">
-          <label>Ordenar</label>
-          <select
-            className="input"
-            value={sortBy}
-            onChange={(e) =>
-              setSortBy(
-                e.target.value as "recentes" | "nome" | "estoque" | "preco"
-              )
-            }
-          >
-            <option value="recentes">Mais recentes</option>
-            <option value="nome">Nome (A→Z)</option>
-            <option value="estoque">Estoque (maior)</option>
-            <option value="preco">Preço venda (maior)</option>
-          </select>
-        </div>
-
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={onlyActive}
-            onChange={(e) => setOnlyActive(e.target.checked)}
-          />
-          <span>Somente ativos</span>
-        </label>
-
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={onlySemEstoque}
-            onChange={(e) => setOnlySemEstoque(e.target.checked)}
-          />
-          <span>Somente sem estoque</span>
-        </label>
-      </section>
-
-      <section className="summary">
-        <div className="sumCard">
-          <div className="sumLabel">Produtos no filtro</div>
-          <div className="sumValue">{totals.total}</div>
-        </div>
-        <div className="sumCard">
-          <div className="sumLabel">Ativos</div>
-          <div className="sumValue">{totals.ativos}</div>
-        </div>
-        <div className="sumCard">
-          <div className="sumLabel">Sem estoque (disponível)</div>
-          <div className="sumValue">{totals.semEstoqueDisp}</div>
-        </div>
-        <div className="sumCard">
-          <div className="sumLabel">Estoque físico (unid.)</div>
-          <div className="sumValue">{totals.estoqueFisico}</div>
-        </div>
-        <div className="sumCard">
-          <div className="sumLabel">Reservado (unid.)</div>
-          <div className="sumValue">{totals.totalReservado}</div>
-        </div>
-        <div className="sumCard">
-          <div className="sumLabel">Disponível (unid.)</div>
-          <div className="sumValue">{totals.totalDisponivel}</div>
-        </div>
-        <div className="sumCard">
-          <div className="sumLabel">Valor estoque (venda)</div>
-          <div className="sumValue">
-            {formatBRL(totals.valorEstoqueVenda)}
-          </div>
-        </div>
-        <div className="sumCard">
-          <div className="sumLabel">Valor estoque (compra)</div>
-          <div className="sumValue">
-            {formatBRL(totals.valorEstoqueCompra)}
-          </div>
-        </div>
-        <div className="sumCard">
-          <div className="sumLabel">Margem estimada (venda - compra)</div>
-          <div className="sumValue">
-            {formatBRL(totals.margemEstimada)}
-          </div>
-        </div>
-        <div className="sumHint">
-          Clique na linha para editar. <b>ESC</b> fecha. <b>Ctrl+Enter</b> salva
-          no modal.
-          <br />
-          Futuro: pedidos vão consumir <b>estoque reservado</b>, e quando pagos
-          baixam do <b>estoque físico</b>.
-        </div>
-      </section>
-
-      {/* TABELA ESTILO ERP */}
-      <section className="erpTable">
-        <div className="erpInner">
-          <div className="erpHeadRow">
-            <div className="erpHeadCell main">Produto</div>
-            <div className="erpHeadCell">Cat.</div>
-            <div className="erpHeadCell">Vol.</div>
-            <div className="erpHeadCell">Marca</div>
-            <div className="erpHeadCell num">Estoque</div>
-            <div className="erpHeadCell num">Reserv.</div>
-            <div className="erpHeadCell num">Disp.</div>
-            <div className="erpHeadCell num">Preço comp.</div>
-            <div className="erpHeadCell num">Preço venda</div>
-            <div className="erpHeadCell">Status</div>
-            <div className="erpHeadCell actions">Ações</div>
-          </div>
-
-          {filtered.map((p) => {
-            const est = Number(p.estoque) || 0;
-            const res = Number(p.reservado) || 0;
-            const disp = Math.max(0, est - res);
-            const statusLabel = p.ativo === false ? "Inativo" : "Ativo";
-
-            return (
-              <div
-                key={p.id}
-                className="erpRow"
-                onClick={() => openEdit(p.id)}
-              >
-                <div className="erpCell main">
-                  <div className="erpProdName">{p.nome}</div>
-                </div>
-
-                <div className="erpCell">
-                  <span className="chip">
-                    {p.categoria ? p.categoria : "—"}
-                  </span>
-                </div>
-
-                <div className="erpCell">
-                  {p.volumeMl ? (
-                    <span className="chipGhost">{p.volumeMl}ml</span>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-
-                <div className="erpCell">
-                  <span className="meta">{p.marca || "—"}</span>
-                </div>
-
-                <div className="erpCell num">{est}</div>
-                <div className="erpCell num">{res}</div>
-                <div className="erpCell num">{disp}</div>
-
-                <div className="erpCell num">
-                  <span className="priceERP priceCompra">
-                    {formatBRL(Number(p.precoCompra || 0))}
-                  </span>
-                </div>
-
-                <div className="erpCell num">
-                  <span className="priceERP">
-                    {formatBRL(Number(p.precoVenda || 0))}
-                  </span>
-                </div>
-
-                <div className="erpCell">
-                  <span
-                    className={`pill ${p.ativo === false ? "off" : "on"}`}
-                  >
-                    {statusLabel}
-                  </span>
-                </div>
-
-                {/* Ações – não abre modal */}
-                <div
-                  className="erpCell actionsCell"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    className="mini"
-                    onClick={() => adjustEstoque(p.id, -1)}
-                    type="button"
-                    title="Baixar 1"
-                  >
-                    −1
-                  </button>
-                  <button
-                    className="mini"
-                    onClick={() => adjustEstoque(p.id, +1)}
-                    type="button"
-                    title="Somar 1"
-                  >
-                    +1
-                  </button>
-                  <button
-                    className="mini"
-                    onClick={() => toggleActive(p.id)}
-                    type="button"
-                    title="Ativar/Inativar"
-                  >
-                    {p.ativo === false ? "Ativar" : "Inativar"}
-                  </button>
-                  <button
-                    className="mini"
-                    onClick={() => duplicateProduct(p.id)}
-                    type="button"
-                    title="Duplicar produto"
-                  >
-                    Duplicar
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-
-          {!filtered.length ? (
-            <div className="empty">
-              Nenhum produto cadastrado. Clique em “+ Novo”.
+      <section className="smartPanel">
+        <div className="smartPanelTop">
+          <div className="smartFilters">
+            <div className="field smartSearch">
+              <label>Busca</label>
+              <input
+                className="input"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar produto, marca ou categoria..."
+              />
             </div>
-          ) : null}
+
+            <div className="field smartSelect">
+              <label>Categoria</label>
+              <select
+                className="input"
+                value={cat}
+                onChange={(e) => setCat(e.target.value as "todas" | Categoria)}
+              >
+                <option value="todas">Todas</option>
+                <option value="masculino">Masculino</option>
+                <option value="feminino">Feminino</option>
+                <option value="unissex">Unissex</option>
+                <option value="kits-presente">Kits Presente</option>
+              </select>
+            </div>
+
+            <div className="field smartSelect">
+              <label>Ordenar</label>
+              <select
+                className="input"
+                value={sortBy}
+                onChange={(e) =>
+                  setSortBy(
+                    e.target.value as "recentes" | "nome" | "estoque" | "preco"
+                  )
+                }
+              >
+                <option value="recentes">Mais recentes</option>
+                <option value="nome">Nome (A→Z)</option>
+                <option value="estoque">Estoque (maior)</option>
+                <option value="preco">Preço venda (maior)</option>
+              </select>
+            </div>
+
+            <label className="check smartCheck">
+              <input
+                type="checkbox"
+                checked={onlyActive}
+                onChange={(e) => setOnlyActive(e.target.checked)}
+              />
+              <span>Ativos</span>
+            </label>
+
+            <label className="check smartCheck">
+              <input
+                type="checkbox"
+                checked={onlySemEstoque}
+                onChange={(e) => setOnlySemEstoque(e.target.checked)}
+              />
+              <span>Sem estoque</span>
+            </label>
+          </div>
+
+          <div className="smartActions">
+            <button className="btn btnPrimaryMini" onClick={openNew} type="button">
+              + Novo
+            </button>
+            <button className="btn" onClick={refresh} type="button">
+              Atualizar
+            </button>
+            <button className="btn" onClick={exportJSON} type="button">
+              Exportar
+            </button>
+            <button
+              className="btn"
+              onClick={() => fileRef.current?.click()}
+              type="button"
+            >
+              Importar
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) importJSON(f);
+              }}
+            />
+          </div>
         </div>
+
+        <div className="smartKpis">
+          <div className="miniKpi">
+            <span>Produtos</span>
+            <strong>{totals.total}</strong>
+          </div>
+          <div className="miniKpi">
+            <span>Ativos</span>
+            <strong>{totals.ativos}</strong>
+          </div>
+          <div className={totals.semEstoqueDisp > 0 ? "miniKpi miniKpiWarn" : "miniKpi"}>
+            <span>Sem estoque</span>
+            <strong>{totals.semEstoqueDisp}</strong>
+          </div>
+          <div className="miniKpi">
+            <span>Disponível</span>
+            <strong>{totals.totalDisponivel}</strong>
+          </div>
+          <div className="miniKpi">
+            <span>Estoque</span>
+            <strong>{totals.estoqueFisico}</strong>
+          </div>
+          <div className="miniKpi miniKpiGold">
+            <span>Valor venda</span>
+            <strong>{formatBRL(totals.valorEstoqueVenda)}</strong>
+          </div>
+          <div className="miniKpi miniKpiGold">
+            <span>Margem</span>
+            <strong>{formatBRL(totals.margemEstimada)}</strong>
+          </div>
+        </div>
+      </section>
+
+      {/* GRID DE PRODUTOS - SAAS COMPACTO */}
+      <section className="productsShell">
+        <div className="productsHead">
+          <div>
+            <div className="sectionKicker">Produtos cadastrados</div>
+            <h2>Catálogo e estoque</h2>
+            <p>
+              Visual em cards para evitar cortes, melhorar leitura e agilizar ações.
+            </p>
+          </div>
+
+          <div className="productsHeadBadges">
+            <span>{filtered.length} produto(s)</span>
+            <span className="gold">{formatBRL(totals.valorEstoqueVenda)}</span>
+          </div>
+        </div>
+
+        {filtered.length ? (
+          <div className="productsGrid">
+            {filtered.map((p) => {
+              const est = Number(p.estoque) || 0;
+              const res = Number(p.reservado) || 0;
+              const disp = Math.max(0, est - res);
+              const bloqueado = p.ativo === false;
+              const categoriaLabel = String(p.categoria || "—")
+                .replace("kits-presente", "Kits")
+                .replace("masculino", "Masc.")
+                .replace("feminino", "Fem.")
+                .replace("unissex", "Unissex");
+
+              return (
+                <article
+                  key={p.id}
+                  className={bloqueado ? "productCard blocked" : "productCard"}
+                  onClick={() => openEdit(p.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") openEdit(p.id);
+                  }}
+                >
+                  <div className="productCardGlow" />
+
+                  <div className="productTop">
+                    <div className="productAvatar">
+                      {String(p.nome || "P").trim().slice(0, 1).toUpperCase()}
+                    </div>
+
+                    <div className="productTitleWrap">
+                      <strong className="productName" title={p.nome}>
+                        {p.nome || "Produto sem nome"}
+                      </strong>
+                      <span className="productMeta">
+                        {p.marca || "Sem marca"} • {p.volumeMl ? `${p.volumeMl}ml` : "Volume não informado"}
+                      </span>
+                    </div>
+
+                    <span className={bloqueado ? "productStatus off" : "productStatus on"}>
+                      {bloqueado ? "🔴 Bloqueado" : "🟢 Ativo"}
+                    </span>
+                  </div>
+
+                  <div className="productTags">
+                    <span>{categoriaLabel}</span>
+                    {disp <= 0 ? <span className="dangerTag">⚠ Sem estoque</span> : null}
+                    {disp > 0 && disp <= 2 ? <span className="dangerTag">⚠ Estoque baixo</span> : null}
+                    {res > 0 ? <span className="softTag">Reservado: {res}</span> : null}
+                  </div>
+
+                  <div className="productCompactInfo">
+                    <div className="productStockLine">
+                      <span>Estoque: <b>{est}</b></span>
+                      <span>Disp.: <b>{disp}</b></span>
+                      <span>Res.: <b>{res}</b></span>
+                    </div>
+
+                    <div className="productPriceLine">
+                      <span>Venda <b>{formatBRL(Number(p.precoVenda || 0))}</b></span>
+                      <span>Compra <b>{formatBRL(Number(p.precoCompra || 0))}</b></span>
+                      <span>Margem <b>{formatBRL(Math.max(0, Number(p.precoVenda || 0) - Number(p.precoCompra || 0)))}</b></span>
+                    </div>
+                  </div>
+
+                  {p.observacoes ? (
+                    <div className="productObs" title={p.observacoes}>
+                      {p.observacoes}
+                    </div>
+                  ) : null}
+
+                  <div className="productActions" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="miniAction"
+                      onClick={() => adjustEstoque(p.id, -1)}
+                      type="button"
+                      title="Baixar 1 unidade"
+                    >
+                      −1
+                    </button>
+
+                    <button
+                      className="miniAction"
+                      onClick={() => adjustEstoque(p.id, +1)}
+                      type="button"
+                      title="Adicionar 1 unidade"
+                    >
+                      +1
+                    </button>
+
+                    <button
+                      className="miniAction edit"
+                      onClick={() => openEdit(p.id)}
+                      type="button"
+                    >
+                      Editar
+                    </button>
+
+                    <button
+                      className={bloqueado ? "miniAction unblock" : "miniAction block"}
+                      onClick={() => toggleActive(p.id)}
+                      type="button"
+                      title={bloqueado ? "Ativar produto" : "Bloquear produto"}
+                    >
+                      {bloqueado ? "Ativar" : "Bloquear"}
+                    </button>
+
+                    <button
+                      className="miniAction"
+                      onClick={() => duplicateProduct(p.id)}
+                      type="button"
+                    >
+                      Duplicar
+                    </button>
+
+                    <button
+                      className="miniAction label"
+                      onClick={() => openEtiqueta(p.id)}
+                      type="button"
+                      title="Gerar etiqueta de preço em PDF"
+                    >
+                      Etiqueta
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="emptyPremium">
+            <strong>Nenhum produto encontrado.</strong>
+            <span>Ajuste os filtros ou clique em “+ Novo”.</span>
+          </div>
+        )}
       </section>
 
       {/* MODAL */}
@@ -1019,7 +1040,8 @@ export default function ProdutosPage() {
         }
 
         .btn {
-          padding: 12px 14px;
+          min-height: 42px;
+          padding: 0 12px;
           border-radius: 14px;
           border: 1px solid rgba(200, 162, 106, 0.25);
           background: rgba(200, 162, 106, 0.08);
@@ -1038,91 +1060,515 @@ export default function ProdutosPage() {
           max-width: 980px;
         }
 
-        .toolbar {
-          margin-top: 14px;
+        .heroBadge {
+          min-height: 34px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 12px;
+          border-radius: 999px;
+          border: 1px solid rgba(88, 214, 141, 0.3);
+          background: rgba(88, 214, 141, 0.08);
+          color: #9ff0bc;
+          font-size: 12px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+
+        .smartPanel {
+          margin-top: 12px;
+          padding: 12px;
+          border-radius: 20px;
+          border: 1px solid rgba(200, 162, 106, 0.18);
+          background:
+            radial-gradient(circle at top right, rgba(200, 162, 106, 0.10), transparent 34%),
+            rgba(0, 0, 0, 0.14);
+          box-shadow: 0 16px 38px rgba(0, 0, 0, 0.14);
+        }
+        .smartPanelTop {
           display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
           gap: 12px;
           flex-wrap: wrap;
-          align-items: end;
-          padding: 14px;
-          border-radius: 18px;
-          border: 1px solid rgba(200, 162, 106, 0.18);
-          background: rgba(0, 0, 0, 0.14);
+        }
+        .smartFilters {
+          display: flex;
+          align-items: flex-end;
+          gap: 8px;
+          flex-wrap: wrap;
+          min-width: 0;
+          flex: 1 1 auto;
+        }
+        .smartActions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
+          flex-wrap: wrap;
         }
 
         .field {
           display: grid;
-          gap: 6px;
-          min-width: 220px;
+          gap: 5px;
+          min-width: 0;
+        }
+        .smartSearch {
+          width: min(320px, 100%);
+        }
+        .smartSelect {
+          width: 190px;
         }
         .field label {
-          font-size: 11px;
-          letter-spacing: 0.12em;
+          font-size: 10px;
+          letter-spacing: 0.13em;
           text-transform: uppercase;
-          opacity: 0.75;
+          opacity: 0.72;
           font-weight: 900;
         }
         .input {
-          padding: 12px 12px;
+          height: 42px;
+          padding: 0 12px;
           border-radius: 14px;
           border: 1px solid rgba(255, 255, 255, 0.12);
-          background: rgba(15, 15, 22, 0.9);
+          background: rgba(15, 15, 22, 0.92);
           color: #f2f2f2;
           outline: none;
+          font-size: 13px;
         }
 
         .check {
           display: inline-flex;
-          gap: 10px;
+          gap: 8px;
           align-items: center;
-          padding: 12px 12px;
+          padding: 0 12px;
           border-radius: 14px;
           border: 1px solid rgba(200, 162, 106, 0.18);
           background: rgba(200, 162, 106, 0.06);
           font-weight: 900;
           cursor: pointer;
           user-select: none;
-          height: 48px;
+          height: 42px;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+        .smartCheck input {
+          width: 14px;
+          height: 14px;
+          accent-color: #c8a26a;
+        }
+        .btnPrimaryMini {
+          border-color: rgba(200, 162, 106, 0.48);
+          background: linear-gradient(180deg, rgba(200, 162, 106, 0.18), rgba(200, 162, 106, 0.07));
+        }
+        .smartKpis {
+          margin-top: 10px;
+          display: grid;
+          grid-template-columns: repeat(7, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .miniKpi {
+          min-width: 0;
+          padding: 9px 10px;
+          border-radius: 14px;
+          border: 1px solid rgba(200, 162, 106, 0.14);
+          background: rgba(255, 255, 255, 0.025);
+        }
+        .miniKpi span {
+          display: block;
+          font-size: 10px;
+          opacity: 0.72;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .miniKpi strong {
+          display: block;
+          margin-top: 4px;
+          color: #fff;
+          font-size: 15px;
+          font-weight: 950;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .miniKpiGold strong {
+          color: rgba(200, 162, 106, 0.98);
+        }
+        .miniKpiWarn {
+          border-color: rgba(255, 157, 92, 0.28);
+          background: rgba(255, 157, 92, 0.07);
         }
 
-        .summary {
-          margin-top: 14px;
-          display: grid;
-          gap: 12px;
-          grid-template-columns: repeat(1, minmax(0, 1fr));
-          align-items: start;
-        }
-        @media (min-width: 1100px) {
-          .summary {
+        @media (max-width: 1280px) {
+          .smartKpis {
             grid-template-columns: repeat(4, minmax(0, 1fr));
           }
         }
-        .sumCard {
-          padding: 12px 14px;
-          border-radius: 16px;
-          border: 1px solid rgba(200, 162, 106, 0.16);
-          background: rgba(200, 162, 106, 0.06);
-        }
-        .sumLabel {
-          font-size: 12px;
-          opacity: 0.8;
-        }
-        .sumValue {
-          margin-top: 8px;
-          font-size: 18px;
-          font-weight: 900;
-        }
-        .sumHint {
-          padding: 12px 14px;
-          border-radius: 16px;
-          border: 1px dashed rgba(200, 162, 106, 0.22);
-          background: rgba(0, 0, 0, 0.12);
-          font-size: 12px;
-          opacity: 0.85;
-          line-height: 1.35;
+        @media (max-width: 900px) {
+          .smartKpis {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .smartSelect,
+          .smartSearch {
+            width: 100%;
+          }
         }
 
         /* ===== TABELA ERP ===== */
+
+        .sectionKicker {
+          font-size: 11px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: rgba(200, 162, 106, 0.95);
+          font-weight: 950;
+        }
+        .productsShell {
+          margin-top: 14px;
+          padding: 14px;
+          border-radius: 22px;
+          border: 1px solid rgba(200, 162, 106, 0.18);
+          background:
+            radial-gradient(circle at top left, rgba(200, 162, 106, 0.10), transparent 30%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+          box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+          overflow: hidden;
+        }
+        .productsHead {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: flex-start;
+          flex-wrap: wrap;
+          margin-bottom: 12px;
+        }
+        .productsHead h2 {
+          margin: 3px 0 0;
+          font-size: 22px;
+          line-height: 1.08;
+          letter-spacing: -0.02em;
+        }
+        .productsHead p {
+          margin: 6px 0 0;
+          opacity: 0.68;
+          font-size: 13px;
+          line-height: 1.45;
+        }
+        .productsHeadBadges {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .productsHeadBadges span {
+          min-height: 34px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 12px;
+          border-radius: 999px;
+          border: 1px solid rgba(255, 255, 255, 0.10);
+          background: rgba(0, 0, 0, 0.18);
+          font-size: 12px;
+          font-weight: 950;
+          white-space: nowrap;
+        }
+        .productsHeadBadges .gold {
+          border-color: rgba(200, 162, 106, 0.32);
+          background: rgba(200, 162, 106, 0.10);
+          color: rgba(200, 162, 106, 0.98);
+        }
+        .productsGrid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+          gap: 10px;
+        }
+        .productCard {
+          position: relative;
+          overflow: hidden;
+          min-width: 0;
+          border-radius: 18px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+            rgba(0, 0, 0, 0.22);
+          padding: 11px;
+          box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+          cursor: pointer;
+          transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, opacity 0.16s ease;
+        }
+        .productCard:hover {
+          transform: translateY(-2px);
+          border-color: rgba(200, 162, 106, 0.30);
+          background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018)),
+            rgba(0, 0, 0, 0.24);
+        }
+        .productCard.blocked {
+          opacity: 0.72;
+          border-color: rgba(255, 120, 120, 0.22);
+        }
+        .productCardGlow {
+          position: absolute;
+          inset: -90px auto auto -90px;
+          width: 190px;
+          height: 190px;
+          border-radius: 999px;
+          background: radial-gradient(circle, rgba(200, 162, 106, 0.16), transparent 66%);
+          pointer-events: none;
+        }
+        .productTop {
+          position: relative;
+          display: grid;
+          grid-template-columns: 36px minmax(0, 1fr) auto;
+          gap: 9px;
+          align-items: center;
+        }
+        .productAvatar {
+          width: 36px;
+          height: 36px;
+          border-radius: 13px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(200, 162, 106, 0.28);
+          background: linear-gradient(180deg, rgba(200, 162, 106, 0.18), rgba(200, 162, 106, 0.06));
+          color: rgba(200, 162, 106, 0.98);
+          font-weight: 1000;
+          font-size: 15px;
+          flex: 0 0 auto;
+        }
+        .productTitleWrap {
+          min-width: 0;
+        }
+        .productName {
+          display: block;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 13px;
+          line-height: 1.2;
+        }
+        .productMeta {
+          display: block;
+          margin-top: 3px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          opacity: 0.64;
+          font-size: 12px;
+          font-weight: 800;
+        }
+        .productStatus {
+          min-height: 26px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 9px;
+          border-radius: 999px;
+          font-size: 10.5px;
+          font-weight: 1000;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+          white-space: nowrap;
+        }
+        .productStatus.on {
+          border: 1px solid rgba(117, 255, 171, 0.30);
+          background: rgba(117, 255, 171, 0.08);
+          color: #bfffd5;
+        }
+        .productStatus.off {
+          border: 1px solid rgba(255, 120, 120, 0.32);
+          background: rgba(255, 120, 120, 0.09);
+          color: #ffd1d1;
+        }
+        .productTags {
+          margin-top: 8px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .productTags span {
+          min-height: 22px;
+          display: inline-flex;
+          align-items: center;
+          border-radius: 999px;
+          border: 1px solid rgba(200, 162, 106, 0.18);
+          background: rgba(200, 162, 106, 0.07);
+          padding: 0 9px;
+          font-size: 11px;
+          font-weight: 900;
+          color: rgba(242, 242, 242, 0.82);
+        }
+        .productTags .dangerTag {
+          border-color: rgba(255, 157, 92, 0.34);
+          background: rgba(255, 157, 92, 0.12);
+          color: #ffd2ad;
+        }
+        .productTags .softTag {
+          border-color: rgba(115, 171, 255, 0.26);
+          background: rgba(115, 171, 255, 0.08);
+          color: #cfe1ff;
+        }
+        .productMetrics {
+          margin-top: 10px;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .productMetrics > div,
+        .productPrices > div {
+          min-width: 0;
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.075);
+          background: rgba(0, 0, 0, 0.18);
+          padding: 9px;
+        }
+        .productMetrics span,
+        .productPrices span {
+          display: block;
+          font-size: 10.5px;
+          opacity: 0.56;
+          font-weight: 950;
+          text-transform: uppercase;
+          letter-spacing: 0.07em;
+        }
+        .productMetrics strong,
+        .productPrices strong {
+          display: block;
+          margin-top: 4px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 14px;
+          color: rgba(242, 242, 242, 0.92);
+        }
+        .productPrices {
+          margin-top: 8px;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .productPrices strong {
+          color: rgba(200, 162, 106, 0.98);
+          font-size: 13px;
+        }
+        .productObs {
+          margin-top: 8px;
+          min-height: 26px;
+          max-height: 38px;
+          overflow: hidden;
+          border-radius: 13px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          background: rgba(255, 255, 255, 0.025);
+          padding: 7px 8px;
+          font-size: 11px;
+          line-height: 1.35;
+          opacity: 0.68;
+        }
+        .productActions {
+          margin-top: 8px;
+          padding-top: 8px;
+          border-top: 1px solid rgba(255, 255, 255, 0.07);
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .miniAction {
+          min-height: 31px;
+          min-width: 44px;
+          padding: 0 9px;
+          border-radius: 11px;
+          border: 1px solid rgba(200, 162, 106, 0.23);
+          background: rgba(200, 162, 106, 0.08);
+          color: #f2f2f2;
+          font-weight: 950;
+          cursor: pointer;
+          font-size: 12px;
+          white-space: nowrap;
+          transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+        }
+        .miniAction:hover {
+          transform: translateY(-1px);
+          border-color: rgba(200, 162, 106, 0.40);
+        }
+        .miniAction.edit {
+          background: rgba(115, 171, 255, 0.08);
+          border-color: rgba(115, 171, 255, 0.24);
+        }
+        .miniAction.block {
+          background: rgba(70, 30, 30, 0.42);
+          border-color: rgba(255, 120, 120, 0.22);
+          color: #ffd1d1;
+        }
+        .miniAction.unblock {
+          background: rgba(117, 255, 171, 0.08);
+          border-color: rgba(117, 255, 171, 0.30);
+          color: #bfffd5;
+        }
+        .miniAction.label {
+          background: rgba(200, 162, 106, 0.12);
+          border-color: rgba(200, 162, 106, 0.34);
+          color: #ffe1ad;
+        }
+
+        .productCompactInfo {
+          margin-top: 8px;
+          display: grid;
+          gap: 7px;
+        }
+        .productStockLine,
+        .productPriceLine {
+          min-width: 0;
+          border-radius: 13px;
+          border: 1px solid rgba(255, 255, 255, 0.075);
+          background: rgba(0, 0, 0, 0.18);
+          padding: 8px 9px;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+          align-items: center;
+        }
+        .productStockLine span,
+        .productPriceLine span {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 11px;
+          color: rgba(244, 241, 235, 0.62);
+          font-weight: 850;
+        }
+        .productStockLine b {
+          color: rgba(244, 241, 235, 0.96);
+          font-size: 12px;
+        }
+        .productPriceLine b {
+          display: block;
+          margin-top: 2px;
+          color: rgba(200, 162, 106, 0.98);
+          font-size: 12px;
+          line-height: 1.1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .emptyPremium {
+          min-height: 180px;
+          display: grid;
+          place-items: center;
+          gap: 6px;
+          text-align: center;
+          border-radius: 18px;
+          border: 1px dashed rgba(255, 255, 255, 0.14);
+          background: rgba(0, 0, 0, 0.14);
+          opacity: 0.78;
+        }
+        .emptyPremium strong,
+        .emptyPremium span {
+          display: block;
+        }
+
         .erpTable {
           margin-top: 16px;
           border-radius: 18px;
@@ -1297,7 +1743,7 @@ export default function ProdutosPage() {
           max-height: calc(100dvh - 36px);
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
-          border-radius: 20px;
+          border-radius: 18px;
           border: 1px solid rgba(200, 162, 106, 0.22);
           background: rgba(12, 12, 18, 0.95);
           box-shadow: 0 30px 120px rgba(0, 0, 0, 0.6);
@@ -1427,23 +1873,25 @@ export default function ProdutosPage() {
           }
 
           .headRight,
-          .toolbar {
+          .smartPanel,
+          .smartFilters,
+          .smartActions {
             width: 100%;
           }
 
-          .headRight .btn {
+          .smartActions .btn {
             flex: 1 1 calc(50% - 8px);
-            min-height: 46px;
+            min-height: 42px;
           }
 
-          .toolbar .field,
-          .toolbar .check {
+          .smartFilters .field,
+          .smartFilters .check {
             width: 100%;
             min-width: 0;
           }
 
-          .summary {
-            grid-template-columns: 1fr;
+          .smartKpis {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
           .erpTable {
@@ -1509,6 +1957,359 @@ export default function ProdutosPage() {
           }
         }
 
+
+
+        /* ======================================================
+           ✅ PRODUTOS ULTRA COMPACTO 10/10 — SaaS Premium
+           ✅ Apenas visual/densidade. Não altera Firebase, estoque, filtros ou ações.
+           ✅ Mais produtos visíveis por tela, sem cortes e com botões alinhados.
+        ====================================================== */
+        .page {
+          max-width: 1160px !important;
+          padding: 12px 14px 20px !important;
+          margin: 0 auto !important;
+          overflow-x: hidden !important;
+        }
+
+        .head {
+          padding: 12px 14px !important;
+          border-radius: 18px !important;
+          align-items: center !important;
+          gap: 12px !important;
+        }
+        .kicker {
+          font-size: 10px !important;
+          letter-spacing: 0.16em !important;
+        }
+        .title {
+          font-size: 23px !important;
+          line-height: 1.04 !important;
+          margin-top: 5px !important;
+        }
+        .sub {
+          font-size: 12.5px !important;
+          line-height: 1.28 !important;
+          margin-top: 6px !important;
+          max-width: 620px !important;
+        }
+        .heroBadge {
+          min-height: 34px !important;
+          padding: 0 12px !important;
+          border-radius: 999px !important;
+          font-size: 11.5px !important;
+        }
+
+        .smartPanel {
+          margin-top: 12px !important;
+          padding: 12px !important;
+          border-radius: 18px !important;
+        }
+        .smartPanelTop {
+          gap: 10px !important;
+        }
+        .smartFilters {
+          gap: 8px !important;
+          align-items: end !important;
+        }
+        .field label {
+          font-size: 9px !important;
+          letter-spacing: 0.11em !important;
+        }
+        .smartSearch {
+          min-width: 270px !important;
+        }
+        .smartSelect {
+          min-width: 170px !important;
+        }
+        .input {
+          height: 36px !important;
+          min-height: 36px !important;
+          padding: 0 11px !important;
+          border-radius: 12px !important;
+          font-size: 12px !important;
+        }
+        .check {
+          height: 36px !important;
+          min-height: 36px !important;
+          padding: 0 11px !important;
+          border-radius: 12px !important;
+          font-size: 11.5px !important;
+        }
+        .smartActions {
+          gap: 7px !important;
+        }
+        .btn {
+          height: 34px !important;
+          min-height: 34px !important;
+          padding: 0 11px !important;
+          border-radius: 11px !important;
+          font-size: 11.5px !important;
+        }
+
+        .smartKpis {
+          margin-top: 10px !important;
+          display: grid !important;
+          grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)) !important;
+          gap: 8px !important;
+        }
+        .miniKpi {
+          min-height: 58px !important;
+          padding: 9px 10px !important;
+          border-radius: 14px !important;
+        }
+        .miniKpi span {
+          font-size: 10px !important;
+          line-height: 1.15 !important;
+        }
+        .miniKpi strong {
+          margin-top: 4px !important;
+          font-size: 15px !important;
+          line-height: 1.08 !important;
+          overflow-wrap: anywhere !important;
+        }
+
+        .productsShell {
+          margin-top: 12px !important;
+          padding: 12px !important;
+          border-radius: 18px !important;
+        }
+        .productsHead {
+          margin-bottom: 10px !important;
+          gap: 10px !important;
+          align-items: center !important;
+        }
+        .sectionKicker {
+          font-size: 10px !important;
+          letter-spacing: 0.15em !important;
+        }
+        .productsHead h2 {
+          font-size: 21px !important;
+          line-height: 1.05 !important;
+          margin-top: 4px !important;
+        }
+        .productsHead p {
+          display: none !important;
+        }
+        .productsHeadBadges {
+          gap: 7px !important;
+        }
+        .productsHeadBadges span {
+          min-height: 30px !important;
+          padding: 0 10px !important;
+          border-radius: 999px !important;
+          font-size: 11px !important;
+        }
+
+        .productsGrid {
+          display: grid !important;
+          grid-template-columns: repeat(auto-fit, minmax(315px, 1fr)) !important;
+          gap: 8px !important;
+        }
+        .productCard {
+          min-width: 0 !important;
+          min-height: 0 !important;
+          padding: 9px 10px !important;
+          border-radius: 16px !important;
+          gap: 7px !important;
+          overflow: hidden !important;
+          transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease !important;
+        }
+        .productCard:hover {
+          transform: translateY(-2px) !important;
+          border-color: rgba(200, 162, 106, 0.42) !important;
+        }
+        .productCardGlow {
+          width: 110px !important;
+          height: 110px !important;
+          inset: -50px auto auto -50px !important;
+          opacity: 0.72 !important;
+        }
+        .productTop {
+          gap: 8px !important;
+          align-items: center !important;
+        }
+        .productAvatar {
+          width: 34px !important;
+          height: 34px !important;
+          border-radius: 12px !important;
+          font-size: 14px !important;
+        }
+        .productTitleWrap {
+          min-width: 0 !important;
+        }
+        .productName {
+          font-size: 12.5px !important;
+          line-height: 1.12 !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          max-width: 100% !important;
+        }
+        .productMeta {
+          margin-top: 2px !important;
+          font-size: 10.5px !important;
+          line-height: 1.15 !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+        .productStatus {
+          min-height: 24px !important;
+          height: 24px !important;
+          padding: 0 9px !important;
+          border-radius: 999px !important;
+          font-size: 9.5px !important;
+          flex: 0 0 auto !important;
+        }
+
+        .productTags {
+          gap: 5px !important;
+          flex-wrap: nowrap !important;
+          overflow: hidden !important;
+        }
+        .productTags span,
+        .dangerTag,
+        .softTag {
+          min-height: 20px !important;
+          height: 20px !important;
+          padding: 0 7px !important;
+          border-radius: 999px !important;
+          font-size: 9.5px !important;
+          white-space: nowrap !important;
+          flex: 0 0 auto !important;
+        }
+
+        .productCompactInfo {
+          display: grid !important;
+          gap: 6px !important;
+          margin-top: 0 !important;
+        }
+        .productStockLine,
+        .productPriceLine {
+          min-height: 32px !important;
+          padding: 6px 8px !important;
+          border-radius: 12px !important;
+          gap: 7px !important;
+          display: grid !important;
+          grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          align-items: center !important;
+        }
+        .productStockLine span,
+        .productPriceLine span {
+          font-size: 9.5px !important;
+          line-height: 1.1 !important;
+          min-width: 0 !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+        .productStockLine b,
+        .productPriceLine b {
+          font-size: 10.5px !important;
+          line-height: 1.05 !important;
+          display: block !important;
+          margin-top: 1px !important;
+          overflow-wrap: anywhere !important;
+        }
+
+        .productObs {
+          min-height: 24px !important;
+          max-height: 24px !important;
+          padding: 5px 8px !important;
+          border-radius: 12px !important;
+          font-size: 10px !important;
+          line-height: 1.15 !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+
+        .productActions {
+          margin-top: 1px !important;
+          padding-top: 7px !important;
+          gap: 5px !important;
+          display: grid !important;
+          grid-template-columns: 36px 36px minmax(58px, 0.75fr) minmax(74px, 0.95fr) minmax(70px, 0.95fr) minmax(74px, 0.95fr) !important;
+          align-items: center !important;
+        }
+        .miniAction {
+          width: 100% !important;
+          min-width: 0 !important;
+          height: 28px !important;
+          min-height: 28px !important;
+          padding: 0 7px !important;
+          border-radius: 9px !important;
+          font-size: 10px !important;
+          line-height: 1 !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+
+        .emptyPremium {
+          min-height: 150px !important;
+          border-radius: 16px !important;
+          padding: 18px !important;
+        }
+
+        .modal {
+          width: min(920px, 96vw) !important;
+          padding: 12px !important;
+          border-radius: 18px !important;
+        }
+        .modalHead {
+          padding: 8px 8px 10px !important;
+        }
+        .modalTitle {
+          font-size: 17px !important;
+        }
+        .modalSub {
+          font-size: 11.5px !important;
+        }
+        .modalGrid {
+          gap: 10px !important;
+          padding: 10px 6px 6px !important;
+        }
+        .textarea {
+          min-height: 82px !important;
+          padding: 10px 11px !important;
+          border-radius: 12px !important;
+          font-size: 12px !important;
+        }
+        .modalActions {
+          padding: 10px 6px calc(10px + env(safe-area-inset-bottom)) !important;
+          gap: 8px !important;
+        }
+        .btnSmallPrimary,
+        .btnDanger {
+          height: 34px !important;
+          min-height: 34px !important;
+          padding: 0 11px !important;
+          border-radius: 11px !important;
+          font-size: 11.5px !important;
+        }
+
+        @media (max-width: 1280px) {
+          .page { max-width: 1080px !important; }
+          .productsGrid { grid-template-columns: repeat(auto-fit, minmax(305px, 1fr)) !important; }
+        }
+        @media (max-width: 980px) {
+          .page { padding: 10px !important; }
+          .smartFilters,
+          .smartActions,
+          .headRightCompact { width: 100% !important; }
+          .smartSearch,
+          .smartSelect,
+          .smartCheck { min-width: 0 !important; flex: 1 1 180px !important; }
+          .productsGrid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 560px) {
+          .title { font-size: 22px !important; }
+          .smartKpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .productActions { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .productStockLine,
+          .productPriceLine { grid-template-columns: 1fr !important; }
+        }
       `}</style>
     </main>
   );
