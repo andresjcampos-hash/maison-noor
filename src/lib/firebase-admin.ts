@@ -26,23 +26,25 @@ function getServiceAccount() {
   return null;
 }
 
+// 🔥 Inicialização segura
 if (!admin.apps.length) {
   const serviceAccount = getServiceAccount();
 
-  if (serviceAccount) {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: serviceAccount.projectId,
-        clientEmail: serviceAccount.clientEmail,
-        privateKey: serviceAccount.privateKey,
-      }),
-    });
-  } else {
-    console.warn("Firebase Admin não configurado (build/local).");
+  if (!serviceAccount) {
+    throw new Error("Firebase Admin não configurado corretamente.");
   }
+
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: serviceAccount.projectId,
+      clientEmail: serviceAccount.clientEmail,
+      privateKey: serviceAccount.privateKey,
+    }),
+  });
 }
 
-export const adminDb = admin.apps.length ? admin.firestore() : null;
-export const adminAuth = admin.apps.length ? admin.auth() : null;
+// 🔥 AGORA NUNCA MAIS SERÁ NULL
+export const adminDb = admin.firestore();
+export const adminAuth = admin.auth();
 
 export default admin;
