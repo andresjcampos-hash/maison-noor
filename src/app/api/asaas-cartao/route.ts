@@ -166,20 +166,24 @@ export async function POST(req: Request) {
     const numeroEndereco = normalizarTexto(body?.numeroEndereco || body?.addressNumber, "0");
     const { expiryMonth, expiryYear } = separarValidade(validade);
     const remoteIp = getRemoteIp(req);
+    const chaveAsaasAtual = obterChaveAsaas();
 
     console.log("ASAAS CONFIG SEGURO:", {
       ambiente: ASAAS_ENV,
       url: ASAAS_API_URL,
-      chaveConfigurada: Boolean(ASAAS_API_KEY),
-      prefixoChave: ASAAS_API_KEY ? ASAAS_API_KEY.slice(0, 12) : "vazio",
+      chaveConfigurada: Boolean(chaveAsaasAtual),
+      prefixoChave: chaveAsaasAtual ? chaveAsaasAtual.slice(0, 12) : "vazio",
+      tamanhoChave: chaveAsaasAtual.length,
     });
 
-    if (!ASAAS_API_KEY) {
+    if (!chaveAsaasAtual) {
       return NextResponse.json(
         {
           erro: true,
           mensagem:
-            "ASAAS_API_KEY não configurada. No .env.local, como a chave começa com $, use ASAAS_API_KEY=\\$aact_hmlg_... e reinicie o npm run dev.",
+            ASAAS_ENV === "production"
+              ? "ASAAS_API_KEY_PROD não configurada no Vercel."
+              : "ASAAS_API_KEY não configurada.",
           ambienteAtual: ASAAS_ENV,
         },
         { status: 500 }
