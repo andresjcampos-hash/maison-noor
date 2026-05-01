@@ -10,10 +10,17 @@ type AsaasError = {
 };
 
 function limparEnv(valor: unknown) {
-  return String(valor || "")
+  const limpo = String(valor || "")
     .trim()
-    .replace(/^['\"]|['\"]$/g, "")
+    .replace(/^[\'\"]|[\'\"]$/g, "")
     .replace(/^\\\$/, "$");
+
+  // Vercel/PowerShell às vezes entregam a chave sem o "$" inicial.
+  // O Asaas exige o prefixo completo: $aact_prod_... ou $aact_hmlg_...
+  if (limpo.startsWith("aact_prod_")) return `$${limpo}`;
+  if (limpo.startsWith("aact_hmlg_")) return `$${limpo}`;
+
+  return limpo;
 }
 
 const ASAAS_ENV = limparEnv(process.env.ASAAS_ENV || "sandbox").toLowerCase();
@@ -32,30 +39,6 @@ function obterChaveAsaas() {
   }
 
   return chavePadrao || chaveProducao || chaveLegada;
-}
-
-
-function logDiagnosticoAsaas() {
-  const chaveProducao = limparEnv(process.env.ASAAS_API_KEY_PROD);
-  const chavePadrao = limparEnv(process.env.ASAAS_API_KEY);
-  const chaveLegada = limparEnv(process.env.ASAAS_TOKEN);
-  const chaveSelecionada = obterChaveAsaas();
-
-  console.log("ASAAS DEBUG ENV:", {
-    ASAAS_ENV,
-    ASAAS_API_URL,
-    ASAAS_API_KEY_PROD_existe: Boolean(chaveProducao),
-    ASAAS_API_KEY_PROD_prefixo: chaveProducao.slice(0, 12),
-    ASAAS_API_KEY_PROD_tamanho: chaveProducao.length,
-    ASAAS_API_KEY_existe: Boolean(chavePadrao),
-    ASAAS_API_KEY_prefixo: chavePadrao.slice(0, 12),
-    ASAAS_API_KEY_tamanho: chavePadrao.length,
-    ASAAS_TOKEN_existe: Boolean(chaveLegada),
-    ASAAS_TOKEN_prefixo: chaveLegada.slice(0, 12),
-    ASAAS_TOKEN_tamanho: chaveLegada.length,
-    chaveSelecionada_prefixo: chaveSelecionada.slice(0, 12),
-    chaveSelecionada_tamanho: chaveSelecionada.length,
-  });
 }
 
 function hojeISO() {
@@ -99,6 +82,21 @@ function isPago(status?: string) {
   );
 }
 
+function isEmAnalise(status?: string) {
+  return ["PENDING", "AWAITING_RISK_ANALYSIS"].includes(
+    String(status || "").toUpperCase()
+  );
+}
+
+function statusInternoPagamento(status?: string) {
+  const statusUpper = String(status || "").toUpperCase();
+
+  if (isPago(statusUpper)) return "pago";
+  if (isEmAnalise(statusUpper)) return "em_analise";
+
+  return "aguardando_pagamento";
+}
+
 function extrairMensagemAsaas(data: any, fallback: string) {
   const errors: AsaasError[] = data?.errors || data?.error_messages || [];
   return (
@@ -125,7 +123,6 @@ function getRemoteIp(req: Request) {
 }
 
 async function asaasFetch(path: string, payload: any) {
-  // Lê a chave em runtime, dentro da função, para evitar problema no Vercel/serverless.
   const apiKey = obterChaveAsaas();
 
   if (!apiKey) {
@@ -135,14 +132,6 @@ async function asaasFetch(path: string, payload: any) {
         : "ASAAS_API_KEY não configurada."
     );
   }
-
-  console.log("ASAAS DEBUG FETCH:", {
-    path,
-    ambiente: ASAAS_ENV,
-    url: ASAAS_API_URL,
-    chavePrefixo: apiKey.slice(0, 12),
-    chaveTamanho: apiKey.length,
-  });
 
   return fetch(`${ASAAS_API_URL}${path}`, {
     method: "POST",
@@ -158,16 +147,12 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // DEBUG TEMPORÁRIO: mostra no log da Vercel se a variável certa está sendo lida.
-    // Não imprime a chave completa, apenas prefixo e tamanho. Remova depois do diagnóstico.
-    logDiagnosticoAsaas();
-
     const valor = Number(body?.valor || body?.value || body?.total || 0);
     const numeroPedido = normalizarTexto(body?.numeroPedido);
     const pedidoId = normalizarTexto(body?.pedidoId);
 
     const nome = normalizarTexto(body?.nome || body?.cardNome, "Cliente Maison Noor");
-    const cardNome = normalizarTexto(body?.cardNome || body?.nome, nome);
+    const cardNome = normalizarTexto(body?.cardNome || body?.nome, nome).toUpperCase();
     const email = normalizarTexto(body?.email, "cliente@maisonnoor.com.br");
     const cpfCnpj = somenteNumeros(body?.cpf || body?.cpfCnpj);
     const telefone = somenteNumeros(body?.telefone || body?.phone || body?.mobilePhone);
@@ -181,6 +166,25 @@ export async function POST(req: Request) {
     const numeroEndereco = normalizarTexto(body?.numeroEndereco || body?.addressNumber, "0");
     const { expiryMonth, expiryYear } = separarValidade(validade);
     const remoteIp = getRemoteIp(req);
+
+    console.log("ASAAS CONFIG SEGURO:", {
+      ambiente: ASAAS_ENV,
+      url: ASAAS_API_URL,
+      chaveConfigurada: Boolean(ASAAS_API_KEY),
+      prefixoChave: ASAAS_API_KEY ? ASAAS_API_KEY.slice(0, 12) : "vazio",
+    });
+
+    if (!ASAAS_API_KEY) {
+      return NextResponse.json(
+        {
+          erro: true,
+          mensagem:
+            "ASAAS_API_KEY não configurada. No .env.local, como a chave começa com $, use ASAAS_API_KEY=\\$aact_hmlg_... e reinicie o npm run dev.",
+          ambienteAtual: ASAAS_ENV,
+        },
+        { status: 500 }
+      );
+    }
 
     if (!valor || valor <= 0) {
       return NextResponse.json({ erro: true, mensagem: "Valor inválido." }, { status: 400 });
@@ -264,8 +268,7 @@ export async function POST(req: Request) {
       notificationDisabled: true,
     };
 
-    // IMPORTANTE: não envie phone e mobilePhone com o mesmo número.
-    // 10 dígitos = fixo; 11 dígitos = celular.
+    // Não envie phone e mobilePhone juntos com o mesmo número.
     if (telefone.length === 11) {
       customerPayload.mobilePhone = telefone;
     } else {
@@ -284,8 +287,8 @@ export async function POST(req: Request) {
             erro: true,
             mensagem:
               ASAAS_ENV === "production"
-                ? "A chave ASAAS_API_KEY é de Sandbox, mas ASAAS_ENV está como production. Use uma chave de produção ou troque ASAAS_ENV para sandbox."
-                : "A chave ASAAS_API_KEY é de Produção, mas ASAAS_ENV está como sandbox. Use uma chave do Sandbox ou troque ASAAS_ENV para production.",
+                ? "A chave usada não pertence à produção. Verifique ASAAS_ENV e ASAAS_API_KEY_PROD."
+                : "A chave usada não pertence ao sandbox. Verifique ASAAS_ENV e ASAAS_API_KEY.",
             ambienteAtual: ASAAS_ENV,
             urlAtual: ASAAS_API_URL,
             detalhe: customerData,
@@ -343,7 +346,7 @@ export async function POST(req: Request) {
 
     console.log("ASAAS CARTAO PAYLOAD SEGURO:", {
       ambiente: ASAAS_ENV,
-      url: ASAAS_API_URL,
+      url: `${ASAAS_API_URL}/payments`,
       customer: customerData.id,
       value: valor,
       numeroPedido,
@@ -358,9 +361,49 @@ export async function POST(req: Request) {
 
     const paymentResponse = await asaasFetch("/payments", paymentPayload);
     const paymentData = await paymentResponse.json().catch(() => null);
+    const db = admin.apps.length ? admin.firestore() : null;
 
     if (!paymentResponse.ok) {
       console.error("ERRO ASAAS CARTAO:", paymentData);
+
+      if (db && pedidoId) {
+        await db
+          .collection("pedidos")
+          .doc("default")
+          .collection("lista")
+          .doc(String(pedidoId))
+          .set(
+            {
+              formaPagamento: "cartao",
+              pagamentoStatus: "recusado",
+              statusPagamento: "recusado",
+              status: "aguardando_pagamento",
+
+              cpf: cpfCnpj,
+              telefone,
+              phone: telefone.length === 10 ? telefone : "",
+              mobilePhone: telefone.length === 11 ? telefone : "",
+              parcelas,
+
+              asaasCustomerId: customerData.id,
+              asaasPaymentId: paymentData?.id || null,
+              asaasStatus: paymentData?.status || "RECUSADO",
+              asaasCartao: paymentData || null,
+              asaasErroCartao: paymentData || null,
+
+              valor,
+              total: valor,
+              valorTotal: valor,
+              totalPedido: valor,
+              totalCartao: valor,
+              numeroPedido,
+
+              atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+      }
 
       return NextResponse.json(
         {
@@ -377,7 +420,8 @@ export async function POST(req: Request) {
 
     const statusAsaas = String(paymentData?.status || "").toUpperCase();
     const pagamentoAprovado = isPago(statusAsaas);
-    const db = admin.apps.length ? admin.firestore() : null;
+    const pagamentoEmAnalise = isEmAnalise(statusAsaas);
+    const statusInterno = statusInternoPagamento(statusAsaas);
 
     if (db && pedidoId) {
       await db
@@ -388,8 +432,8 @@ export async function POST(req: Request) {
         .set(
           {
             formaPagamento: "cartao",
-            pagamentoStatus: pagamentoAprovado ? "pago" : "aguardando_pagamento",
-            statusPagamento: pagamentoAprovado ? "pago" : "aguardando_pagamento",
+            pagamentoStatus: statusInterno,
+            statusPagamento: statusInterno,
             status: pagamentoAprovado ? "pago" : "aguardando_pagamento",
 
             cpf: cpfCnpj,
@@ -432,6 +476,8 @@ export async function POST(req: Request) {
       numeroPedido,
       mensagem: pagamentoAprovado
         ? "Pagamento aprovado."
+        : pagamentoEmAnalise
+        ? "Pagamento enviado para análise."
         : "Pagamento criado e aguardando confirmação.",
     });
   } catch (error: any) {
