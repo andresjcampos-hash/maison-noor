@@ -1,435 +1,449 @@
-"use client";
+import { NextResponse } from "next/server";
+import admin from "@/lib/firebase-admin";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-type PedidoSalvo = {
-  id?: string;
-  numeroPedido?: string;
-  formaPagamento?: "pix" | "whatsapp" | "cartao" | string;
-  createdAt?: string;
+type AsaasError = {
+  code?: string;
+  description?: string;
 };
 
-function formatarFormaPagamento(forma?: string) {
-  if (forma === "pix") return "Pix";
-  if (forma === "cartao") return "Cartão de crédito";
-  if (forma === "whatsapp") return "WhatsApp";
-  return "Atendimento";
+function limparEnv(valor: unknown) {
+  return String(valor || "")
+    .trim()
+    .replace(/^['\"]|['\"]$/g, "")
+    .replace(/^\\\$/, "$");
 }
 
-function formatarData(data?: string) {
-  if (!data) return "Agora mesmo";
+const ASAAS_ENV = limparEnv(process.env.ASAAS_ENV || "sandbox").toLowerCase();
+const ASAAS_API_URL =
+  ASAAS_ENV === "production"
+    ? "https://api.asaas.com/v3"
+    : "https://api-sandbox.asaas.com/v3";
 
-  const parsed = new Date(data);
-  if (Number.isNaN(parsed.getTime())) return "Agora mesmo";
+function obterChaveAsaas() {
+  const chaveProducao = limparEnv(process.env.ASAAS_API_KEY_PROD);
+  const chavePadrao = limparEnv(process.env.ASAAS_API_KEY);
+  const chaveLegada = limparEnv(process.env.ASAAS_TOKEN);
 
-  return parsed.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+  if (ASAAS_ENV === "production") {
+    return chaveProducao || chavePadrao || chaveLegada;
+  }
+
+  return chavePadrao || chaveProducao || chaveLegada;
+}
+
+
+function logDiagnosticoAsaas() {
+  const chaveProducao = limparEnv(process.env.ASAAS_API_KEY_PROD);
+  const chavePadrao = limparEnv(process.env.ASAAS_API_KEY);
+  const chaveLegada = limparEnv(process.env.ASAAS_TOKEN);
+  const chaveSelecionada = obterChaveAsaas();
+
+  console.log("ASAAS DEBUG ENV:", {
+    ASAAS_ENV,
+    ASAAS_API_URL,
+    ASAAS_API_KEY_PROD_existe: Boolean(chaveProducao),
+    ASAAS_API_KEY_PROD_prefixo: chaveProducao.slice(0, 12),
+    ASAAS_API_KEY_PROD_tamanho: chaveProducao.length,
+    ASAAS_API_KEY_existe: Boolean(chavePadrao),
+    ASAAS_API_KEY_prefixo: chavePadrao.slice(0, 12),
+    ASAAS_API_KEY_tamanho: chavePadrao.length,
+    ASAAS_TOKEN_existe: Boolean(chaveLegada),
+    ASAAS_TOKEN_prefixo: chaveLegada.slice(0, 12),
+    ASAAS_TOKEN_tamanho: chaveLegada.length,
+    chaveSelecionada_prefixo: chaveSelecionada.slice(0, 12),
+    chaveSelecionada_tamanho: chaveSelecionada.length,
   });
 }
 
-export default function CheckoutSucessoClient() {
-  const searchParams = useSearchParams();
+function hojeISO() {
+  return new Date().toISOString().slice(0, 10);
+}
 
-  const [mounted, setMounted] = useState(false);
-  const [pedido, setPedido] = useState<PedidoSalvo | null>(null);
-  const [whatsAppAutoTried, setWhatsAppAutoTried] = useState(false);
+function somenteNumeros(valor: unknown) {
+  return String(valor || "").replace(/\D/g, "");
+}
 
-  useEffect(() => {
-    setMounted(true);
+function normalizarTexto(valor: unknown, fallback = "") {
+  return String(valor || fallback).trim();
+}
 
-    try {
-      const raw = window.sessionStorage.getItem("maison_noor_checkout_last_order");
-      if (!raw) return;
+function separarValidade(validade: unknown) {
+  const clean = somenteNumeros(validade);
 
-      const parsed = JSON.parse(raw);
-      setPedido(parsed);
-    } catch (error) {
-      console.error("Erro ao ler último pedido salvo:", error);
-    }
-  }, []);
+  if (clean.length === 4) {
+    return {
+      expiryMonth: clean.slice(0, 2),
+      expiryYear: `20${clean.slice(2, 4)}`,
+    };
+  }
 
-  useEffect(() => {
-    if (!mounted || whatsAppAutoTried) return;
+  if (clean.length === 6) {
+    return {
+      expiryMonth: clean.slice(0, 2),
+      expiryYear: clean.slice(2, 6),
+    };
+  }
 
-    try {
-      const pendingHref = window.sessionStorage.getItem("maison_noor_checkout_pending_whatsapp_url");
-      if (pendingHref) {
-        window.sessionStorage.removeItem("maison_noor_checkout_pending_whatsapp_url");
-        window.open(pendingHref, "_blank");
-      }
-    } catch (error) {
-      console.error("Erro ao abrir WhatsApp automaticamente:", error);
-    } finally {
-      setWhatsAppAutoTried(true);
-    }
-  }, [mounted, whatsAppAutoTried]);
+  return {
+    expiryMonth: "",
+    expiryYear: "",
+  };
+}
 
-  const numeroPedido = useMemo(() => {
-    if (!mounted) return "em geração";
-
-    const numeroQuery = searchParams.get("pedido");
-    return numeroQuery || pedido?.numeroPedido || "em geração";
-  }, [mounted, searchParams, pedido]);
-
-  const formaPagamento = useMemo(() => {
-    if (!mounted) return "Atendimento";
-
-    const formaQuery = searchParams.get("forma");
-    return formatarFormaPagamento(formaQuery || pedido?.formaPagamento);
-  }, [mounted, searchParams, pedido]);
-
-  const dataPedido = useMemo(() => {
-    if (!mounted) return "Agora mesmo";
-    return formatarData(pedido?.createdAt);
-  }, [mounted, pedido]);
-
-  const whatsappHref = useMemo(() => {
-    const numeroTexto = numeroPedido && numeroPedido !== "em geração"
-      ? `#${numeroPedido}`
-      : "meu pedido recente";
-
-    const texto = encodeURIComponent(
-      `Olá! Quero continuar o atendimento do pedido ${numeroTexto} na Maison Noor.`
-    );
-
-    return `https://wa.me/5512982627108?text=${texto}`;
-  }, [numeroPedido]);
-
-  return (
-    <main style={styles.page}>
-      <section style={styles.container}>
-        <div style={styles.heroCard}>
-          <p style={styles.kicker}>Maison Noor</p>
-          <h1 style={styles.title}>Pedido criado com sucesso</h1>
-          <p style={styles.subtitle}>
-            Seu pedido foi registrado e o atendimento foi iniciado. Você também pode
-            acompanhar tudo pela sua área do cliente.
-          </p>
-        </div>
-
-        <div style={styles.grid}>
-          <section style={styles.mainCard}>
-            <div style={styles.successBadge}>✓ Pedido registrado</div>
-
-            <h2 style={styles.sectionTitle}>
-              Pedido <span style={styles.orderNumber}>#{numeroPedido}</span>
-            </h2>
-
-            <p style={styles.sectionText}>
-              Tudo certo por aqui. Seu pedido foi salvo com sucesso e a Maison Noor
-              seguirá com o atendimento pela forma escolhida.
-            </p>
-
-            <div style={styles.infoGrid}>
-              <div style={styles.infoCard}>
-                <span style={styles.infoLabel}>Forma de pagamento</span>
-                <strong style={styles.infoValue}>{formaPagamento}</strong>
-              </div>
-
-              <div style={styles.infoCard}>
-                <span style={styles.infoLabel}>Registrado em</span>
-                <strong style={styles.infoValue}>{dataPedido}</strong>
-              </div>
-            </div>
-
-            <div style={styles.timeline}>
-              <div style={styles.timelineItem}>
-                <div style={styles.timelineDotActive} />
-                <div>
-                  <strong style={styles.timelineTitle}>Pedido recebido</strong>
-                  <p style={styles.timelineText}>
-                    Seu pedido já está salvo no sistema da Maison Noor.
-                  </p>
-                </div>
-              </div>
-
-              <div style={styles.timelineItem}>
-                <div style={styles.timelineDot} />
-                <div>
-                  <strong style={styles.timelineTitle}>Atendimento em andamento</strong>
-                  <p style={styles.timelineText}>
-                    Você pode continuar pelo WhatsApp para concluir pagamento e próximos passos.
-                  </p>
-                </div>
-              </div>
-
-              <div style={styles.timelineItem}>
-                <div style={styles.timelineDot} />
-                <div>
-                  <strong style={styles.timelineTitle}>Acompanhe em Minha Conta</strong>
-                  <p style={styles.timelineText}>
-                    O histórico e o status do pedido ficarão disponíveis na sua conta.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <aside style={styles.sideCard}>
-            <span style={styles.sideKicker}>Próximos passos</span>
-            <h3 style={styles.sideTitle}>Sua compra segue organizada</h3>
-
-            <div style={styles.actionList}>
-              <a href={whatsappHref} target="_blank" rel="noreferrer" style={styles.primaryButton}>
-                Falar no WhatsApp
-              </a>
-
-              <Link href="/minha-conta" style={styles.secondaryButton}>
-                Ir para Minha Conta
-              </Link>
-
-              <Link href="/" style={styles.secondaryButton}>
-                Continuar comprando
-              </Link>
-            </div>
-
-            <div style={styles.noticeCard}>
-              <span style={styles.noticeLabel}>Atendimento premium</span>
-              <p style={styles.noticeText}>
-                Seu pedido fica salvo para facilitar o acompanhamento, pagamento e suporte.
-              </p>
-            </div>
-          </aside>
-        </div>
-      </section>
-    </main>
+function isPago(status?: string) {
+  return ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"].includes(
+    String(status || "").toUpperCase()
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background:
-      "radial-gradient(circle at top, rgba(215,192,160,0.20), transparent 24%), #F5EFE6",
-    color: "#2B2B2B",
-    fontFamily: "Arial, sans-serif",
-  },
-  container: {
-    maxWidth: "1080px",
-    margin: "0 auto",
-    padding: "24px 18px 40px",
-  },
-  heroCard: {
-    borderRadius: 24,
-    border: "1px solid #E2D2BF",
-    background: "linear-gradient(180deg, rgba(255,252,248,0.96), rgba(244,234,220,0.96))",
-    boxShadow: "0 14px 30px rgba(62, 44, 24, 0.07)",
-    padding: "24px 24px",
-    marginBottom: 18,
-  },
-  kicker: {
-    margin: 0,
-    color: "#B1874E",
-    fontSize: 11,
-    fontWeight: 700,
-    textTransform: "uppercase",
-    letterSpacing: "0.16em",
-  },
-  title: {
-    margin: "8px 0 10px",
-    color: "#3A2F29",
-    lineHeight: 1.05,
-    fontWeight: 700,
-    letterSpacing: "-0.03em",
-    fontSize: 30,
-  },
-  subtitle: {
-    margin: 0,
-    color: "#6D6157",
-    fontSize: 14,
-    lineHeight: 1.65,
-    maxWidth: 760,
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 320px",
-    gap: 18,
-  },
-  mainCard: {
-    background: "linear-gradient(180deg, #FFFEFC, #FCF6EE)",
-    borderRadius: 22,
-    boxShadow: "0 12px 26px rgba(48,34,20,0.07)",
-    border: "1px solid #EADBC8",
-    padding: 22,
-  },
-  sideCard: {
-    borderRadius: 22,
-    border: "1px solid #E1CFBB",
-    background: "linear-gradient(135deg, rgba(24,19,14,0.96), rgba(41,30,20,0.96))",
-    boxShadow: "0 18px 38px rgba(34, 24, 15, 0.14)",
-    color: "#F6E9D6",
-    padding: 22,
-    alignSelf: "start",
-  },
-  successBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 34,
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "rgba(221, 242, 226, 0.95)",
-    border: "1px solid #B9DEC0",
-    color: "#2F6A3C",
-    fontWeight: 700,
-    fontSize: 12,
-    marginBottom: 14,
-  },
-  sectionTitle: {
-    margin: "0 0 10px",
-    color: "#3A2F29",
-    fontSize: 26,
-    lineHeight: 1.1,
-  },
-  orderNumber: {
-    color: "#9B7441",
-  },
-  sectionText: {
-    margin: 0,
-    color: "#6D6157",
-    fontSize: 14,
-    lineHeight: 1.7,
-  },
-  infoGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
-    marginTop: 18,
-    marginBottom: 18,
-  },
-  infoCard: {
-    padding: "16px 16px",
-    borderRadius: 18,
-    border: "1px solid #E8D8C5",
-    background: "rgba(255,255,255,0.72)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-  },
-  infoLabel: {
-    color: "#8B7A6A",
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: "0.12em",
-    fontWeight: 700,
-  },
-  infoValue: {
-    color: "#3E3027",
-    fontSize: 18,
-    lineHeight: 1.2,
-  },
-  timeline: {
-    display: "grid",
-    gap: 16,
-    marginTop: 8,
-  },
-  timelineItem: {
-    display: "grid",
-    gridTemplateColumns: "18px 1fr",
-    gap: 12,
-    alignItems: "flex-start",
-  },
-  timelineDotActive: {
-    width: 14,
-    height: 14,
-    borderRadius: 999,
-    marginTop: 4,
-    background: "#BE9155",
-    boxShadow: "0 0 0 4px rgba(190,145,85,0.14)",
-  },
-  timelineDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 999,
-    marginTop: 4,
-    background: "#DCC7AA",
-  },
-  timelineTitle: {
-    display: "block",
-    color: "#3E3027",
-    fontSize: 15,
-    marginBottom: 4,
-  },
-  timelineText: {
-    margin: 0,
-    color: "#78695B",
-    fontSize: 13,
-    lineHeight: 1.55,
-  },
-  sideKicker: {
-    display: "inline-block",
-    color: "#D8BE97",
-    fontSize: 10,
-    fontWeight: 700,
-    textTransform: "uppercase",
-    letterSpacing: "0.16em",
-    marginBottom: 8,
-  },
-  sideTitle: {
-    margin: "0 0 14px",
-    fontSize: 24,
-    lineHeight: 1.08,
-    color: "#FFF6EB",
-  },
-  actionList: {
-    display: "grid",
-    gap: 10,
-    marginBottom: 16,
-  },
-  primaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 46,
-    borderRadius: 14,
-    border: "1px solid rgba(212, 175, 119, 0.34)",
-    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
-    color: "#241A12",
-    fontSize: 14,
-    fontWeight: 700,
-    textDecoration: "none",
-    boxShadow: "0 12px 22px rgba(120, 87, 45, 0.11)",
-    padding: "0 18px",
-  },
-  secondaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "0 18px",
-    borderRadius: 14,
-    border: "1px solid rgba(216,193,162,0.18)",
-    background: "rgba(255,255,255,0.08)",
-    color: "#F6E9D6",
-    fontSize: 13,
-    fontWeight: 700,
-    textDecoration: "none",
-  },
-  noticeCard: {
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.07)",
-    border: "1px solid rgba(216,193,162,0.14)",
-    padding: "16px 16px",
-  },
-  noticeLabel: {
-    display: "inline-block",
-    color: "#D8BE97",
-    fontSize: 11,
-    fontWeight: 700,
-    textTransform: "uppercase",
-    letterSpacing: "0.14em",
-    marginBottom: 8,
-  },
-  noticeText: {
-    margin: 0,
-    color: "#F3E8DA",
-    fontSize: 13,
-    lineHeight: 1.6,
-  },
-};
+function extrairMensagemAsaas(data: any, fallback: string) {
+  const errors: AsaasError[] = data?.errors || data?.error_messages || [];
+  return (
+    errors?.[0]?.description ||
+    data?.mensagem ||
+    data?.message ||
+    data?.error ||
+    fallback
+  );
+}
+
+function isErroAmbienteAsaas(data: any) {
+  const errors: AsaasError[] = data?.errors || data?.error_messages || [];
+  return errors.some((erro) => erro?.code === "invalid_environment");
+}
+
+function getRemoteIp(req: Request) {
+  const forwardedFor = req.headers.get("x-forwarded-for") || "";
+  const realIp = req.headers.get("x-real-ip") || "";
+  const ip = forwardedFor.split(",")[0]?.trim() || realIp.trim() || "127.0.0.1";
+
+  if (ip === "::1" || ip === "::ffff:127.0.0.1") return "127.0.0.1";
+  return ip;
+}
+
+async function asaasFetch(path: string, payload: any) {
+  // Lê a chave em runtime, dentro da função, para evitar problema no Vercel/serverless.
+  const apiKey = obterChaveAsaas();
+
+  if (!apiKey) {
+    throw new Error(
+      ASAAS_ENV === "production"
+        ? "ASAAS_API_KEY_PROD não configurada no Vercel."
+        : "ASAAS_API_KEY não configurada."
+    );
+  }
+
+  console.log("ASAAS DEBUG FETCH:", {
+    path,
+    ambiente: ASAAS_ENV,
+    url: ASAAS_API_URL,
+    chavePrefixo: apiKey.slice(0, 12),
+    chaveTamanho: apiKey.length,
+  });
+
+  return fetch(`${ASAAS_API_URL}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      access_token: apiKey,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+
+    // DEBUG TEMPORÁRIO: mostra no log da Vercel se a variável certa está sendo lida.
+    // Não imprime a chave completa, apenas prefixo e tamanho. Remova depois do diagnóstico.
+    logDiagnosticoAsaas();
+
+    const valor = Number(body?.valor || body?.value || body?.total || 0);
+    const numeroPedido = normalizarTexto(body?.numeroPedido);
+    const pedidoId = normalizarTexto(body?.pedidoId);
+
+    const nome = normalizarTexto(body?.nome || body?.cardNome, "Cliente Maison Noor");
+    const cardNome = normalizarTexto(body?.cardNome || body?.nome, nome);
+    const email = normalizarTexto(body?.email, "cliente@maisonnoor.com.br");
+    const cpfCnpj = somenteNumeros(body?.cpf || body?.cpfCnpj);
+    const telefone = somenteNumeros(body?.telefone || body?.phone || body?.mobilePhone);
+
+    const numeroCartao = somenteNumeros(body?.cardNumero || body?.numeroCartao);
+    const validade = body?.cardValidade || body?.validade || "";
+    const cvv = somenteNumeros(body?.cardCvv || body?.cvv || body?.ccv);
+    const parcelas = Math.max(1, Number(body?.parcelas || body?.installments || 1));
+
+    const cep = somenteNumeros(body?.cep || body?.postalCode);
+    const numeroEndereco = normalizarTexto(body?.numeroEndereco || body?.addressNumber, "0");
+    const { expiryMonth, expiryYear } = separarValidade(validade);
+    const remoteIp = getRemoteIp(req);
+
+    if (!valor || valor <= 0) {
+      return NextResponse.json({ erro: true, mensagem: "Valor inválido." }, { status: 400 });
+    }
+
+    if (!numeroPedido) {
+      return NextResponse.json(
+        { erro: true, mensagem: "numeroPedido não informado." },
+        { status: 400 }
+      );
+    }
+
+    if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
+      return NextResponse.json(
+        { erro: true, mensagem: "CPF/CNPJ do cliente não informado ou inválido." },
+        { status: 400 }
+      );
+    }
+
+    if (telefone.length < 10 || telefone.length > 11) {
+      return NextResponse.json(
+        { erro: true, mensagem: "Telefone do titular inválido. Informe DDD + número." },
+        { status: 400 }
+      );
+    }
+
+    if (!cep || cep.length !== 8) {
+      return NextResponse.json(
+        { erro: true, mensagem: "CEP inválido. Informe um CEP com 8 números." },
+        { status: 400 }
+      );
+    }
+
+    if (!numeroEndereco) {
+      return NextResponse.json(
+        { erro: true, mensagem: "Número do endereço não informado." },
+        { status: 400 }
+      );
+    }
+
+    if (!numeroCartao || numeroCartao.length < 13) {
+      return NextResponse.json(
+        { erro: true, mensagem: "Número do cartão inválido." },
+        { status: 400 }
+      );
+    }
+
+    if (!expiryMonth || !expiryYear) {
+      return NextResponse.json(
+        { erro: true, mensagem: "Validade do cartão inválida." },
+        { status: 400 }
+      );
+    }
+
+    const mes = Number(expiryMonth);
+    const ano = Number(expiryYear);
+    const anoAtual = new Date().getFullYear();
+
+    if (mes < 1 || mes > 12) {
+      return NextResponse.json(
+        { erro: true, mensagem: "Mês de validade do cartão inválido." },
+        { status: 400 }
+      );
+    }
+
+    if (ano < anoAtual) {
+      return NextResponse.json(
+        { erro: true, mensagem: "Ano de validade do cartão expirado." },
+        { status: 400 }
+      );
+    }
+
+    if (!cvv || cvv.length < 3) {
+      return NextResponse.json({ erro: true, mensagem: "CVV inválido." }, { status: 400 });
+    }
+
+    const customerPayload: any = {
+      name: nome,
+      email,
+      cpfCnpj,
+      notificationDisabled: true,
+    };
+
+    // IMPORTANTE: não envie phone e mobilePhone com o mesmo número.
+    // 10 dígitos = fixo; 11 dígitos = celular.
+    if (telefone.length === 11) {
+      customerPayload.mobilePhone = telefone;
+    } else {
+      customerPayload.phone = telefone;
+    }
+
+    const customerResponse = await asaasFetch("/customers", customerPayload);
+    const customerData = await customerResponse.json().catch(() => null);
+
+    if (!customerResponse.ok || !customerData?.id) {
+      console.error("ERRO ASAAS CUSTOMER:", customerData);
+
+      if (isErroAmbienteAsaas(customerData)) {
+        return NextResponse.json(
+          {
+            erro: true,
+            mensagem:
+              ASAAS_ENV === "production"
+                ? "A chave ASAAS_API_KEY é de Sandbox, mas ASAAS_ENV está como production. Use uma chave de produção ou troque ASAAS_ENV para sandbox."
+                : "A chave ASAAS_API_KEY é de Produção, mas ASAAS_ENV está como sandbox. Use uma chave do Sandbox ou troque ASAAS_ENV para production.",
+            ambienteAtual: ASAAS_ENV,
+            urlAtual: ASAAS_API_URL,
+            detalhe: customerData,
+          },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          erro: true,
+          mensagem: extrairMensagemAsaas(customerData, "Erro ao criar cliente no Asaas."),
+          detalhe: customerData,
+        },
+        { status: customerResponse.status || 400 }
+      );
+    }
+
+    const creditCardHolderInfo: any = {
+      name: cardNome,
+      email,
+      cpfCnpj,
+      postalCode: cep,
+      addressNumber: numeroEndereco,
+    };
+
+    if (telefone.length === 11) {
+      creditCardHolderInfo.mobilePhone = telefone;
+    } else {
+      creditCardHolderInfo.phone = telefone;
+    }
+
+    const paymentPayload: any = {
+      customer: customerData.id,
+      billingType: "CREDIT_CARD",
+      value: valor,
+      dueDate: hojeISO(),
+      description: `Pedido Maison Noor - ${numeroPedido}`,
+      externalReference: String(numeroPedido),
+      creditCard: {
+        holderName: cardNome,
+        number: numeroCartao,
+        expiryMonth,
+        expiryYear,
+        ccv: cvv,
+      },
+      creditCardHolderInfo,
+      remoteIp,
+    };
+
+    if (parcelas > 1) {
+      paymentPayload.installmentCount = parcelas;
+      paymentPayload.totalValue = valor;
+    }
+
+    console.log("ASAAS CARTAO PAYLOAD SEGURO:", {
+      ambiente: ASAAS_ENV,
+      url: ASAAS_API_URL,
+      customer: customerData.id,
+      value: valor,
+      numeroPedido,
+      holderName: cardNome,
+      cardFinal: numeroCartao.slice(-4),
+      expiryMonth,
+      expiryYear,
+      telefoneTamanho: telefone.length,
+      remoteIp,
+      parcelas,
+    });
+
+    const paymentResponse = await asaasFetch("/payments", paymentPayload);
+    const paymentData = await paymentResponse.json().catch(() => null);
+
+    if (!paymentResponse.ok) {
+      console.error("ERRO ASAAS CARTAO:", paymentData);
+
+      return NextResponse.json(
+        {
+          erro: true,
+          mensagem: extrairMensagemAsaas(
+            paymentData,
+            "Transação não autorizada. Verifique os dados do cartão de crédito e tente novamente."
+          ),
+          detalhe: paymentData,
+        },
+        { status: paymentResponse.status || 400 }
+      );
+    }
+
+    const statusAsaas = String(paymentData?.status || "").toUpperCase();
+    const pagamentoAprovado = isPago(statusAsaas);
+    const db = admin.apps.length ? admin.firestore() : null;
+
+    if (db && pedidoId) {
+      await db
+        .collection("pedidos")
+        .doc("default")
+        .collection("lista")
+        .doc(String(pedidoId))
+        .set(
+          {
+            formaPagamento: "cartao",
+            pagamentoStatus: pagamentoAprovado ? "pago" : "aguardando_pagamento",
+            statusPagamento: pagamentoAprovado ? "pago" : "aguardando_pagamento",
+            status: pagamentoAprovado ? "pago" : "aguardando_pagamento",
+
+            cpf: cpfCnpj,
+            telefone,
+            phone: telefone.length === 10 ? telefone : "",
+            mobilePhone: telefone.length === 11 ? telefone : "",
+            parcelas,
+
+            asaasCustomerId: customerData.id,
+            asaasPaymentId: paymentData?.id || null,
+            asaasInvoiceUrl: paymentData?.invoiceUrl || null,
+            asaasStatus: statusAsaas || paymentData?.status || null,
+            asaasCartao: paymentData || null,
+
+            valor,
+            total: valor,
+            valorTotal: valor,
+            totalPedido: valor,
+            totalCartao: valor,
+            numeroPedido,
+
+            atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: new Date().toISOString(),
+            ...(pagamentoAprovado
+              ? { pagoEm: admin.firestore.FieldValue.serverTimestamp() }
+              : {}),
+          },
+          { merge: true }
+        );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      aprovado: pagamentoAprovado,
+      id: paymentData?.id,
+      asaasPaymentId: paymentData?.id,
+      asaasCustomerId: customerData.id,
+      invoiceUrl: paymentData?.invoiceUrl,
+      status: statusAsaas || paymentData?.status,
+      numeroPedido,
+      mensagem: pagamentoAprovado
+        ? "Pagamento aprovado."
+        : "Pagamento criado e aguardando confirmação.",
+    });
+  } catch (error: any) {
+    console.error("ERRO API ASAAS CARTAO:", error);
+
+    return NextResponse.json(
+      {
+        erro: true,
+        mensagem: "Erro interno ao processar pagamento com cartão.",
+        detalhe: error?.message || String(error),
+      },
+      { status: 500 }
+    );
+  }
+}
