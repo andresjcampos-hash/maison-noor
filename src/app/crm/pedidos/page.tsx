@@ -79,6 +79,13 @@ type PedidoPagamento = {
   valor: number;
 };
 
+type TipoEntrega =
+  | "entrega_maos"
+  | "retirada_evento"
+  | "correios"
+  | "motoboy"
+  | "a_combinar";
+
 type Pedido = {
   id: string;
   /** ✅ Número sequencial (0001, 0002, ...) */
@@ -101,6 +108,11 @@ type Pedido = {
   numeroSite?: string;
   formaPagamento?: string;
   statusPagamento?: string;
+
+  // ✅ Entrega / retirada
+  tipoEntrega?: TipoEntrega;
+  entregaLabel?: string;
+  entregaObservacao?: string;
 
   // ✅ NOVO: vendedor responsável pela venda
   vendedorId?: string;
@@ -175,6 +187,19 @@ const ORIGEM_LABEL: Record<Origem, string> = {
   site: "Site",
   outros: "Outros",
 };
+
+const TIPO_ENTREGA_LABEL: Record<TipoEntrega, string> = {
+  entrega_maos: "Entregue em mãos",
+  retirada_evento: "Retirada no evento",
+  correios: "Correios",
+  motoboy: "Motoboy",
+  a_combinar: "A combinar",
+};
+
+function entregaLabel(tipo?: TipoEntrega, fallback?: string): string {
+  if (tipo && TIPO_ENTREGA_LABEL[tipo]) return TIPO_ENTREGA_LABEL[tipo];
+  return fallback || "A combinar";
+}
 
 // type-guard origem
 const ORIGENS_VALIDAS = [
@@ -522,43 +547,49 @@ function shouldDevolverEstoque(status: StatusPedido): boolean {
   return status === "cancelado";
 }
 
-async function resolverProdutoRefParaEstoque(item: PedidoItem) {
+async function resolverProdutoRefsParaEstoque(item: PedidoItem) {
   const produtoId = String(item.produtoId || "").trim();
   const nome = String(item.nome || "").trim();
 
-  // 1) Caminho oficial do CRM Produtos
+  const refs: ReturnType<typeof doc>[] = [];
+  const addRef = (ref: ReturnType<typeof doc>) => {
+    const path = ref.path;
+    if (!refs.some((r) => r.path === path)) refs.push(ref);
+  };
+
+  // ✅ Tenta pelo ID nos dois caminhos usados no projeto.
+  // Isso resolve quando o pedido salva produtoId de uma coleção,
+  // mas a tela Produtos está exibindo estoque da outra coleção.
   if (produtoId) {
     const refProdutos = doc(db, "produtos", "default", "lista", produtoId);
     const snapProdutos = await getDoc(refProdutos);
-    if (snapProdutos.exists()) return refProdutos;
+    if (snapProdutos.exists()) addRef(refProdutos);
 
-    // 2) Compatibilidade com catálogo/site antigo
     const refProducts = doc(db, "products", produtoId);
     const snapProducts = await getDoc(refProducts);
-    if (snapProducts.exists()) return refProducts;
+    if (snapProducts.exists()) addRef(refProducts);
   }
 
-  // 3) Plano B: se o ID salvo não bater, tenta localizar pelo nome exato no CRM
+  // ✅ Plano B: tenta pelo nome exato nos dois caminhos.
+  // Corrige pedidos antigos que ficaram sem produtoId ou com ID diferente.
   if (nome) {
     const qProdutos = query(
       collection(db, "produtos", "default", "lista"),
       where("nome", "==", nome)
     );
     const snapNomeProdutos = await getDocs(qProdutos);
-    if (!snapNomeProdutos.empty) return snapNomeProdutos.docs[0].ref;
+    snapNomeProdutos.docs.forEach((d) => addRef(d.ref));
 
-    // 4) Plano B compatível com products
     const qProducts = query(collection(db, "products"), where("nome", "==", nome));
     const snapNomeProducts = await getDocs(qProducts);
-    if (!snapNomeProducts.empty) return snapNomeProducts.docs[0].ref;
+    snapNomeProducts.docs.forEach((d) => addRef(d.ref));
   }
 
-  console.warn("Produto não encontrado para ajustar estoque:", {
-    produtoId,
-    nome,
-  });
+  if (!refs.length) {
+    console.warn("Produto não encontrado para ajustar estoque:", { produtoId, nome });
+  }
 
-  return null;
+  return refs;
 }
 
 async function ajustarEstoquePorPedido(
@@ -578,27 +609,29 @@ async function ajustarEstoquePorPedido(
     const qtd = Math.max(0, Number(it.qtd) || 0);
     if (qtd <= 0) continue;
 
-    const produtoRef = await resolverProdutoRefParaEstoque(it);
-    if (!produtoRef) continue;
+    const produtoRefs = await resolverProdutoRefsParaEstoque(it);
+    if (!produtoRefs.length) continue;
 
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(produtoRef);
-      if (!snap.exists()) return;
+    for (const produtoRef of produtoRefs) {
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(produtoRef);
+        if (!snap.exists()) return;
 
-      const data = snap.data() as Produto;
-      const estoqueAtual = Math.max(0, Number(data.estoque) || 0);
-      const novoEstoque =
-        modo === "baixar"
-          ? Math.max(0, estoqueAtual - qtd)
-          : Math.max(0, estoqueAtual + qtd);
+        const data = snap.data() as Produto;
+        const estoqueAtual = Math.max(0, Number(data.estoque) || 0);
+        const novoEstoque =
+          modo === "baixar"
+            ? Math.max(0, estoqueAtual - qtd)
+            : Math.max(0, estoqueAtual + qtd);
 
-      tx.update(produtoRef, {
-        estoque: novoEstoque,
-        updatedAt,
+        tx.update(produtoRef, {
+          estoque: novoEstoque,
+          updatedAt,
+        });
+
+        algumProdutoAjustado = true;
       });
-
-      algumProdutoAjustado = true;
-    });
+    }
   }
 
   // ✅ Mantém o cache local sincronizado para a tela responder rápido no mesmo navegador.
@@ -609,9 +642,9 @@ async function ajustarEstoquePorPedido(
     for (const it of itensValidos) {
       const produtoId = String(it.produtoId || "").trim();
       const nomeNormalizado = norm(it.nome || "");
-      const produto = produtoId
-        ? map.get(produtoId)
-        : Array.from(map.values()).find((p) => norm(p.nome) === nomeNormalizado);
+      const produto =
+        (produtoId ? map.get(produtoId) : undefined) ||
+        Array.from(map.values()).find((p) => norm(p.nome) === nomeNormalizado);
 
       if (!produto) continue;
 
@@ -1014,6 +1047,8 @@ export default function PedidosPage() {
   const [status, setStatus] = useState<StatusPedido>("rascunho");
   const [observacoes, setObservacoes] = useState("");
   const [dataPedido, setDataPedido] = useState(hojeInputDate());
+  const [tipoEntrega, setTipoEntrega] = useState<TipoEntrega>("entrega_maos");
+  const [entregaObservacao, setEntregaObservacao] = useState("");
 
   // ✅ OPÇÃO 2: pagamentos no modal (dividido)
   const [pagamentos, setPagamentos] = useState<PedidoPagamento[]>([
@@ -1036,6 +1071,8 @@ export default function PedidosPage() {
   const [editTelefone, setEditTelefone] = useState("");
   const [editOrigem, setEditOrigem] = useState<Origem>("outros");
   const [editObservacoes, setEditObservacoes] = useState("");
+  const [editTipoEntrega, setEditTipoEntrega] = useState<TipoEntrega>("a_combinar");
+  const [editEntregaObservacao, setEditEntregaObservacao] = useState("");
   const [pedidoDetalhe, setPedidoDetalhe] = useState<Pedido | null>(null);
   const [realtimeOn, setRealtimeOn] = useState(false);
 
@@ -1210,6 +1247,8 @@ export default function PedidosPage() {
     setStatus("rascunho");
     setObservacoes("");
     setDataPedido(hojeInputDate());
+    setTipoEntrega("entrega_maos");
+    setEntregaObservacao("");
 
     // ✅ pagamento default
     setPagamentos([{ forma: "pix", valor: 0 }]);
@@ -1417,6 +1456,9 @@ export default function PedidosPage() {
         createdAt: now,
         updatedAt: updatedNow,
         observacoes: observacoes.trim() || undefined,
+        tipoEntrega,
+        entregaLabel: entregaLabel(tipoEntrega),
+        entregaObservacao: entregaObservacao.trim() || undefined,
         estoqueBaixado: false,
         pagamentos: pags.length ? pags : undefined,
       };
@@ -1577,6 +1619,50 @@ export default function PedidosPage() {
     }
   }
 
+  async function reprocessarEstoquePedido(pedidoId: string): Promise<void> {
+    try {
+      const pedido = pedidos.find((p) => p.id === pedidoId);
+      if (!pedido) return;
+
+      if (!shouldBaixarEstoque(pedido.status)) {
+        toast("⚠️ Só é possível baixar estoque de pedido pago, enviado ou entregue.", 2600);
+        return;
+      }
+
+      const okConfirm =
+        typeof window === "undefined"
+          ? true
+          : window.confirm(
+              "Reprocessar a baixa de estoque deste pedido? Use isso apenas quando o pedido aparece como baixado, mas o estoque real não caiu."
+            );
+
+      if (!okConfirm) return;
+
+      const estoqueOk = await ajustarEstoquePorPedido(pedido, "baixar");
+      if (!estoqueOk) {
+        toast("⚠️ Não encontrei produto correspondente para baixar estoque.", 3200);
+        return;
+      }
+
+      const updatedAt = new Date().toISOString();
+      const patch: Partial<Pedido> = { estoqueBaixado: true, updatedAt };
+
+      await updatePedidoInFirestore(pedido.id, patch);
+      setPedidos((prev) => prev.map((p) => (p.id === pedido.id ? { ...p, ...patch } : p)));
+      setProdutos(loadJSON<Produto[]>(PRODUTOS_KEY, []));
+      toast("✅ Estoque reprocessado com sucesso!", 1800);
+    } catch (err) {
+      console.error("Erro ao reprocessar estoque:", err);
+      const code = firebaseCode(err);
+      toast(
+        code
+          ? `⚠️ Firebase: ${code} (reprocessar estoque)`
+          : "⚠️ Não consegui reprocessar o estoque. Veja o console (F12).",
+        3400
+      );
+    }
+  }
+
   async function marcarPedidoComoVisualizado(id: string, showToast = true): Promise<void> {
     try {
       const visualizadoEm = new Date().toISOString();
@@ -1694,6 +1780,8 @@ export default function PedidosPage() {
     setEditTelefone(p.telefone || "");
     setEditOrigem((p.origem || "outros") as Origem);
     setEditObservacoes(p.observacoes || "");
+    setEditTipoEntrega((p.tipoEntrega || "a_combinar") as TipoEntrega);
+    setEditEntregaObservacao(p.entregaObservacao || "");
     setEditOpen(true);
   }
 
@@ -1719,6 +1807,9 @@ export default function PedidosPage() {
         telefone: editTelefone.trim(),
         origem: editOrigem,
         observacoes: editObservacoes.trim() || undefined,
+        tipoEntrega: editTipoEntrega,
+        entregaLabel: entregaLabel(editTipoEntrega),
+        entregaObservacao: editEntregaObservacao.trim() || undefined,
         updatedAt,
       };
 
@@ -2122,6 +2213,10 @@ export default function PedidosPage() {
                       <span>Estoque</span>
                       <strong>{p.estoqueBaixado ? "Baixado" : "Pendente"}</strong>
                     </div>
+                    <div className="detailBox">
+                      <span>Entrega</span>
+                      <strong>{entregaLabel(p.tipoEntrega, p.entregaLabel)}</strong>
+                    </div>
                   </div>
 
                   <div className="orderItemsBlock">
@@ -2206,6 +2301,20 @@ export default function PedidosPage() {
                         type="button"
                       >
                         Marcar visto
+                      </button>
+                    ) : null}
+
+                    {shouldBaixarEstoque(p.status) ? (
+                      <button
+                        className="btnSmall"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void reprocessarEstoquePedido(p.id);
+                        }}
+                        type="button"
+                        title="Use quando o pedido aparece como baixado, mas o estoque real não caiu"
+                      >
+                        Reprocessar estoque
                       </button>
                     ) : null}
 
@@ -2325,6 +2434,10 @@ export default function PedidosPage() {
                     <span>Estoque</span>
                     <strong>{pedidoDetalheAtual.estoqueBaixado ? "Baixado" : "Pendente"}</strong>
                   </div>
+                  <div>
+                    <span>Entrega</span>
+                    <strong>{entregaLabel(pedidoDetalheAtual.tipoEntrega, pedidoDetalheAtual.entregaLabel)}</strong>
+                  </div>
                 </div>
 
                 <div className="detailSectionTitle">Itens do pedido</div>
@@ -2378,6 +2491,11 @@ export default function PedidosPage() {
                       Marcar visto
                     </button>
                   ) : null}
+                  {shouldBaixarEstoque(pedidoDetalheAtual.status) ? (
+                    <button className="btnSmall" type="button" onClick={() => void reprocessarEstoquePedido(pedidoDetalheAtual.id)}>
+                      Reprocessar estoque
+                    </button>
+                  ) : null}
                   <button className="btnSmall" type="button" onClick={() => openWhatsApp(pedidoDetalheAtual.telefone, pedidoDetalheAtual.clienteNome)}>
                     WhatsApp
                   </button>
@@ -2394,6 +2512,12 @@ export default function PedidosPage() {
                   <strong>{new Date(pedidoDetalheAtual.createdAt).toLocaleString("pt-BR")}</strong>
                   <span>Atualizado em</span>
                   <strong>{new Date(pedidoDetalheAtual.updatedAt || pedidoDetalheAtual.createdAt).toLocaleString("pt-BR")}</strong>
+                  {pedidoDetalheAtual.entregaObservacao ? (
+                    <>
+                      <span>Obs. entrega</span>
+                      <strong>{pedidoDetalheAtual.entregaObservacao}</strong>
+                    </>
+                  ) : null}
                 </div>
               </aside>
             </div>
@@ -2463,8 +2587,29 @@ export default function PedidosPage() {
                       <option value="outros">Outros</option>
                     </select>
                   </div>
-                  <div />
+                  <div>
+                    <label className="lab">Entrega</label>
+                    <select
+                      className="select"
+                      value={editTipoEntrega}
+                      onChange={(e) => setEditTipoEntrega(e.target.value as TipoEntrega)}
+                    >
+                      <option value="entrega_maos">Entregue em mãos</option>
+                      <option value="retirada_evento">Retirada no evento</option>
+                      <option value="correios">Correios</option>
+                      <option value="motoboy">Motoboy</option>
+                      <option value="a_combinar">A combinar</option>
+                    </select>
+                  </div>
                 </div>
+
+                <label className="lab">Observação da entrega</label>
+                <input
+                  className="input"
+                  value={editEntregaObservacao}
+                  onChange={(e) => setEditEntregaObservacao(e.target.value)}
+                  placeholder="Ex: entregue no evento, retirada na bancada, código de rastreio..."
+                />
 
                 <label className="lab">Observações</label>
                 <textarea
@@ -2635,6 +2780,36 @@ export default function PedidosPage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                </div>
+
+                <div className="row2">
+                  <div>
+                    <label className="lab">Entrega</label>
+                    <select
+                      className="select"
+                      value={tipoEntrega}
+                      onChange={(e) => {
+                        const next = e.target.value as TipoEntrega;
+                        setTipoEntrega(next);
+                        if (next === "entrega_maos" || next === "retirada_evento") setFrete(0);
+                      }}
+                    >
+                      <option value="entrega_maos">Entregue em mãos</option>
+                      <option value="retirada_evento">Retirada no evento</option>
+                      <option value="correios">Correios</option>
+                      <option value="motoboy">Motoboy</option>
+                      <option value="a_combinar">A combinar</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="lab">Observação da entrega</label>
+                    <input
+                      className="input"
+                      value={entregaObservacao}
+                      onChange={(e) => setEntregaObservacao(e.target.value)}
+                      placeholder="Ex: entregue no evento, retirada na bancada..."
+                    />
                   </div>
                 </div>
 
@@ -3323,7 +3498,7 @@ export default function PedidosPage() {
         .detailMoneyGrid {
           margin-top: 16px;
           display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
           gap: 10px;
         }
         .detailMoneyGrid > div {
