@@ -9,6 +9,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -521,32 +522,68 @@ function shouldDevolverEstoque(status: StatusPedido): boolean {
   return status === "cancelado";
 }
 
+async function resolverProdutoRefParaEstoque(item: PedidoItem) {
+  const produtoId = String(item.produtoId || "").trim();
+  const nome = String(item.nome || "").trim();
+
+  // 1) Caminho oficial do CRM Produtos
+  if (produtoId) {
+    const refProdutos = doc(db, "produtos", "default", "lista", produtoId);
+    const snapProdutos = await getDoc(refProdutos);
+    if (snapProdutos.exists()) return refProdutos;
+
+    // 2) Compatibilidade com catálogo/site antigo
+    const refProducts = doc(db, "products", produtoId);
+    const snapProducts = await getDoc(refProducts);
+    if (snapProducts.exists()) return refProducts;
+  }
+
+  // 3) Plano B: se o ID salvo não bater, tenta localizar pelo nome exato no CRM
+  if (nome) {
+    const qProdutos = query(
+      collection(db, "produtos", "default", "lista"),
+      where("nome", "==", nome)
+    );
+    const snapNomeProdutos = await getDocs(qProdutos);
+    if (!snapNomeProdutos.empty) return snapNomeProdutos.docs[0].ref;
+
+    // 4) Plano B compatível com products
+    const qProducts = query(collection(db, "products"), where("nome", "==", nome));
+    const snapNomeProducts = await getDocs(qProducts);
+    if (!snapNomeProducts.empty) return snapNomeProducts.docs[0].ref;
+  }
+
+  console.warn("Produto não encontrado para ajustar estoque:", {
+    produtoId,
+    nome,
+  });
+
+  return null;
+}
+
 async function ajustarEstoquePorPedido(
   pedido: Pedido,
   modo: "baixar" | "devolver"
-): Promise<void> {
-  const itensComProduto = (pedido.itens || []).filter((it) => it.produtoId);
-  if (!itensComProduto.length) return;
+): Promise<boolean> {
+  const itensValidos = (pedido.itens || []).filter(
+    (it) => (it.produtoId || it.nome) && Math.max(0, Number(it.qtd) || 0) > 0
+  );
+
+  if (!itensValidos.length) return false;
 
   const updatedAt = new Date().toISOString();
+  let algumProdutoAjustado = false;
 
-  for (const it of itensComProduto) {
-    const produtoId = String(it.produtoId || "").trim();
-    if (!produtoId) continue;
-
+  for (const it of itensValidos) {
     const qtd = Math.max(0, Number(it.qtd) || 0);
     if (qtd <= 0) continue;
 
-    // ✅ Caminho oficial dos produtos no Firebase:
-    // produtos/default/lista/{produtoId}
-    const produtoRef = doc(db, "produtos", "default", "lista", produtoId);
+    const produtoRef = await resolverProdutoRefParaEstoque(it);
+    if (!produtoRef) continue;
 
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(produtoRef);
-      if (!snap.exists()) {
-        console.warn(`Produto não encontrado no Firebase para ajustar estoque: ${produtoId}`);
-        return;
-      }
+      if (!snap.exists()) return;
 
       const data = snap.data() as Produto;
       const estoqueAtual = Math.max(0, Number(data.estoque) || 0);
@@ -559,17 +596,23 @@ async function ajustarEstoquePorPedido(
         estoque: novoEstoque,
         updatedAt,
       });
+
+      algumProdutoAjustado = true;
     });
   }
 
   // ✅ Mantém o cache local sincronizado para a tela responder rápido no mesmo navegador.
   const produtosLocal = loadJSON<Produto[]>(PRODUTOS_KEY, []);
-  if (produtosLocal.length) {
+  if (produtosLocal.length && algumProdutoAjustado) {
     const map = new Map<string, Produto>(produtosLocal.map((produto) => [produto.id, produto]));
 
-    for (const it of itensComProduto) {
+    for (const it of itensValidos) {
       const produtoId = String(it.produtoId || "").trim();
-      const produto = map.get(produtoId);
+      const nomeNormalizado = norm(it.nome || "");
+      const produto = produtoId
+        ? map.get(produtoId)
+        : Array.from(map.values()).find((p) => norm(p.nome) === nomeNormalizado);
+
       if (!produto) continue;
 
       const qtd = Math.max(0, Number(it.qtd) || 0);
@@ -579,7 +622,7 @@ async function ajustarEstoquePorPedido(
           ? Math.max(0, estoqueAtual - qtd)
           : Math.max(0, estoqueAtual + qtd);
 
-      map.set(produtoId, {
+      map.set(produto.id, {
         ...produto,
         estoque: novoEstoque,
         updatedAt,
@@ -588,6 +631,8 @@ async function ajustarEstoquePorPedido(
 
     saveJSON(PRODUTOS_KEY, Array.from(map.values()));
   }
+
+  return algumProdutoAjustado;
 }
 
 // ✅ normaliza texto pra casar nome do Lead com nome do Produto
@@ -1377,8 +1422,15 @@ export default function PedidosPage() {
       };
 
       if (shouldBaixarEstoque(p.status)) {
-        await ajustarEstoquePorPedido(p, "baixar");
-        p.estoqueBaixado = true;
+        const estoqueOk = await ajustarEstoquePorPedido(p, "baixar");
+        p.estoqueBaixado = estoqueOk;
+
+        if (!estoqueOk) {
+          toast(
+            "⚠️ Pedido pago, mas não encontrei o produto para baixar estoque. Confira o vínculo do item.",
+            3400
+          );
+        }
       }
 
       // ✅ FINANCEIRO (opção 2)
@@ -1426,92 +1478,87 @@ export default function PedidosPage() {
 
   async function updatePedidoStatus(id: string, st: StatusPedido): Promise<void> {
     try {
+      const pedidoAtual = pedidos.find((p) => p.id === id);
+      if (!pedidoAtual) return;
+
       const updatedAt = new Date().toISOString();
-      const estoqueTasks: Promise<void>[] = [];
+      const prevStatus = pedidoAtual.status;
+      let estoqueBaixadoFinal = Boolean(pedidoAtual.estoqueBaixado);
 
-      const next = pedidos.map((p) => {
-        if (p.id !== id) return p;
+      const updated: Pedido = {
+        ...pedidoAtual,
+        status: st,
+        updatedAt,
+        visualizado: true,
+        alertaNovoPedido: false,
+        statusInterno: st === "pago" ? "pagamento_confirmado" : "status_atualizado",
+        visualizadoEm: pedidoAtual.visualizadoEm || updatedAt,
+      };
 
-        const prevStatus = p.status; // ✅ NOVO: precisamos saber se saiu de "pago"
-        const updated: Pedido = {
-          ...p,
-          status: st,
-          updatedAt,
-          visualizado: true,
-          alertaNovoPedido: false,
-          statusInterno: st === "pago" ? "pagamento_confirmado" : "status_atualizado",
-          visualizadoEm: p.visualizadoEm || updatedAt,
-        };
+      if (shouldBaixarEstoque(updated.status) && !estoqueBaixadoFinal) {
+        const estoqueOk = await ajustarEstoquePorPedido(updated, "baixar");
+        estoqueBaixadoFinal = estoqueOk;
 
-        const baixado = Boolean(updated.estoqueBaixado);
-
-        if (shouldBaixarEstoque(updated.status) && !baixado) {
-          estoqueTasks.push(ajustarEstoquePorPedido(updated, "baixar"));
-          updated.estoqueBaixado = true;
-        }
-
-        if (shouldDevolverEstoque(updated.status) && baixado) {
-          estoqueTasks.push(ajustarEstoquePorPedido(updated, "devolver"));
-          updated.estoqueBaixado = false;
-        }
-
-        syncLeadStatusFromPedido(updated);
-
-        // ✅ FINANCEIRO: regra clara (sem duplicar)
-        // - se virou pago => registra (idempotente no localStorage por origemPedidoId)
-        // - se saiu de pago => remove todos lançamentos desse pedido
-        if (st === "pago") {
-          const subtotal = (updated.itens || []).reduce(
-            (a, it) => a + (Number(it.preco) || 0) * (Number(it.qtd) || 0),
-            0
+        if (!estoqueOk) {
+          toast(
+            "⚠️ Status atualizado, mas não encontrei o produto para baixar estoque. Confira o vínculo do item.",
+            3600
           );
-          const total = Math.max(
-            0,
-            subtotal -
-              (Number(updated.desconto) || 0) +
-              (Number(updated.frete) || 0)
-          );
-
-          if (total > 0) {
-            const pags: PedidoPagamento[] = pagamentosDoPedidoParaFinanceiro(updated, total);
-
-            updated.pagamentos = pags;
-
-            void registrarReceitasDoPedidoMulti(
-              updated.id,
-              updated.clienteNome,
-              updated.updatedAt,
-              updated.numero,
-              pags
-            );
-          }
-        } else {
-          // ✅ se antes era pago e agora não é mais => remove financeiro
-          if (prevStatus === "pago") {
-            void removerFinanceiroDoPedido(updated.id);
-          }
         }
-
-        return updated;
-      });
-
-      setPedidos(next);
-
-      if (estoqueTasks.length) {
-        await Promise.all(estoqueTasks);
       }
 
-      const updatedPedido = next.find((p) => p.id === id);
+      if (shouldDevolverEstoque(updated.status) && estoqueBaixadoFinal) {
+        const estoqueOk = await ajustarEstoquePorPedido(updated, "devolver");
+        estoqueBaixadoFinal = estoqueOk ? false : estoqueBaixadoFinal;
+      }
+
+      updated.estoqueBaixado = estoqueBaixadoFinal;
+
+      syncLeadStatusFromPedido(updated);
+
+      // ✅ FINANCEIRO: regra clara (sem duplicar)
+      // - se virou pago => registra (idempotente no localStorage por origemPedidoId)
+      // - se saiu de pago => remove todos lançamentos desse pedido
+      if (st === "pago") {
+        const subtotal = (updated.itens || []).reduce(
+          (a, it) => a + (Number(it.preco) || 0) * (Number(it.qtd) || 0),
+          0
+        );
+        const total = Math.max(
+          0,
+          subtotal -
+            (Number(updated.desconto) || 0) +
+            (Number(updated.frete) || 0)
+        );
+
+        if (total > 0) {
+          const pags: PedidoPagamento[] = pagamentosDoPedidoParaFinanceiro(updated, total);
+
+          updated.pagamentos = pags;
+
+          void registrarReceitasDoPedidoMulti(
+            updated.id,
+            updated.clienteNome,
+            updated.updatedAt,
+            updated.numero,
+            pags
+          );
+        }
+      } else if (prevStatus === "pago") {
+        void removerFinanceiroDoPedido(updated.id);
+      }
+
+      setPedidos((prev) => prev.map((p) => (p.id === id ? updated : p)));
 
       await updatePedidoInFirestore(id, {
         status: st,
         updatedAt,
-        estoqueBaixado: updatedPedido?.estoqueBaixado,
-        pagamentos: updatedPedido?.pagamentos,
+        estoqueBaixado: updated.estoqueBaixado,
+        pagamentos: updated.pagamentos,
         visualizado: true,
         alertaNovoPedido: false,
         statusInterno: st === "pago" ? "pagamento_confirmado" : "status_atualizado",
-        visualizadoEm: updatedPedido?.visualizadoEm || updatedAt,
+        visualizadoEm: updated.visualizadoEm || updatedAt,
       });
 
       setLeads(loadJSON<Lead[]>(LEADS_KEY, []));
