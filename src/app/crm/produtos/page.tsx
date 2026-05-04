@@ -511,6 +511,7 @@ export default function ProdutosPage() {
     let totalDisponivel = 0;
     let valorEstoqueVenda = 0;
     let valorEstoqueCompra = 0;
+    let valorEstoqueDisponivel = 0;
 
     for (const p of filtered) {
       if (p.ativo !== false) ativos++;
@@ -523,9 +524,15 @@ export default function ProdutosPage() {
       if (disp <= 0) semEstoqueDisp++;
       valorEstoqueVenda += (Number(p.precoVenda) || 0) * est;
       valorEstoqueCompra += (Number(p.precoCompra) || 0) * est;
+      valorEstoqueDisponivel += (Number(p.precoCompra) || 0) * disp;
     }
 
     const margemEstimada = Math.max(0, valorEstoqueVenda - valorEstoqueCompra);
+    const markupPercentual =
+      valorEstoqueCompra > 0 ? (margemEstimada / valorEstoqueCompra) * 100 : 0;
+    const margemVendaPercentual =
+      valorEstoqueVenda > 0 ? (margemEstimada / valorEstoqueVenda) * 100 : 0;
+    const margemPercentual = markupPercentual;
 
     return {
       total,
@@ -536,7 +543,11 @@ export default function ProdutosPage() {
       totalDisponivel,
       valorEstoqueVenda,
       valorEstoqueCompra,
+      valorEstoqueDisponivel,
       margemEstimada,
+      markupPercentual,
+      margemVendaPercentual,
+      margemPercentual,
     };
   }, [filtered]);
 
@@ -679,8 +690,19 @@ export default function ProdutosPage() {
             <strong>{formatBRL(totals.valorEstoqueVenda)}</strong>
           </div>
           <div className="miniKpi miniKpiGold">
-            <span>Margem</span>
+            <span>Valor estoque</span>
+            <strong>{formatBRL(totals.valorEstoqueCompra)}</strong>
+          </div>
+          <div className="miniKpi miniKpiGold">
+            <span>Estoque disponível</span>
+            <strong>{formatBRL(totals.valorEstoqueDisponivel)}</strong>
+          </div>
+          <div className="miniKpi miniKpiGold">
+            <span>Lucro estoque</span>
             <strong>{formatBRL(totals.margemEstimada)}</strong>
+            <small className="kpiSub">
+              Markup {totals.markupPercentual.toFixed(0)}% • Venda {totals.margemVendaPercentual.toFixed(0)}%
+            </small>
           </div>
         </div>
       </section>
@@ -709,6 +731,9 @@ export default function ProdutosPage() {
               const res = Number(p.reservado) || 0;
               const disp = Math.max(0, est - res);
               const bloqueado = p.ativo === false;
+              const lucroUnitario = Number(p.precoVenda || 0) - Number(p.precoCompra || 0);
+              const markupUnitario = Number(p.precoCompra || 0) > 0 ? (lucroUnitario / Number(p.precoCompra || 0)) * 100 : 0;
+              const margemVendaUnitario = Number(p.precoVenda || 0) > 0 ? (lucroUnitario / Number(p.precoVenda || 0)) * 100 : 0;
               const categoriaLabel = String(p.categoria || "—")
                 .replace("kits-presente", "Kits")
                 .replace("masculino", "Masc.")
@@ -764,7 +789,9 @@ export default function ProdutosPage() {
                     <div className="productPriceLine">
                       <span>Venda <b>{formatBRL(Number(p.precoVenda || 0))}</b></span>
                       <span>Compra <b>{formatBRL(Number(p.precoCompra || 0))}</b></span>
-                      <span>Margem <b>{formatBRL(Math.max(0, Number(p.precoVenda || 0) - Number(p.precoCompra || 0)))}</b></span>
+                      <span>Lucro <b>{formatBRL(Math.max(0, lucroUnitario))}</b></span>
+                      <span>Markup <b>{markupUnitario.toFixed(0)}%</b></span>
+                      <span>Venda <b>{margemVendaUnitario.toFixed(0)}%</b></span>
                     </div>
                   </div>
 
@@ -1164,7 +1191,7 @@ export default function ProdutosPage() {
         .smartKpis {
           margin-top: 10px;
           display: grid;
-          grid-template-columns: repeat(7, minmax(0, 1fr));
+          grid-template-columns: repeat(9, minmax(0, 1fr));
           gap: 8px;
         }
         .miniKpi {
@@ -1191,6 +1218,14 @@ export default function ProdutosPage() {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+        }
+        .miniKpi .kpiSub {
+          display: block;
+          margin-top: 3px;
+          font-size: 9px;
+          line-height: 1.15;
+          color: rgba(255, 255, 255, 0.62);
+          white-space: normal;
         }
         .miniKpiGold strong {
           color: rgba(200, 162, 106, 0.98);

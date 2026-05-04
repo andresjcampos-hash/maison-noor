@@ -1076,6 +1076,91 @@ export default function PedidosPage() {
   const [pedidoDetalhe, setPedidoDetalhe] = useState<Pedido | null>(null);
   const [realtimeOn, setRealtimeOn] = useState(false);
 
+  function produtoDoItem(item: PedidoItem): Produto | undefined {
+    const produtoId = String(item.produtoId || "").trim();
+    const nomeNormalizado = norm(item.nome || "");
+
+    return (produtos || []).find((produto) => {
+      if (produtoId && produto.id === produtoId) return true;
+      return norm(produto.nome || "") === nomeNormalizado;
+    });
+  }
+
+  function custoProduto(produto?: Produto): number {
+    if (!produto) return 0;
+    const data = produto as any;
+    return Number(
+      produto.precoCompra ??
+        data.custo ??
+        data.cost ??
+        data.valorCompra ??
+        data.precoCusto ??
+        0
+    ) || 0;
+  }
+
+  function vendaProduto(produto?: Produto): number {
+    if (!produto) return 0;
+    const data = produto as any;
+    return Number(
+      produto.precoVenda ??
+        data.price ??
+        data.preco ??
+        data.valorVenda ??
+        0
+    ) || 0;
+  }
+
+  function calcularItemFinanceiro(item: PedidoItem) {
+    const produto = produtoDoItem(item);
+    const qtd = Math.max(1, Number(item.qtd) || 1);
+    const precoUnitarioVenda = Number(item.preco) || vendaProduto(produto);
+    const precoUnitarioCusto = custoProduto(produto);
+    const totalVenda = precoUnitarioVenda * qtd;
+    const totalCusto = precoUnitarioCusto * qtd;
+    const margem = totalVenda - totalCusto;
+    const margemVendaPercentual = totalVenda > 0 ? (margem / totalVenda) * 100 : 0;
+    const markupPercentual = totalCusto > 0 ? (margem / totalCusto) * 100 : 0;
+    const margemPercentual = markupPercentual;
+
+    return {
+      produto,
+      qtd,
+      precoUnitarioVenda,
+      precoUnitarioCusto,
+      totalVenda,
+      totalCusto,
+      margem,
+      markupPercentual,
+      margemVendaPercentual,
+      margemPercentual,
+      estoqueAtual: typeof produto?.estoque === "number" ? produto.estoque : undefined,
+    };
+  }
+
+  function calcularPedidoFinanceiro(pedido: Pedido) {
+    const itensFinanceiros = (pedido.itens || []).map(calcularItemFinanceiro);
+    const custoProdutos = itensFinanceiros.reduce(
+      (acc, item) => acc + item.totalCusto,
+      0
+    );
+    const totalVenda = calcularTotalPedido(pedido);
+    const margem = totalVenda - custoProdutos;
+    const margemVendaPercentual = totalVenda > 0 ? (margem / totalVenda) * 100 : 0;
+    const markupPercentual = custoProdutos > 0 ? (margem / custoProdutos) * 100 : 0;
+    const margemPercentual = markupPercentual;
+
+    return {
+      totalVenda,
+      custoProdutos,
+      margem,
+      markupPercentual,
+      margemVendaPercentual,
+      margemPercentual,
+      itensFinanceiros,
+    };
+  }
+
   function toast(t: string, ms = 1600): void {
     setMsg(t);
     if (typeof window !== "undefined") {
@@ -1847,35 +1932,38 @@ export default function PedidosPage() {
   }, [pedidos, statusFiltro, q, periodoFiltro, dataInicioFiltro, dataFimFiltro]);
 
   const resumo = useMemo(() => {
-    const total = pedidosFiltrados.reduce((acc, p) => {
-      const subtotal = (p.itens || []).reduce(
-        (a, it) => a + (Number(it.preco) || 0) * (Number(it.qtd) || 0),
-        0
-      );
-      const t = Math.max(
-        0,
-        subtotal - (Number(p.desconto) || 0) + (Number(p.frete) || 0)
-      );
-      return acc + t;
-    }, 0);
+    const pedidosFaturados = pedidosFiltrados.filter(
+      (p) => p.status === "pago" || p.status === "enviado" || p.status === "entregue"
+    );
 
-    const faturado = pedidosFiltrados
-      .filter((p) => p.status === "pago" || p.status === "enviado" || p.status === "entregue")
-      .reduce((acc, p) => {
-        const subtotal = (p.itens || []).reduce(
-          (a, it) => a + (Number(it.preco) || 0) * (Number(it.qtd) || 0),
-          0
-        );
-        const t = Math.max(
-          0,
-          subtotal - (Number(p.desconto) || 0) + (Number(p.frete) || 0)
-        );
-        return acc + t;
-      }, 0);
+    const total = pedidosFiltrados.reduce(
+      (acc, p) => acc + calcularTotalPedido(p),
+      0
+    );
+
+    const faturado = pedidosFaturados.reduce(
+      (acc, p) => acc + calcularTotalPedido(p),
+      0
+    );
+
+    const custoEstimado = pedidosFaturados.reduce(
+      (acc, p) => acc + calcularPedidoFinanceiro(p).custoProdutos,
+      0
+    );
+
+    const margemEstimada = faturado - custoEstimado;
+    const margemVendaPercentual = faturado > 0 ? (margemEstimada / faturado) * 100 : 0;
+    const markupPercentual = custoEstimado > 0 ? (margemEstimada / custoEstimado) * 100 : 0;
+    const margemPercentual = markupPercentual;
 
     return {
       total,
       faturado,
+      custoEstimado,
+      margemEstimada,
+      markupPercentual,
+      margemVendaPercentual,
+      margemPercentual,
       aguardando: pedidosFiltrados.filter((p) => p.status === "aguardando_pagamento").length,
       pagos: pedidosFiltrados.filter((p) => p.status === "pago").length,
       enviados: pedidosFiltrados.filter((p) => p.status === "enviado").length,
@@ -1883,7 +1971,7 @@ export default function PedidosPage() {
       cancelados: pedidosFiltrados.filter((p) => p.status === "cancelado").length,
       parados: pedidosFiltrados.filter(isPedidoParado).length,
     };
-  }, [pedidosFiltrados]);
+  }, [pedidosFiltrados, produtos]);
 
   const novosPedidos = useMemo(() => pedidos.filter(isPedidoNovoAlerta), [pedidos]);
   const pedidosParados = useMemo(() => pedidos.filter(isPedidoParado), [pedidos]);
@@ -2121,6 +2209,34 @@ export default function PedidosPage() {
 
         <button
           type="button"
+          className="stat statButton"
+          onClick={() => setStatusFiltro("todos")}
+          title="Custo estimado dos produtos vendidos"
+        >
+          <div className="statIcon">📦</div>
+          <div>
+            <div className="statLabel">Custo</div>
+            <div className="statValue">{formatBRL(resumo.custoEstimado)}</div>
+            <div className="statHint">Baseado no preço de compra</div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className="stat statButton statProfit"
+          onClick={() => setStatusFiltro("todos")}
+          title="Margem estimada dos pedidos faturados"
+        >
+          <div className="statIcon">📈</div>
+          <div>
+            <div className="statLabel">Lucro estimado</div>
+            <div className="statValue">{formatBRL(resumo.margemEstimada)}</div>
+            <div className="statHint">Markup {resumo.markupPercentual.toFixed(0)}% • Venda {resumo.margemVendaPercentual.toFixed(0)}%</div>
+          </div>
+        </button>
+
+        <button
+          type="button"
           className={statusFiltro === "todos" ? "stat statButton statActive" : "stat statButton"}
           onClick={() => setStatusFiltro("todos")}
         >
@@ -2152,6 +2268,7 @@ export default function PedidosPage() {
           <div className="ordersGrid">
             {pedidosFiltrados.map((p) => {
               const total = calcularTotalPedido(p);
+              const financeiroPedido = calcularPedidoFinanceiro(p);
               const podeExcluir = canDeletePedido(p);
               const novo = isPedidoNovoAlerta(p);
               const statusLabel = statusPedidoLabel(p.status);
@@ -2195,6 +2312,9 @@ export default function PedidosPage() {
                     <div className="orderOrigin">
                       <span>{p.origem ? origemLabel(p.origem) : "Origem não informada"}</span>
                       <small>{p.formaPagamento || p.statusPagamento || "pagamento"}</small>
+                      <small className={financeiroPedido.margem >= 0 ? "profitText" : "lossText"}>
+                        Lucro {formatBRL(financeiroPedido.margem)} • Markup {financeiroPedido.markupPercentual.toFixed(0)}% • Venda {financeiroPedido.margemVendaPercentual.toFixed(0)}%
+                      </small>
                     </div>
                   </div>
 
@@ -2423,6 +2543,19 @@ export default function PedidosPage() {
                     <strong>{formatBRL(calcularTotalPedido(pedidoDetalheAtual))}</strong>
                   </div>
                   <div>
+                    <span>Custo produtos</span>
+                    <strong>{formatBRL(calcularPedidoFinanceiro(pedidoDetalheAtual).custoProdutos)}</strong>
+                  </div>
+                  <div>
+                    <span>Lucro</span>
+                    <strong>
+                      {formatBRL(calcularPedidoFinanceiro(pedidoDetalheAtual).margem)}
+                      <small className="marginPercent">
+                        Markup {calcularPedidoFinanceiro(pedidoDetalheAtual).markupPercentual.toFixed(0)}% • Venda {calcularPedidoFinanceiro(pedidoDetalheAtual).margemVendaPercentual.toFixed(0)}%
+                      </small>
+                    </strong>
+                  </div>
+                  <div>
                     <span>Frete</span>
                     <strong>{formatBRL(Number(pedidoDetalheAtual.frete) || 0)}</strong>
                   </div>
@@ -2442,15 +2575,27 @@ export default function PedidosPage() {
 
                 <div className="detailSectionTitle">Itens do pedido</div>
                 <div className="detailItemsList">
-                  {(pedidoDetalheAtual.itens || []).map((it, idx) => (
-                    <div className="detailItem" key={`${pedidoDetalheAtual.id}_detail_${idx}`}>
-                      <div>
-                        <strong>{it.nome}</strong>
-                        <span>Quantidade: {it.qtd}</span>
+                  {(pedidoDetalheAtual.itens || []).map((it, idx) => {
+                    const itemFinanceiro = calcularItemFinanceiro(it);
+
+                    return (
+                      <div className="detailItem" key={`${pedidoDetalheAtual.id}_detail_${idx}`}>
+                        <div>
+                          <strong>{it.nome}</strong>
+                          <span>Quantidade: {it.qtd}</span>
+                          <div className="itemFinanceLine">
+                            <span>Venda {formatBRL(itemFinanceiro.totalVenda)}</span>
+                            <span>Custo {formatBRL(itemFinanceiro.totalCusto)}</span>
+                            <span className={itemFinanceiro.margem >= 0 ? "profitText" : "lossText"}>
+                              Lucro {formatBRL(itemFinanceiro.margem)} • Markup {itemFinanceiro.markupPercentual.toFixed(0)}% • Venda {itemFinanceiro.margemVendaPercentual.toFixed(0)}%
+                            </span>
+                            <span>Estoque {itemFinanceiro.estoqueAtual ?? "—"}</span>
+                          </div>
+                        </div>
+                        <strong>{formatBRL((Number(it.preco) || 0) * (Number(it.qtd) || 0))}</strong>
                       </div>
-                      <strong>{formatBRL((Number(it.preco) || 0) * (Number(it.qtd) || 0))}</strong>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {!pedidoDetalheAtual.itens?.length ? (
                     <div className="emptyBox">Nenhum item encontrado nesse pedido.</div>
                   ) : null}
@@ -4214,6 +4359,42 @@ export default function PedidosPage() {
         .statSla {
           border-color: rgba(255, 157, 92, 0.34);
           background: linear-gradient(180deg, rgba(255, 157, 92, 0.12), rgba(255, 255, 255, 0.018));
+        }
+        .statProfit {
+          border-color: rgba(88, 214, 141, 0.28);
+          background: linear-gradient(180deg, rgba(88, 214, 141, 0.10), rgba(255, 255, 255, 0.018));
+        }
+        .profitText {
+          color: #b9ffd0 !important;
+          font-weight: 950 !important;
+        }
+        .lossText {
+          color: #ffd1d1 !important;
+          font-weight: 950 !important;
+        }
+        .marginPercent {
+          display: block;
+          margin-top: 3px;
+          font-size: 11px;
+          color: #b9ffd0;
+          font-weight: 950;
+        }
+        .itemFinanceLine {
+          margin-top: 7px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .itemFinanceLine span {
+          display: inline-flex;
+          align-items: center;
+          min-height: 22px;
+          padding: 0 8px;
+          border-radius: 999px;
+          border: 1px solid rgba(200, 162, 106, 0.16);
+          background: rgba(200, 162, 106, 0.06);
+          font-size: 11px;
+          opacity: 0.95;
         }
         .slaBadge {
           display: inline-flex;
