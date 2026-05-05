@@ -149,6 +149,11 @@ type AnalyticsHistoryDay = {
   custo?: number;
   lucro?: number;
   ticketMedio?: number;
+  /** Campos legados/alternativos usados em snapshots antigos do Firestore */
+  faturamentoTotal?: number;
+  lucroTotal?: number;
+  totalPedidos?: number;
+  pedidosFaturados?: number;
   updatedAt?: any;
 };
 
