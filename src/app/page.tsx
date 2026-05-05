@@ -14,7 +14,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -40,6 +39,12 @@ type ProdutoFirebase = {
   observacoes?: string;
   imagem?: string;
   imageUrl?: string;
+  ordemVitrine?: number;
+  ordem?: number;
+  posicao?: number;
+  position?: number;
+  destaque?: boolean;
+  tipo?: string;
 };
 
 type ProdutoCarrinho = {
@@ -340,6 +345,26 @@ function categoriaDescricao(categoria: string) {
   return "Explore os perfumes por notas e famílias olfativas";
 }
 
+function getProdutoTime(valor: any) {
+  if (!valor) return 0;
+  if (typeof valor?.toDate === "function") return valor.toDate().getTime();
+
+  const data = new Date(valor);
+  return Number.isFinite(data.getTime()) ? data.getTime() : 0;
+}
+
+function getProdutoOrdem(produto: any) {
+  const ordem = Number(
+    produto.ordemVitrine ??
+      produto.ordem ??
+      produto.posicao ??
+      produto.position ??
+      9999
+  );
+
+  return Number.isFinite(ordem) ? ordem : 9999;
+}
+
 export default function HomePage() {
   const [busca, setBusca] = useState("");
   const [categoriaAtiva, setCategoriaAtiva] = useState("Todos");
@@ -505,7 +530,7 @@ export default function HomePage() {
       setLoadingProdutos(true);
 
       try {
-        const q = query(productsCollection, orderBy("updatedAt", "desc"));
+        const q = query(productsCollection);
         const snapshot = await getDocs(q);
 
         if (cancelled) return;
@@ -529,6 +554,12 @@ export default function HomePage() {
             observacoes: data.observacoes,
             imagem: data.imagem,
             imageUrl: data.imageUrl,
+            ordemVitrine: data.ordemVitrine,
+            ordem: data.ordem,
+            posicao: data.posicao,
+            position: data.position,
+            destaque: data.destaque,
+            tipo: data.tipo,
           });
         });
 
@@ -589,7 +620,31 @@ export default function HomePage() {
         };
       })
       .filter((produto) => produto.ativo !== false)
-      .filter((produto) => produto.precoFinal > 0);
+      .filter((produto) => produto.precoFinal > 0)
+      .sort((a, b) => {
+        // 1) Produtos disponíveis sempre primeiro; indisponíveis ficam no final
+        if (a.indisponivel !== b.indisponivel) {
+          return a.indisponivel ? 1 : -1;
+        }
+
+        // 2) Destaques primeiro, caso o campo exista no CRM/Firebase
+        const destaqueA = a.destaque === true ? 1 : 0;
+        const destaqueB = b.destaque === true ? 1 : 0;
+        if (destaqueA !== destaqueB) return destaqueB - destaqueA;
+
+        // 3) Ordem manual da vitrine, se existir: ordemVitrine, ordem, posicao ou position
+        const ordemA = getProdutoOrdem(a);
+        const ordemB = getProdutoOrdem(b);
+        if (ordemA !== ordemB) return ordemA - ordemB;
+
+        // 4) Mais novos primeiro, usando createdAt. Não usa updatedAt para não subir produto editado no CRM
+        const criadoA = getProdutoTime(a.createdAt);
+        const criadoB = getProdutoTime(b.createdAt);
+        if (criadoA !== criadoB) return criadoB - criadoA;
+
+        // 5) Fallback alfabético
+        return String(a.nome || "").localeCompare(String(b.nome || ""));
+      });
   }, [produtos]);
 
   const heroBanners = useMemo<HeroBanner[]>(() => {
