@@ -15,9 +15,19 @@ function limparCpf(cpf: unknown) {
   return String(cpf || "").replace(/\D/g, "");
 }
 
+function getAsaasToken() {
+  return String(
+    process.env.ASAAS_API_KEY_PROD ||
+      process.env.ASAAS_API_KEY ||
+      process.env.ASAAS_TOKEN ||
+      ""
+  ).trim();
+}
+
 function extrairMensagemErro(data: any) {
   return (
     data?.errors?.[0]?.description ||
+    data?.error_messages?.[0]?.description ||
     data?.error ||
     data?.message ||
     "Erro ao gerar Pix no Asaas."
@@ -26,20 +36,23 @@ function extrairMensagemErro(data: any) {
 
 export async function POST(req: Request) {
   try {
-    const tokenEnv = process.env.ASAAS_TOKEN;
-    const token = tokenEnv ? `$${tokenEnv}` : "";
+    const token = getAsaasToken();
 
-    if (!tokenEnv) {
+    if (!token) {
       return NextResponse.json(
-        { erro: true, mensagem: "ASAAS_TOKEN não configurado." },
+        {
+          erro: true,
+          mensagem:
+            "Chave Asaas não configurada. Configure ASAAS_API_KEY_PROD, ASAAS_API_KEY ou ASAAS_TOKEN.",
+        },
         { status: 500 }
       );
     }
 
     const body = await req.json();
 
-    const valor = Number(body.total || 0);
-    const cpf = limparCpf(body.cpf);
+    const valor = Number(body.total || body.valor || 0);
+    const cpf = limparCpf(body.cpf || body.cpfCnpj);
 
     if (!valor || valor <= 0) {
       return NextResponse.json(
@@ -69,7 +82,7 @@ export async function POST(req: Request) {
       }),
     });
 
-    const customerData = await customerRes.json();
+    const customerData = await customerRes.json().catch(() => null);
 
     if (!customerRes.ok) {
       return NextResponse.json(
@@ -101,7 +114,7 @@ export async function POST(req: Request) {
       }),
     });
 
-    const paymentData = await paymentRes.json();
+    const paymentData = await paymentRes.json().catch(() => null);
 
     if (!paymentRes.ok) {
       return NextResponse.json(
@@ -125,7 +138,7 @@ export async function POST(req: Request) {
       }
     );
 
-    const qrData = await qrRes.json();
+    const qrData = await qrRes.json().catch(() => null);
 
     if (!qrRes.ok) {
       return NextResponse.json(
@@ -158,6 +171,13 @@ export async function POST(req: Request) {
           ],
         },
       ],
+      copia: qrData.payload,
+      qr: `data:image/png;base64,${qrData.encodedImage}`,
+      qrCode: `data:image/png;base64,${qrData.encodedImage}`,
+      copiaECola: qrData.payload,
+      codigoPix: qrData.payload,
+      textoPix: qrData.payload,
+      payment: paymentData,
     });
   } catch (error) {
     console.error("Erro PIX Asaas:", error);
