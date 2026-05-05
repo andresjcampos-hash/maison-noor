@@ -275,6 +275,67 @@ async function notificarPedidoPorEmail(payload: any) {
   }
 }
 
+
+const MENSAGEM_CARTAO_RECUSADO_CLIENTE =
+  "Pagamento não aprovado pelo banco/emissor do cartão. Você pode tentar outro cartão ou finalizar com Pix.";
+
+function extrairTextoErroCartao(data: any, fallback?: string) {
+  const mensagens = [
+    fallback,
+    data?.mensagem,
+    data?.erro,
+    data?.message,
+    data?.error,
+    data?.description,
+    data?.statusDescription,
+    data?.detalhes?.errors?.[0]?.description,
+    data?.detalhe?.errors?.[0]?.description,
+    data?.errors?.[0]?.description,
+    data?.error_messages?.[0]?.description,
+  ];
+
+  return mensagens
+    .map((item) => String(item || "").trim())
+    .find(Boolean) || "";
+}
+
+function mensagemCartaoParaCliente(data: any, fallback?: string) {
+  const tecnico = extrairTextoErroCartao(data, fallback);
+  const texto = tecnico.toLowerCase();
+
+  if (
+    texto.includes("limite") ||
+    texto.includes("insufficient") ||
+    texto.includes("fund") ||
+    texto.includes("saldo")
+  ) {
+    return "Pagamento não aprovado pelo banco, possivelmente por limite insuficiente. Você pode tentar outro cartão ou finalizar com Pix.";
+  }
+
+  if (
+    texto.includes("invalid_creditcard") ||
+    texto.includes("invalid credit") ||
+    texto.includes("cartão inválido") ||
+    texto.includes("cartao invalido") ||
+    texto.includes("creditcard")
+  ) {
+    return "Não foi possível aprovar este cartão. Confira os dados informados ou tente outro cartão/Pix.";
+  }
+
+  if (
+    texto.includes("unauthorized") ||
+    texto.includes("not authorized") ||
+    texto.includes("não autorizado") ||
+    texto.includes("nao autorizado") ||
+    texto.includes("recus") ||
+    texto.includes("declined")
+  ) {
+    return MENSAGEM_CARTAO_RECUSADO_CLIENTE;
+  }
+
+  return MENSAGEM_CARTAO_RECUSADO_CLIENTE;
+}
+
 export default function CheckoutPage() {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -913,11 +974,16 @@ export default function CheckoutPage() {
         data?.error_messages?.[0]?.description;
 
       if (!response.ok || data?.erro || data?.error) {
+        const mensagemCliente = mensagemCartaoParaCliente(data, erroAsaas);
+        const mensagemTecnica = extrairTextoErroCartao(data, erroAsaas);
+
         await setDoc(
           doc(db, "pedidos", "default", "lista", pedidoSalvo.id),
           {
             asaasCartao: data || null,
             asaasStatus: data?.status || "RECUSADO",
+            asaasErroTecnico: mensagemTecnica,
+            asaasMensagemCliente: mensagemCliente,
             status: "aguardando_pagamento",
             statusPagamento: "recusado",
             pagamentoStatus: "recusado",
@@ -926,7 +992,15 @@ export default function CheckoutPage() {
           },
           { merge: true }
         );
-        throw new Error(erroAsaas || "Pagamento recusado. Revise os dados do cartão ou tente outro cartão.");
+
+        console.warn("Cartão recusado pelo Asaas:", {
+          pedidoId: pedidoSalvo.id,
+          numeroPedido: pedidoSalvo.numeroPedido,
+          mensagemTecnica,
+          data,
+        });
+
+        throw new Error(mensagemCliente);
       }
 
       const statusAsaas = String(data?.status || data?.payment?.status || data?.cobranca?.status || "").toUpperCase();
@@ -996,7 +1070,30 @@ export default function CheckoutPage() {
 
       if (!aprovado && !emAnalise) {
         const motivo = erroAsaas || data?.description || data?.statusDescription;
-        throw new Error(motivo || "Pagamento recusado. Confira os dados do cartão ou tente outro cartão.");
+        const mensagemCliente = mensagemCartaoParaCliente(data, motivo);
+        const mensagemTecnica = extrairTextoErroCartao(data, motivo);
+
+        await setDoc(
+          doc(db, "pedidos", "default", "lista", pedidoSalvo.id),
+          {
+            asaasErroTecnico: mensagemTecnica,
+            asaasMensagemCliente: mensagemCliente,
+            statusPagamento: "recusado",
+            pagamentoStatus: "recusado",
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        console.warn("Cartão não aprovado pelo Asaas:", {
+          pedidoId: pedidoSalvo.id,
+          numeroPedido: pedidoSalvo.numeroPedido,
+          statusAsaas,
+          mensagemTecnica,
+          data,
+        });
+
+        throw new Error(mensagemCliente);
       }
 
       if (typeof window !== "undefined") {
@@ -1026,7 +1123,10 @@ export default function CheckoutPage() {
       setCheckoutFeedback(`Pagamento enviado para análise pelo Asaas. Pedido #${pedidoSalvo.numeroPedido} registrado com segurança.`);
     } catch (error: any) {
       console.error("Erro ao processar pagamento com cartão Asaas:", error);
-      setCheckoutFeedback(error?.message || "Pagamento recusado. Revise os dados do cartão ou tente Pix.");
+      setCheckoutFeedback(
+        error?.message ||
+          "Pagamento não aprovado pelo banco/emissor do cartão. Você pode tentar outro cartão ou finalizar com Pix."
+      );
     } finally {
       setSavingOrder(false);
     }
