@@ -175,6 +175,8 @@ async function salvarClienteCartaoAutomatico(params: {
       status: statusCliente,
       ultimoPedido: params.numeroPedido,
       ultimoValor: params.valor,
+      ticketMedio: params.valor,
+      totalCompras: params.status === "comprou" ? params.valor : 0,
       ultimaFormaPagamento: "cartao",
       asaasCustomerId: params.asaasCustomerId || null,
       asaasPaymentId: params.asaasPaymentId || null,
