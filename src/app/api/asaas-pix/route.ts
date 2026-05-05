@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { adminDb } from "@/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,64 @@ function extrairMensagemErro(data: any) {
   );
 }
 
+async function salvarClienteAutomatico(body: any, cpf: string, valor: number) {
+  try {
+    if (!adminDb || !cpf) return;
+
+    const agora = new Date().toISOString();
+
+    const nome = String(body?.nome || "Cliente Maison Noor").trim();
+    const email = String(body?.email || "cliente@maisonnoor.com.br").trim();
+    const telefone = String(body?.telefone || body?.phone || body?.mobilePhone || "").replace(/\D/g, "");
+    const numeroPedido = String(body?.numeroPedido || "").trim();
+
+    const clienteRef = adminDb.collection("clientes").doc(cpf);
+
+    await clienteRef.set(
+      {
+        cpf,
+        nome,
+        email,
+        telefone,
+        origem: "site",
+        status: "novo",
+        ultimoPedido: numeroPedido,
+        ultimoValor: valor,
+        ultimaFormaPagamento: "pix",
+        atualizadoEm: agora,
+        updatedAt: agora,
+        criadoEm: agora,
+        createdAt: agora,
+      },
+      { merge: true }
+    );
+
+    await adminDb.collection("clientes_vip").doc(cpf).set(
+      {
+        cpf,
+        nome,
+        email,
+        whatsapp: telefone,
+        telefone,
+        origem: "checkout-site",
+        status: "novo",
+        preferencia: "Não informado",
+        estilo: "Não informado",
+        ultimoPedido: numeroPedido,
+        ultimoValor: valor,
+        ultimaFormaPagamento: "pix",
+        atualizadoEm: agora,
+        updatedAt: agora,
+        criadoEm: agora,
+        createdAt: agora,
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.error("Erro ao salvar cliente automático no CRM:", error);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const token = getAsaasToken();
@@ -67,6 +126,8 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    await salvarClienteAutomatico(body, cpf, valor);
 
     const customerRes = await fetch(`${ASAAS_API_URL}/customers`, {
       method: "POST",
