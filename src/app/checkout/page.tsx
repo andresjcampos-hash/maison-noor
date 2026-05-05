@@ -157,65 +157,60 @@ function formatarMoeda(valor: number) {
   });
 }
 
-function calcularFretes(cepDigits: string, subtotal: number): FreightOption[] {
-  if (cepDigits.length < 8) return [];
+function normalizarOpcoesFrete(data: any): FreightOption[] {
+  const opcoesRaw = data?.opcoes;
 
-  const prefixo = Number(cepDigits.slice(0, 2));
-
-  let pac = 22.9;
-  let sedex = 31.9;
-  let mini = 18.9;
-
-  if (prefixo <= 19) {
-    pac = 15.9;
-    sedex = 24.9;
-    mini = 13.9;
-  } else if (prefixo <= 29) {
-    pac = 18.9;
-    sedex = 27.9;
-    mini = 15.9;
-  } else if (prefixo <= 49) {
-    pac = 21.9;
-    sedex = 30.9;
-    mini = 17.9;
-  } else if (prefixo <= 69) {
-    pac = 25.9;
-    sedex = 35.9;
-    mini = 21.9;
-  } else {
-    pac = 29.9;
-    sedex = 39.9;
-    mini = 24.9;
+  if (Array.isArray(opcoesRaw)) {
+    return opcoesRaw
+      .map((item: any, index: number) => ({
+        id: String(item.id || item.codigo || item.servico || `frete_${index}`),
+        nome: String(item.nome || item.name || item.servico || "Entrega"),
+        prazo: String(item.prazo || item.delivery_time || item.tempo || "Prazo a confirmar"),
+        valor: Number(item.valor ?? item.price ?? item.preco ?? 0),
+        destaque: item.destaque ? String(item.destaque) : undefined,
+      }))
+      .filter((item) => item.id && item.nome && Number.isFinite(item.valor));
   }
 
-  if (subtotal >= 399) {
-    pac = Math.max(0, pac - 4);
-    mini = Math.max(0, mini - 3);
+  if (opcoesRaw && typeof opcoesRaw === "object") {
+    return Object.entries(opcoesRaw)
+      .map(([id, item]: [string, any]) => ({
+        id: String(item?.id || id),
+        nome: String(item?.nome || item?.name || id).replace(/_/g, " "),
+        prazo: String(item?.prazo || item?.delivery_time || "Prazo a confirmar"),
+        valor: Number(item?.valor ?? item?.price ?? item?.preco ?? 0),
+        destaque: item?.destaque ? String(item.destaque) : undefined,
+      }))
+      .filter((item) => item.id && item.nome && Number.isFinite(item.valor));
   }
 
-  return [
-    {
-      id: "mini",
-      nome: "Correios Mini Envios",
-      prazo: "5 a 9 dias úteis",
-      valor: mini,
-      destaque: "Opção econômica",
-    },
-    {
-      id: "pac",
-      nome: "Correios PAC",
-      prazo: "4 a 8 dias úteis",
-      valor: pac,
-      destaque: "Mais escolhido",
-    },
-    {
-      id: "sedex",
-      nome: "Correios Sedex",
-      prazo: "1 a 3 dias úteis",
-      valor: sedex,
-      destaque: "Entrega mais rápida",
-    },
-  ];
+  return [];
+}
+
+async function consultarFrete(cepDigits: string, subtotal: number, totalItens: number): Promise<FreightOption[]> {
+  const response = await fetch("/api/frete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      cep: cepDigits,
+      subtotal,
+      totalItens,
+    }),
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || data?.erro) {
+    throw new Error(data?.erro || data?.message || "Não foi possível calcular o frete agora.");
+  }
+
+  const opcoes = normalizarOpcoesFrete(data);
+
+  if (!opcoes.length) {
+    throw new Error("A API de frete não retornou opções de entrega.");
+  }
+
+  return opcoes;
 }
 
 function formatarCep(value: string) {
@@ -288,6 +283,8 @@ export default function CheckoutPage() {
   const [freightOptions, setFreightOptions] = useState<FreightOption[]>([]);
   const [selectedFreight, setSelectedFreight] = useState<string>("");
   const [savingOrder, setSavingOrder] = useState(false);
+  const [loadingFrete, setLoadingFrete] = useState(false);
+  const [erroFrete, setErroFrete] = useState("");
   const [checkoutFeedback, setCheckoutFeedback] = useState("");
   const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<"pix" | "cartao">("pix");
   const [cardNome, setCardNome] = useState("");
@@ -329,19 +326,59 @@ export default function CheckoutPage() {
     return carrinho.reduce((acc, item) => acc + Number(item.qtd || item.quantidade || 1), 0);
   }, [carrinho]);
 
+  async function calcularFreteCheckout(exibirFeedback = false) {
+    const digits = cep.replace(/\D/g, "");
+
+    if (digits.length < 8) {
+      setFreightOptions([]);
+      setSelectedFreight("");
+      setErroFrete("");
+      if (exibirFeedback) {
+        setCheckoutFeedback("Digite um CEP válido com 8 números para calcular o frete.");
+      }
+      return;
+    }
+
+    try {
+      setLoadingFrete(true);
+      setErroFrete("");
+      if (exibirFeedback) setCheckoutFeedback("Calculando frete pelos Correios...");
+
+      const options = await consultarFrete(digits, subtotal, totalItens);
+      setFreightOptions(options);
+      setSelectedFreight((prev) => {
+        if (prev && options.some((option) => option.id === prev)) return prev;
+        return options.find((option) => option.id === "pac")?.id || options[0]?.id || "";
+      });
+
+      if (exibirFeedback) setCheckoutFeedback("");
+    } catch (error) {
+      const mensagem = error instanceof Error ? error.message : "Não foi possível calcular o frete agora.";
+      setFreightOptions([]);
+      setSelectedFreight("");
+      setErroFrete(mensagem);
+      if (exibirFeedback) setCheckoutFeedback(mensagem);
+    } finally {
+      setLoadingFrete(false);
+    }
+  }
+
   useEffect(() => {
     const digits = cep.replace(/\D/g, "");
 
     if (digits.length < 8) {
       setFreightOptions([]);
       setSelectedFreight("");
+      setErroFrete("");
       return;
     }
 
-    const options = calcularFretes(digits, subtotal);
-    setFreightOptions(options);
-    setSelectedFreight((prev) => prev || options[1]?.id || options[0]?.id || "");
-  }, [cep, subtotal]);
+    const timer = window.setTimeout(() => {
+      void calcularFreteCheckout(false);
+    }, 450);
+
+    return () => window.clearTimeout(timer);
+  }, [cep, subtotal, totalItens]);
 
   const freteSelecionado = useMemo(() => {
     const current = freightOptions.find((opt) => opt.id === selectedFreight);
@@ -1153,28 +1190,17 @@ export default function CheckoutPage() {
                   <button
                     type="button"
                     style={styles.calcButton}
-                    onClick={() => {
-                      const digits = cep.replace(/\D/g, "");
-
-                      if (digits.length < 8) {
-                        setFreightOptions([]);
-                        setSelectedFreight("");
-                        setCheckoutFeedback("Digite um CEP válido com 8 números para calcular o frete.");
-                        return;
-                      }
-
-                      const options = calcularFretes(digits, subtotal);
-                      setFreightOptions(options);
-                      setSelectedFreight((prev) => prev || options[1]?.id || options[0]?.id || "");
-                      setCheckoutFeedback("");
-                    }}
+                    onClick={() => void calcularFreteCheckout(true)}
+                    disabled={loadingFrete}
                   >
-                    Calcular frete
+                    {loadingFrete ? "Calculando..." : "Calcular frete"}
                   </button>
                 </div>
               </div>
 
-              {freightOptions.length > 0 ? (
+              {loadingFrete ? (
+                <div style={styles.noticeSoftBox}>Calculando frete pelos Correios...</div>
+              ) : freightOptions.length > 0 ? (
                 <div style={styles.freightListPremium}>
                   {freightOptions.map((option) => {
                     const active = selectedFreight === option.id;
@@ -1202,7 +1228,7 @@ export default function CheckoutPage() {
                 </div>
               ) : (
                 <div style={styles.noticeSoftBox}>
-                  Digite seu CEP para liberar as opções estimadas de entrega e finalizar com mais segurança.
+                  {erroFrete || "Digite seu CEP para liberar as opções de entrega e finalizar com mais segurança."}
                 </div>
               )}
             </div>
@@ -1245,7 +1271,7 @@ export default function CheckoutPage() {
 
                 <div style={styles.summaryRow}>
                   <span>Frete</span>
-                  <strong>{freightOptions.length ? formatarMoeda(freteSelecionado) : "Informe o CEP"}</strong>
+                  <strong>{loadingFrete ? "Calculando..." : freightOptions.length ? formatarMoeda(freteSelecionado) : "Informe o CEP"}</strong>
                 </div>
 
                 <div style={styles.summaryRow}>
@@ -1446,10 +1472,10 @@ export default function CheckoutPage() {
                 type="button"
                 style={{
                   ...styles.mainButton,
-                  ...((savingOrder || !carrinho.length) ? styles.buttonDisabled : {}),
+                  ...((savingOrder || loadingFrete || !carrinho.length) ? styles.buttonDisabled : {}),
                 }}
                 onClick={formaPagamentoSelecionada === "pix" ? solicitarPix : pagarCartao}
-                disabled={savingOrder || !carrinho.length}
+                disabled={savingOrder || loadingFrete || !carrinho.length}
               >
                 {savingOrder
                   ? formaPagamentoSelecionada === "pix"
@@ -1495,10 +1521,10 @@ export default function CheckoutPage() {
             type="button"
             style={{
               ...styles.mobileStickyButton,
-              ...((savingOrder || !carrinho.length) ? styles.buttonDisabled : {}),
+              ...((savingOrder || loadingFrete || !carrinho.length) ? styles.buttonDisabled : {}),
             }}
             onClick={formaPagamentoSelecionada === "pix" ? solicitarPix : pagarCartao}
-            disabled={savingOrder || !carrinho.length}
+            disabled={savingOrder || loadingFrete || !carrinho.length}
           >
             {savingOrder
               ? formaPagamentoSelecionada === "pix"
