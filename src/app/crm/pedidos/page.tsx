@@ -72,6 +72,7 @@ type PedidoPagamentoForma =
   | "debito"
   | "boleto"
   | "transferencia"
+  | "a_prazo"
   | "outros";
 
 type PedidoPagamento = {
@@ -1047,6 +1048,7 @@ export default function PedidosPage() {
   const [status, setStatus] = useState<StatusPedido>("rascunho");
   const [observacoes, setObservacoes] = useState("");
   const [dataPedido, setDataPedido] = useState(hojeInputDate());
+  const [dataVencimento, setDataVencimento] = useState(addDiasInputDate(hojeInputDate(), 7));
   const [tipoEntrega, setTipoEntrega] = useState<TipoEntrega>("entrega_maos");
   const [entregaObservacao, setEntregaObservacao] = useState("");
 
@@ -1119,9 +1121,7 @@ export default function PedidosPage() {
     const totalVenda = precoUnitarioVenda * qtd;
     const totalCusto = precoUnitarioCusto * qtd;
     const margem = totalVenda - totalCusto;
-    const margemVendaPercentual = totalVenda > 0 ? (margem / totalVenda) * 100 : 0;
-    const markupPercentual = totalCusto > 0 ? (margem / totalCusto) * 100 : 0;
-    const margemPercentual = markupPercentual;
+    const margemPercentual = totalVenda > 0 ? (margem / totalVenda) * 100 : 0;
 
     return {
       produto,
@@ -1131,8 +1131,6 @@ export default function PedidosPage() {
       totalVenda,
       totalCusto,
       margem,
-      markupPercentual,
-      margemVendaPercentual,
       margemPercentual,
       estoqueAtual: typeof produto?.estoque === "number" ? produto.estoque : undefined,
     };
@@ -1146,16 +1144,12 @@ export default function PedidosPage() {
     );
     const totalVenda = calcularTotalPedido(pedido);
     const margem = totalVenda - custoProdutos;
-    const margemVendaPercentual = totalVenda > 0 ? (margem / totalVenda) * 100 : 0;
-    const markupPercentual = custoProdutos > 0 ? (margem / custoProdutos) * 100 : 0;
-    const margemPercentual = markupPercentual;
+    const margemPercentual = totalVenda > 0 ? (margem / totalVenda) * 100 : 0;
 
     return {
       totalVenda,
       custoProdutos,
       margem,
-      markupPercentual,
-      margemVendaPercentual,
       margemPercentual,
       itensFinanceiros,
     };
@@ -1952,17 +1946,13 @@ export default function PedidosPage() {
     );
 
     const margemEstimada = faturado - custoEstimado;
-    const margemVendaPercentual = faturado > 0 ? (margemEstimada / faturado) * 100 : 0;
-    const markupPercentual = custoEstimado > 0 ? (margemEstimada / custoEstimado) * 100 : 0;
-    const margemPercentual = markupPercentual;
+    const margemPercentual = faturado > 0 ? (margemEstimada / faturado) * 100 : 0;
 
     return {
       total,
       faturado,
       custoEstimado,
       margemEstimada,
-      markupPercentual,
-      margemVendaPercentual,
       margemPercentual,
       aguardando: pedidosFiltrados.filter((p) => p.status === "aguardando_pagamento").length,
       pagos: pedidosFiltrados.filter((p) => p.status === "pago").length,
@@ -2231,7 +2221,7 @@ export default function PedidosPage() {
           <div>
             <div className="statLabel">Lucro estimado</div>
             <div className="statValue">{formatBRL(resumo.margemEstimada)}</div>
-            <div className="statHint">Markup {resumo.markupPercentual.toFixed(0)}% • Venda {resumo.margemVendaPercentual.toFixed(0)}%</div>
+            <div className="statHint">Margem {resumo.margemPercentual.toFixed(0)}%</div>
           </div>
         </button>
 
@@ -2313,7 +2303,7 @@ export default function PedidosPage() {
                       <span>{p.origem ? origemLabel(p.origem) : "Origem não informada"}</span>
                       <small>{p.formaPagamento || p.statusPagamento || "pagamento"}</small>
                       <small className={financeiroPedido.margem >= 0 ? "profitText" : "lossText"}>
-                        Lucro {formatBRL(financeiroPedido.margem)} • Markup {financeiroPedido.markupPercentual.toFixed(0)}% • Venda {financeiroPedido.margemVendaPercentual.toFixed(0)}%
+                        Margem {formatBRL(financeiroPedido.margem)} • {financeiroPedido.margemPercentual.toFixed(0)}%
                       </small>
                     </div>
                   </div>
@@ -2547,11 +2537,11 @@ export default function PedidosPage() {
                     <strong>{formatBRL(calcularPedidoFinanceiro(pedidoDetalheAtual).custoProdutos)}</strong>
                   </div>
                   <div>
-                    <span>Lucro</span>
+                    <span>Margem</span>
                     <strong>
                       {formatBRL(calcularPedidoFinanceiro(pedidoDetalheAtual).margem)}
                       <small className="marginPercent">
-                        Markup {calcularPedidoFinanceiro(pedidoDetalheAtual).markupPercentual.toFixed(0)}% • Venda {calcularPedidoFinanceiro(pedidoDetalheAtual).margemVendaPercentual.toFixed(0)}%
+                        {calcularPedidoFinanceiro(pedidoDetalheAtual).margemPercentual.toFixed(0)}%
                       </small>
                     </strong>
                   </div>
@@ -2587,7 +2577,7 @@ export default function PedidosPage() {
                             <span>Venda {formatBRL(itemFinanceiro.totalVenda)}</span>
                             <span>Custo {formatBRL(itemFinanceiro.totalCusto)}</span>
                             <span className={itemFinanceiro.margem >= 0 ? "profitText" : "lossText"}>
-                              Lucro {formatBRL(itemFinanceiro.margem)} • Markup {itemFinanceiro.markupPercentual.toFixed(0)}% • Venda {itemFinanceiro.margemVendaPercentual.toFixed(0)}%
+                              Margem {formatBRL(itemFinanceiro.margem)} ({itemFinanceiro.margemPercentual.toFixed(0)}%)
                             </span>
                             <span>Estoque {itemFinanceiro.estoqueAtual ?? "—"}</span>
                           </div>
@@ -2863,6 +2853,79 @@ export default function PedidosPage() {
                     />
                   </div>
                 </div>
+
+                {/* ✅ Forma de pagamento visível no topo do pedido */}
+                <div className="row2 paymentVisibleBox">
+                  <div>
+                    <label className="lab">Forma de pagamento</label>
+                    <select
+                      className="select"
+                      value={(pagamentos || [])[0]?.forma || "pix"}
+                      onChange={(e) => {
+                        const forma = e.target.value as PedidoPagamentoForma;
+                        const valorAtual = (pagamentos || [])[0]?.valor || totals.total || 0;
+
+                        setPagamentos((prev) => {
+                          const lista = prev && prev.length ? [...prev] : [{ forma: "pix" as PedidoPagamentoForma, valor: 0 }];
+                          lista[0] = {
+                            ...lista[0],
+                            forma,
+                            valor: Number(lista[0]?.valor || valorAtual || 0),
+                          };
+                          return lista;
+                        });
+
+                        if (forma === "a_prazo") {
+                          setStatus("aguardando_pagamento");
+                          if (!dataVencimento) {
+                            setDataVencimento(addDiasInputDate(hojeInputDate(), 7));
+                          }
+                        }
+                      }}
+                    >
+                      <option value="pix">Pix</option>
+                      <option value="dinheiro">Dinheiro</option>
+                      <option value="credito">Crédito</option>
+                      <option value="debito">Débito</option>
+                      <option value="boleto">Boleto</option>
+                      <option value="transferencia">Transferência</option>
+                      <option value="a_prazo">A prazo</option>
+                      <option value="outros">Outros</option>
+                    </select>
+                  </div>
+
+                  {(pagamentos || []).some((pg) => pg.forma === "a_prazo") ? (
+                    <div>
+                      <label className="lab">Vencimento do A prazo</label>
+                      <input
+                        className="input dueInputVisible"
+                        type="date"
+                        value={dataVencimento}
+                        onChange={(e) => setDataVencimento(e.target.value)}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="lab">Como será lançado</label>
+                      <input
+                        className="input"
+                        value="Pagamento normal"
+                        readOnly
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {(pagamentos || []).some((pg) => pg.forma === "a_prazo") ? (
+                  <div className="creditDueBox creditDueBoxVisible">
+                    <strong>📅 Venda a prazo ativa</strong>
+                    <span>
+                      O pedido ficará em A receber até ser marcado como Pago.
+                      Vencimento: {dataVencimento ? new Date(`${dataVencimento}T12:00:00`).toLocaleDateString("pt-BR") : "não informado"}.
+                    </span>
+                  </div>
+                ) : null}
+
 
                 <div className="row2">
                   <div>
@@ -4437,6 +4500,41 @@ export default function PedidosPage() {
           color: #ffe1ad;
         }
 
+
+
+        .paymentVisibleBox {
+          margin-top: 10px;
+          padding: 10px;
+          border-radius: 14px;
+          border: 1px solid rgba(200, 162, 106, 0.22);
+          background: rgba(200, 162, 106, 0.055);
+        }
+        .dueInputVisible {
+          border-color: rgba(255, 201, 98, 0.48) !important;
+          background: rgba(255, 201, 98, 0.06) !important;
+        }
+        .creditDueBox {
+          margin-top: 10px;
+          padding: 10px 12px;
+          border-radius: 14px;
+          border: 1px solid rgba(255, 201, 98, 0.34);
+          background: rgba(255, 201, 98, 0.10);
+          color: #ffe7ad;
+          display: grid;
+          gap: 4px;
+        }
+        .creditDueBox strong {
+          font-size: 12px;
+          font-weight: 950;
+        }
+        .creditDueBox span {
+          font-size: 11px;
+          line-height: 1.35;
+          opacity: 0.86;
+        }
+        .creditDueBoxVisible {
+          margin-bottom: 4px;
+        }
 
         /* ======================================================
            ✅ PEDIDOS SaaS Premium compacto — alinhado ao Financeiro

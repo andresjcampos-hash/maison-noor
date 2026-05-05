@@ -704,6 +704,129 @@ export default function FinanceiroPage() {
     };
   }, [filtered, periodoTipo, dataInicio, dataFim]);
 
+  const financeiroPremium = useMemo(() => {
+    const hojeKey = todayInput();
+
+    const receitas = filtered.filter((l) => l.tipo === "receita");
+    const despesas = filtered.filter((l) => l.tipo === "despesa");
+
+    const receitaRecebida = receitas
+      .filter((l) => l.status === "pago")
+      .reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+
+    const receitaAReceber = receitas
+      .filter((l) => l.status === "pendente")
+      .reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+
+    const despesaPaga = despesas
+      .filter((l) => l.status === "pago")
+      .reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+
+    const despesaAPagar = despesas
+      .filter((l) => l.status === "pendente")
+      .reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+
+    const entradasHoje = filtered
+      .filter((l) => l.tipo === "receita" && l.status === "pago" && String(l.data || "").slice(0, 10) === hojeKey)
+      .reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+
+    const saidasHoje = filtered
+      .filter((l) => l.tipo === "despesa" && l.status === "pago" && String(l.data || "").slice(0, 10) === hojeKey)
+      .reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+
+    const saldoHoje = entradasHoje - saidasHoje;
+    const lucroReal = receitaRecebida - despesaPaga;
+    const saldoProjetado = (receitaRecebida + receitaAReceber) - (despesaPaga + despesaAPagar);
+    const margemReal = receitaRecebida > 0 ? (lucroReal / receitaRecebida) * 100 : 0;
+    const percentualRecebido = (receitaRecebida + receitaAReceber) > 0
+      ? (receitaRecebida / (receitaRecebida + receitaAReceber)) * 100
+      : 0;
+
+    const porForma = new Map<FormaPag, number>();
+    for (const l of receitas.filter((item) => item.status === "pago")) {
+      porForma.set(l.forma, (porForma.get(l.forma) || 0) + (Number(l.valor) || 0));
+    }
+
+    const formasPagamento = Array.from(porForma.entries())
+      .map(([forma, valor]) => ({
+        forma,
+        label: formaLabel(forma),
+        valor,
+        percentual: receitaRecebida > 0 ? (valor / receitaRecebida) * 100 : 0,
+      }))
+      .sort((a, b) => b.valor - a.valor);
+
+    const porCategoria = new Map<string, number>();
+    for (const l of despesas) {
+      const categoria = String(l.categoria || "Sem categoria");
+      porCategoria.set(categoria, (porCategoria.get(categoria) || 0) + (Number(l.valor) || 0));
+    }
+
+    const maioresDespesas = Array.from(porCategoria.entries())
+      .map(([categoria, valor]) => ({ categoria, valor }))
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 5);
+
+    const alertas: Array<{ titulo: string; descricao: string; tipo: "critico" | "alerta" | "sucesso" | "info" }> = [];
+
+    if (receitaAReceber > 0) {
+      alertas.push({
+        tipo: "alerta",
+        titulo: "Receita pendente para cobrar",
+        descricao: `${formatBRL(receitaAReceber)} ainda está a receber no filtro atual. Priorize cobrança e follow-up.`,
+      });
+    }
+
+    if (despesaAPagar > receitaAReceber && despesaAPagar > 0) {
+      alertas.push({
+        tipo: "critico",
+        titulo: "A pagar maior que a receber",
+        descricao: `${formatBRL(despesaAPagar)} a pagar contra ${formatBRL(receitaAReceber)} a receber. Atenção ao caixa.`,
+      });
+    }
+
+    if (margemReal > 0 && margemReal < 35) {
+      alertas.push({
+        tipo: "alerta",
+        titulo: "Margem real em atenção",
+        descricao: `A margem do período está em ${margemReal.toFixed(1)}%. Revise custos, descontos e despesas.`,
+      });
+    }
+
+    if (lucroReal > 0 && receitaAReceber === 0) {
+      alertas.push({
+        tipo: "sucesso",
+        titulo: "Caixa saudável no período",
+        descricao: `Lucro real de ${formatBRL(lucroReal)} com tudo recebido no filtro atual.`,
+      });
+    }
+
+    if (!alertas.length) {
+      alertas.push({
+        tipo: "info",
+        titulo: "Financeiro sob controle",
+        descricao: "Nenhum alerta crítico encontrado no filtro atual.",
+      });
+    }
+
+    return {
+      receitaRecebida,
+      receitaAReceber,
+      despesaPaga,
+      despesaAPagar,
+      entradasHoje,
+      saidasHoje,
+      saldoHoje,
+      lucroReal,
+      saldoProjetado,
+      margemReal,
+      percentualRecebido,
+      formasPagamento,
+      maioresDespesas,
+      alertas: alertas.slice(0, 4),
+    };
+  }, [filtered]);
+
   const receitasRecentes = filtered.filter((l) => l.tipo === "receita").slice(0, 4);
   const despesasRecentes = filtered.filter((l) => l.tipo === "despesa").slice(0, 4);
   const origemPedidoCount = filtered.filter((l) => l.origemPedidoId).length;
@@ -836,6 +959,38 @@ export default function FinanceiroPage() {
         </div>
       </section>
 
+      <section className="premiumDre">
+        <div className="dreHead">
+          <div>
+            <div className="sectionKicker">Financeiro Premium</div>
+            <h2>DRE rápido da operação</h2>
+            <p>Separação clara entre recebido, a receber, pago, a pagar e lucro real do filtro atual.</p>
+          </div>
+          <div className={financeiroPremium.lucroReal >= 0 ? "dreResult positive" : "dreResult negative"}>
+            <span>Lucro real</span>
+            <strong>{formatBRL(financeiroPremium.lucroReal)}</strong>
+            <small>Margem {financeiroPremium.margemReal.toFixed(1)}%</small>
+          </div>
+        </div>
+
+        <div className="dreGrid">
+          <DreCard label="Receita recebida" value={formatBRL(financeiroPremium.receitaRecebida)} hint="Entradas pagas" tone="green" />
+          <DreCard label="A receber" value={formatBRL(financeiroPremium.receitaAReceber)} hint={`${financeiroPremium.percentualRecebido.toFixed(0)}% já recebido`} tone="gold" />
+          <DreCard label="Despesas pagas" value={formatBRL(financeiroPremium.despesaPaga)} hint="Saídas confirmadas" tone="red" />
+          <DreCard label="A pagar" value={formatBRL(financeiroPremium.despesaAPagar)} hint="Despesas pendentes" tone="warn" />
+          <DreCard label="Saldo projetado" value={formatBRL(financeiroPremium.saldoProjetado)} hint="Recebido + a receber - despesas" tone={financeiroPremium.saldoProjetado >= 0 ? "green" : "red"} />
+        </div>
+
+        <div className="cashToday">
+          <div>
+            <span>Fluxo de caixa hoje</span>
+            <strong>{formatBRL(financeiroPremium.saldoHoje)}</strong>
+          </div>
+          <div><small>Entradas</small><b className="green">{formatBRL(financeiroPremium.entradasHoje)}</b></div>
+          <div><small>Saídas</small><b className="red">{formatBRL(financeiroPremium.saidasHoje)}</b></div>
+        </div>
+      </section>
+
       <section className="kpis">
         <Kpi title="Entradas" value={formatBRL(totals.totalReceitas)} hint="Receitas no filtro" tone="green" />
         <Kpi title="Saídas" value={formatBRL(totals.totalDespesas)} hint="Despesas no filtro" tone="red" />
@@ -849,22 +1004,70 @@ export default function FinanceiroPage() {
 
       <FinancialChart data={chartData} totalEntradas={totals.totalReceitas} totalSaidas={totals.totalDespesas} />
 
+      <section className="financePremiumGrid">
+        <div className="financePremiumPanel">
+          <div className="sectionKicker">Formas de pagamento</div>
+          <h2>Como o dinheiro está entrando</h2>
+          <div className="paymentRanking">
+            {financeiroPremium.formasPagamento.length ? financeiroPremium.formasPagamento.map((item) => (
+              <div className="paymentRow" key={item.forma}>
+                <div>
+                  <strong>{item.label}</strong>
+                  <small>{item.percentual.toFixed(1)}% da receita recebida</small>
+                </div>
+                <span>{formatBRL(item.valor)}</span>
+                <i style={{ width: `${Math.max(5, item.percentual)}%` }} />
+              </div>
+            )) : <div className="emptyMini">Nenhuma receita paga no filtro.</div>}
+          </div>
+        </div>
+
+        <div className="financePremiumPanel">
+          <div className="sectionKicker">Maiores despesas</div>
+          <h2>Onde o dinheiro está saindo</h2>
+          <div className="expenseRanking">
+            {financeiroPremium.maioresDespesas.length ? financeiroPremium.maioresDespesas.map((item) => (
+              <div className="expenseRow" key={item.categoria}>
+                <strong>{item.categoria}</strong>
+                <span>{formatBRL(item.valor)}</span>
+              </div>
+            )) : <div className="emptyMini">Nenhuma despesa no filtro.</div>}
+          </div>
+        </div>
+
+        <div className="financePremiumPanel decisionPanel">
+          <div className="sectionKicker">Alertas financeiros</div>
+          <h2>Decisão rápida</h2>
+          <div className="financeAlerts">
+            {financeiroPremium.alertas.map((item, index) => (
+              <div className={`financeAlert ${item.tipo}`} key={`${item.titulo}_${index}`}>
+                <span>{item.tipo === "critico" ? "⚠️" : item.tipo === "alerta" ? "🔔" : item.tipo === "sucesso" ? "✅" : "💡"}</span>
+                <div>
+                  <strong>{item.titulo}</strong>
+                  <small>{item.descricao}</small>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="insightGrid">
         <div className="insightCard">
           <div className="sectionKicker">Resumo inteligente</div>
           <h2>Performance do período</h2>
           <p>
             Você teve <b>{formatBRL(totals.totalReceitas)}</b> de entradas e <b>{formatBRL(totals.totalDespesas)}</b> de saídas.
-            O saldo atual do filtro é <b>{formatBRL(totals.saldo)}</b>.
+            O lucro real pago é <b>{formatBRL(financeiroPremium.lucroReal)}</b> e o saldo projetado é <b>{formatBRL(financeiroPremium.saldoProjetado)}</b>.
           </p>
         </div>
         <div className="insightCard compact">
-          <span>Receitas pagas</span><strong className="green">{formatBRL(totals.receitasPagas)}</strong>
-          <span>Despesas pagas</span><strong className="red">{formatBRL(totals.despesasPagas)}</strong>
+          <span>Receitas recebidas</span><strong className="green">{formatBRL(financeiroPremium.receitaRecebida)}</strong>
+          <span>A receber</span><strong>{formatBRL(financeiroPremium.receitaAReceber)}</strong>
         </div>
         <div className="insightCard compact">
-          <span>Receitas pendentes</span><strong>{formatBRL(totals.receitasPendentes)}</strong>
-          <span>Despesas pendentes</span><strong>{formatBRL(totals.despesasPendentes)}</strong>
+          <span>Despesas pagas</span><strong className="red">{formatBRL(financeiroPremium.despesaPaga)}</strong>
+          <span>A pagar</span><strong>{formatBRL(financeiroPremium.despesaAPagar)}</strong>
         </div>
       </section>
 
@@ -1326,6 +1529,272 @@ export default function FinanceiroPage() {
         .chartSaldo { text-align:center!important; font-size:10px!important; font-weight:950!important; color:rgba(200,162,106,.95)!important; white-space:nowrap!important; overflow:hidden!important; text-overflow:ellipsis!important; }
         .chartEmpty { min-height:120px!important; border-radius:16px!important; border:1px dashed rgba(255,255,255,.14)!important; display:grid!important; place-items:center!important; opacity:.72!important; font-weight:800!important; }
 
+
+
+        /* ======================================================
+           ✅ FINANCEIRO PREMIUM — DRE, caixa, rankings e alertas
+        ====================================================== */
+        .premiumDre,
+        .financePremiumPanel {
+          margin-top: 12px;
+          padding: 14px;
+          border-radius: 20px;
+          border: 1px solid rgba(200,162,106,.18);
+          background:
+            radial-gradient(circle at top left, rgba(200,162,106,.12), transparent 32%),
+            linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012));
+          box-shadow: 0 16px 42px rgba(0,0,0,.16);
+        }
+
+        .dreHead {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+
+        .dreHead h2,
+        .financePremiumPanel h2 {
+          margin: 4px 0 0;
+          font-size: 20px;
+          line-height: 1.12;
+        }
+
+        .dreHead p {
+          max-width: 760px;
+          font-size: 12px;
+        }
+
+        .dreResult {
+          min-width: 190px;
+          padding: 11px 12px;
+          border-radius: 16px;
+          border: 1px solid rgba(200,162,106,.2);
+          background: rgba(0,0,0,.2);
+          display: grid;
+          gap: 3px;
+          text-align: right;
+        }
+
+        .dreResult span,
+        .dreResult small {
+          font-size: 10px;
+          opacity: .68;
+          text-transform: uppercase;
+          letter-spacing: .1em;
+          font-weight: 950;
+        }
+
+        .dreResult strong {
+          font-size: 21px;
+          line-height: 1.08;
+        }
+
+        .dreResult.positive strong { color: #4dff9a; }
+        .dreResult.negative strong { color: #ff8585; }
+
+        .dreGrid {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+          gap: 9px;
+        }
+
+        .dreCard {
+          min-height: 82px;
+          padding: 11px;
+          border-radius: 16px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(0,0,0,.18);
+          display: grid;
+          align-content: center;
+        }
+
+        .dreCard span {
+          font-size: 10px;
+          opacity: .7;
+          text-transform: uppercase;
+          letter-spacing: .1em;
+          font-weight: 950;
+        }
+
+        .dreCard strong {
+          margin-top: 5px;
+          font-size: 17px;
+          color: rgba(200,162,106,.98);
+          overflow-wrap: anywhere;
+        }
+
+        .dreCard small {
+          margin-top: 4px;
+          opacity: .62;
+          font-size: 10.5px;
+        }
+
+        .dreCard.green strong { color: #4dff9a; }
+        .dreCard.red strong { color: #ff8585; }
+        .dreCard.gold strong,
+        .dreCard.warn strong { color: #f3c979; }
+
+        .cashToday {
+          margin-top: 10px;
+          display: grid;
+          grid-template-columns: 1.2fr .7fr .7fr;
+          gap: 8px;
+          padding: 10px;
+          border-radius: 16px;
+          border: 1px solid rgba(200,162,106,.14);
+          background: rgba(200,162,106,.055);
+        }
+
+        .cashToday > div {
+          display: grid;
+          gap: 4px;
+        }
+
+        .cashToday span,
+        .cashToday small {
+          font-size: 10px;
+          opacity: .68;
+          text-transform: uppercase;
+          letter-spacing: .09em;
+          font-weight: 950;
+        }
+
+        .cashToday strong,
+        .cashToday b {
+          font-size: 15px;
+          overflow-wrap: anywhere;
+        }
+
+        .financePremiumGrid {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: 1fr 1fr 1.15fr;
+          gap: 10px;
+        }
+
+        .paymentRanking,
+        .expenseRanking,
+        .financeAlerts {
+          margin-top: 10px;
+          display: grid;
+          gap: 8px;
+        }
+
+        .paymentRow {
+          position: relative;
+          overflow: hidden;
+          min-height: 56px;
+          padding: 9px;
+          border-radius: 14px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(0,0,0,.18);
+          display: grid;
+          grid-template-columns: minmax(0,1fr) auto;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .paymentRow div,
+        .expenseRow {
+          min-width: 0;
+        }
+
+        .paymentRow strong,
+        .expenseRow strong {
+          display: block;
+          font-size: 12px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .paymentRow small {
+          display: block;
+          margin-top: 3px;
+          opacity: .62;
+          font-size: 10.5px;
+        }
+
+        .paymentRow span,
+        .expenseRow span {
+          font-weight: 950;
+          color: rgba(200,162,106,.98);
+          font-size: 12px;
+          white-space: nowrap;
+        }
+
+        .paymentRow i {
+          position: absolute;
+          left: 0;
+          bottom: 0;
+          height: 3px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #f3c979, rgba(200,162,106,.25));
+        }
+
+        .expenseRow {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          min-height: 42px;
+          padding: 9px;
+          border-radius: 13px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(0,0,0,.18);
+        }
+
+        .financeAlert {
+          display: grid;
+          grid-template-columns: 34px minmax(0,1fr);
+          gap: 8px;
+          padding: 9px;
+          border-radius: 14px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(0,0,0,.18);
+        }
+
+        .financeAlert > span {
+          width: 32px;
+          height: 32px;
+          border-radius: 12px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(200,162,106,.18);
+          background: rgba(200,162,106,.07);
+        }
+
+        .financeAlert strong {
+          display: block;
+          font-size: 12px;
+        }
+
+        .financeAlert small {
+          display: block;
+          margin-top: 3px;
+          opacity: .66;
+          font-size: 10.5px;
+          line-height: 1.28;
+        }
+
+        .financeAlert.critico { border-color: rgba(255,120,120,.28); }
+        .financeAlert.alerta { border-color: rgba(255,201,98,.28); }
+        .financeAlert.sucesso { border-color: rgba(117,255,171,.24); }
+
+        .emptyMini {
+          min-height: 70px;
+          display: grid;
+          place-items: center;
+          border-radius: 14px;
+          border: 1px dashed rgba(255,255,255,.14);
+          opacity: .7;
+          font-size: 12px;
+          text-align: center;
+        }
+
         @media (max-width: 1100px) {
           .insightGrid,
           .listsGrid {
@@ -1348,11 +1817,37 @@ export default function FinanceiroPage() {
           }
         }
 
+
+        @media (max-width: 1100px) {
+          .financePremiumGrid { grid-template-columns: 1fr !important; }
+          .cashToday { grid-template-columns: 1fr !important; }
+          .dreResult { text-align: left !important; }
+        }
       `}</style>
     </main>
   );
 }
 
+
+function DreCard({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: "green" | "red" | "gold" | "warn";
+}) {
+  return (
+    <div className={`dreCard ${tone || ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{hint}</small>
+    </div>
+  );
+}
 function FinancialChart({
   data,
   totalEntradas,

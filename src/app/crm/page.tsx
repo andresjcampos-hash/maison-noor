@@ -47,6 +47,8 @@ type Pedido = {
   valorTotal?: number;
   status?: StatusPedido;
   formaPagamento?: string;
+  dataVencimento?: any;
+  pagamentos?: { forma?: string; valor?: number }[];
   visualizado?: boolean;
   alertaNovoPedido?: boolean;
   statusInterno?: string;
@@ -207,6 +209,76 @@ function isFaturado(p: Pedido) {
   return p.status === "pago" || p.status === "enviado" || p.status === "entregue";
 }
 
+function inputDateFromAny(valor?: any): string {
+  if (!valor) return "";
+  if (typeof valor?.toDate === "function") {
+    const d = valor.toDate();
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 10);
+  }
+
+  const raw = String(valor || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+  const d = new Date(raw);
+  if (!Number.isFinite(d.getTime())) return "";
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function isPedidoAPrazo(p: Pedido) {
+  const formaTexto = String(p.formaPagamento || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return (
+    formaTexto.includes("prazo") ||
+    formaTexto.includes("fiado") ||
+    formaTexto.includes("depois") ||
+    (p.pagamentos || []).some((pg) => pg.forma === "a_prazo")
+  );
+}
+
+function isAPrazoPendente(p: Pedido) {
+  return p.status === "aguardando_pagamento" && isPedidoAPrazo(p);
+}
+
+function diasAteVencimento(valor?: any): number | null {
+  const input = inputDateFromAny(valor);
+  if (!input) return null;
+
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  const vencimento = new Date(`${input}T12:00:00`);
+  vencimento.setHours(0, 0, 0, 0);
+
+  return Math.ceil((vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function statusVencimentoPedido(p: Pedido): "sem_vencimento" | "vencido" | "hoje" | "breve" | "ok" {
+  if (!isAPrazoPendente(p)) return "sem_vencimento";
+  const dias = diasAteVencimento(p.dataVencimento);
+  if (dias === null) return "sem_vencimento";
+  if (dias < 0) return "vencido";
+  if (dias === 0) return "hoje";
+  if (dias <= 2) return "breve";
+  return "ok";
+}
+
+function vencimentoTextoPedido(p: Pedido) {
+  const input = inputDateFromAny(p.dataVencimento);
+  if (!input) return "Sem vencimento";
+  const dataBR = new Date(`${input}T12:00:00`).toLocaleDateString("pt-BR");
+  const dias = diasAteVencimento(p.dataVencimento);
+  if (dias === null) return dataBR;
+  if (dias < 0) return `${dataBR} • atrasado há ${Math.abs(dias)} dia(s)`;
+  if (dias === 0) return `${dataBR} • vence hoje`;
+  return `${dataBR} • vence em ${dias} dia(s)`;
+}
+
 function statusLabel(status?: string) {
   const map: Record<string, string> = {
     rascunho: "Rascunho",
@@ -351,6 +423,10 @@ export default function CrmPage() {
 
     const novos = pedidos.filter(isPedidoNovo);
     const aguardando = pedidos.filter((p) => p.status === "aguardando_pagamento");
+    const aPrazoPendentes = pedidos.filter(isAPrazoPendente);
+    const aPrazoVencidos = aPrazoPendentes.filter((p) => statusVencimentoPedido(p) === "vencido");
+    const aPrazoHoje = aPrazoPendentes.filter((p) => statusVencimentoPedido(p) === "hoje");
+    const aPrazoBreve = aPrazoPendentes.filter((p) => statusVencimentoPedido(p) === "breve");
     const parados = pedidos.filter((p) => isPendenteParado(p) || isPagoParado(p) || isEnviadoParado(p));
     const pagos = pedidos.filter((p) => p.status === "pago");
     const faturados = pedidos.filter(isFaturado);
@@ -366,6 +442,8 @@ export default function CrmPage() {
     const previsaoMes = faturamentoMes > 0 ? (faturamentoMes / diaAtual) * diasNoMes : 0;
     const faturamento = faturados.reduce((acc, p) => acc + calcularTotal(p), 0);
     const potencialPendente = aguardando.reduce((acc, p) => acc + calcularTotal(p), 0);
+    const totalAPrazoPendente = aPrazoPendentes.reduce((acc, p) => acc + calcularTotal(p), 0);
+    const totalAPrazoVencido = aPrazoVencidos.reduce((acc, p) => acc + calcularTotal(p), 0);
     const ticketMedio = faturados.length > 0 ? faturamento / faturados.length : 0;
     const conversao = pedidos.length > 0 ? (faturados.length / pedidos.length) * 100 : 0;
 
@@ -388,6 +466,13 @@ export default function CrmPage() {
       faturamentoMes,
       previsaoMes,
       potencialPendente,
+      totalAPrazoPendente,
+      totalAPrazoVencido,
+      aPrazoPendentes: aPrazoPendentes.length,
+      aPrazoVencidos: aPrazoVencidos.length,
+      aPrazoHoje: aPrazoHoje.length,
+      aPrazoBreve: aPrazoBreve.length,
+      pedidosAPrazoCriticos: [...aPrazoVencidos, ...aPrazoHoje, ...aPrazoBreve].slice(0, 5),
       totalGeral: pedidos.reduce((acc, p) => acc + calcularTotal(p), 0),
       ticketMedio,
       conversao,
@@ -490,6 +575,24 @@ export default function CrmPage() {
       });
     }
 
+    if (resumo.aPrazoVencidos > 0) {
+      lista.push({
+        tipo: "critico",
+        titulo: `${resumo.aPrazoVencidos} venda(s) a prazo vencida(s)`,
+        descricao: `${formatBRL(resumo.totalAPrazoVencido)} em cobrança atrasada. Priorize contato com esses clientes hoje.`,
+        acao: "Ver pedidos",
+        href: "/crm/pedidos",
+      });
+    } else if (resumo.aPrazoHoje > 0) {
+      lista.push({
+        tipo: "alerta",
+        titulo: `${resumo.aPrazoHoje} venda(s) a prazo vencem hoje`,
+        descricao: "Acompanhe os clientes com vencimento hoje para evitar atraso no caixa.",
+        acao: "Ver pedidos",
+        href: "/crm/pedidos",
+      });
+    }
+
     if (resumo.previsaoMes > 0) {
       lista.push({
         tipo: "info",
@@ -564,6 +667,24 @@ export default function CrmPage() {
       });
     }
 
+    if (resumo.aPrazoVencidos > 0) {
+      recomendacoes.push({
+        tipo: "critico",
+        titulo: "Cobrar vendas a prazo vencidas",
+        descricao: `${formatBRL(resumo.totalAPrazoVencido)} já passou do vencimento. Essa é a ação com maior impacto no caixa agora.`,
+        acao: "Abrir cobranças",
+        href: "/crm/pedidos",
+      });
+    } else if (resumo.aPrazoHoje > 0 || resumo.aPrazoBreve > 0) {
+      recomendacoes.push({
+        tipo: "alerta",
+        titulo: "Acompanhar vencimentos a prazo",
+        descricao: `${resumo.aPrazoHoje} vencem hoje e ${resumo.aPrazoBreve} vencem em até 2 dias.`,
+        acao: "Ver a receber",
+        href: "/crm/pedidos",
+      });
+    }
+
     if (resumoEstoque.semEstoque > 0 || resumoEstoque.baixoEstoque > 0) {
       recomendacoes.push({
         tipo: "alerta",
@@ -605,8 +726,12 @@ export default function CrmPage() {
     }
 
     const focoDoDia =
-      resumo.parados > 0
+      resumo.aPrazoVencidos > 0
+        ? "Cobrar vendas a prazo vencidas"
+        : resumo.parados > 0
         ? "Resolver pedidos parados"
+        : resumo.aPrazoHoje > 0
+        ? "Acompanhar vencimentos de hoje"
         : resumo.aguardando > 0
         ? "Converter pagamentos pendentes"
         : resumoEstoque.semEstoque > 0 || resumoEstoque.baixoEstoque > 0
@@ -926,6 +1051,8 @@ export default function CrmPage() {
         <section className="crmDashMetricsOneRow">
           <MetricCard icon="🔔" label="Novos pedidos" value={loading ? "..." : resumo.novos} hint="Ainda não visualizados" href="/crm/pedidos" active={resumo.novos > 0} />
           <MetricCard icon="⏳" label="Aguardando" value={loading ? "..." : resumo.aguardando} hint="Pix ou atendimento pendente" href="/crm/pedidos" active={resumo.aguardando > 0} />
+          <MetricCard icon="🔴" label="A prazo vencido" value={loading ? "..." : resumo.aPrazoVencidos} hint={formatBRL(resumo.totalAPrazoVencido)} href="/crm/pedidos" danger={resumo.aPrazoVencidos > 0} />
+          <MetricCard icon="📅" label="Vence hoje" value={loading ? "..." : resumo.aPrazoHoje} hint="Contas a receber" href="/crm/pedidos" active={resumo.aPrazoHoje > 0} />
           <MetricCard icon="⚠️" label="Parados" value={loading ? "..." : resumo.parados} hint="Follow-up prioritário" href="/crm/pedidos" danger={resumo.parados > 0} />
           <MetricCard icon="✅" label="Pagos" value={loading ? "..." : resumo.pagos} hint="Pedidos confirmados" href="/crm/pedidos" success={resumo.pagos > 0} />
           <MetricCard icon="💰" label="Faturamento (mês)" value={loading ? "..." : formatBRL(resumo.faturamentoMes)} hint="Pago, enviado ou entregue" active={resumo.faturamentoMes > 0} />
@@ -933,6 +1060,39 @@ export default function CrmPage() {
           <MetricCard icon="🧾" label="Ticket médio" value={loading ? "..." : formatBRL(resumo.ticketMedio)} hint="Média dos pedidos faturados" />
           <MetricCard icon="🔥" label="Conversão" value={loading ? "..." : `${resumo.conversao.toFixed(1)}%`} hint="Pedidos faturados no CRM" success={resumo.conversao >= 50} />
         </section>
+
+        {resumo.aPrazoPendentes > 0 ? (
+          <section className="crmDashPanel crmReceivablePanel">
+            <div className="crmDashPanelHead compact">
+              <div>
+                <div className="crmDashPanelKicker">A receber • Vendas a prazo</div>
+                <h2>Alertas de vencimento</h2>
+              </div>
+              <Link href="/crm/pedidos" className="crmDashSmallLink">Ver pedidos</Link>
+            </div>
+
+            <div className="crmReceivableSummary">
+              <span><b>{resumo.aPrazoPendentes}</b> pendente(s)</span>
+              <span><b>{resumo.aPrazoVencidos}</b> vencido(s)</span>
+              <span><b>{resumo.aPrazoHoje}</b> vencem hoje</span>
+              <span><b>{formatBRL(resumo.totalAPrazoPendente)}</b> a receber</span>
+            </div>
+
+            <div className="crmReceivableList">
+              {resumo.pedidosAPrazoCriticos.length ? (
+                resumo.pedidosAPrazoCriticos.map((p) => (
+                  <Link key={p.id} href="/crm/pedidos" className={`crmReceivableItem ${statusVencimentoPedido(p)}`}>
+                    <strong>#{pedidoCodigo(p)} • {p.clienteNome || p.nome || "Cliente"}</strong>
+                    <span>{vencimentoTextoPedido(p)}</span>
+                    <b>{formatBRL(calcularTotal(p))}</b>
+                  </Link>
+                ))
+              ) : (
+                <span className="crmReceivableEmpty">Nenhum vencimento crítico agora.</span>
+              )}
+            </div>
+          </section>
+        ) : null}
 
         <section className="crmBusinessGrid">
           <div className="crmDashPanel crmExecutivePanel">
@@ -2994,7 +3154,89 @@ export default function CrmPage() {
           .crmTrueAiAction { grid-template-columns: 38px minmax(0, 1fr); }
           .crmTrueAiAction > b { grid-column: 2; }
         }
-      `}</style>
+        .crmReceivablePanel {
+          margin-top: 14px;
+        }
+        .crmReceivableSummary {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 10px;
+          margin-top: 10px;
+        }
+        .crmReceivableSummary span {
+          border-radius: 14px;
+          border: 1px solid rgba(200, 162, 106, 0.18);
+          background: rgba(200, 162, 106, 0.06);
+          padding: 10px 12px;
+          font-size: 12px;
+          font-weight: 850;
+          color: rgba(244, 241, 235, 0.76);
+        }
+        .crmReceivableSummary b {
+          display: block;
+          color: #fff;
+          font-size: 18px;
+          margin-bottom: 3px;
+        }
+        .crmReceivableList {
+          display: grid;
+          gap: 8px;
+          margin-top: 10px;
+        }
+        .crmReceivableItem {
+          display: grid;
+          grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+          gap: 10px;
+          align-items: center;
+          text-decoration: none;
+          color: inherit;
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(0, 0, 0, 0.16);
+          padding: 10px 12px;
+        }
+        .crmReceivableItem.vencido {
+          border-color: rgba(255, 90, 90, 0.34);
+          background: rgba(255, 90, 90, 0.08);
+        }
+        .crmReceivableItem.hoje {
+          border-color: rgba(255, 214, 102, 0.34);
+          background: rgba(255, 214, 102, 0.08);
+        }
+        .crmReceivableItem.breve {
+          border-color: rgba(255, 157, 92, 0.34);
+          background: rgba(255, 157, 92, 0.08);
+        }
+        .crmReceivableItem strong,
+        .crmReceivableItem span,
+        .crmReceivableItem b {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .crmReceivableItem span {
+          font-size: 12px;
+          opacity: 0.76;
+        }
+        .crmReceivableItem b {
+          color: rgba(200, 162, 106, 0.98);
+        }
+        .crmReceivableEmpty {
+          opacity: 0.7;
+          font-size: 13px;
+        }
+        @media (max-width: 900px) {
+          .crmReceivableSummary {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .crmReceivableItem {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}
+
+      </style>
     </main>
   );
 }

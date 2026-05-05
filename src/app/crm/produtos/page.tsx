@@ -511,7 +511,6 @@ export default function ProdutosPage() {
     let totalDisponivel = 0;
     let valorEstoqueVenda = 0;
     let valorEstoqueCompra = 0;
-    let valorEstoqueDisponivel = 0;
 
     for (const p of filtered) {
       if (p.ativo !== false) ativos++;
@@ -524,7 +523,6 @@ export default function ProdutosPage() {
       if (disp <= 0) semEstoqueDisp++;
       valorEstoqueVenda += (Number(p.precoVenda) || 0) * est;
       valorEstoqueCompra += (Number(p.precoCompra) || 0) * est;
-      valorEstoqueDisponivel += (Number(p.precoCompra) || 0) * disp;
     }
 
     const margemEstimada = Math.max(0, valorEstoqueVenda - valorEstoqueCompra);
@@ -532,7 +530,6 @@ export default function ProdutosPage() {
       valorEstoqueCompra > 0 ? (margemEstimada / valorEstoqueCompra) * 100 : 0;
     const margemVendaPercentual =
       valorEstoqueVenda > 0 ? (margemEstimada / valorEstoqueVenda) * 100 : 0;
-    const margemPercentual = markupPercentual;
 
     return {
       total,
@@ -543,13 +540,37 @@ export default function ProdutosPage() {
       totalDisponivel,
       valorEstoqueVenda,
       valorEstoqueCompra,
-      valorEstoqueDisponivel,
       margemEstimada,
       markupPercentual,
       margemVendaPercentual,
-      margemPercentual,
     };
   }, [filtered]);
+
+  const margemFormulario = useMemo(() => {
+    const custo = Math.max(0, toNum(fCompra));
+    const venda = Math.max(0, toNum(fVenda));
+    const estoque = Math.max(0, Math.floor(toNum(fEstoque)));
+    const lucroUnitario = venda - custo;
+    const markupPercentual = custo > 0 ? (lucroUnitario / custo) * 100 : 0;
+    const margemVendaPercentual = venda > 0 ? (lucroUnitario / venda) * 100 : 0;
+    const lucroTotalEstoque = lucroUnitario * estoque;
+    const custoTotalEstoque = custo * estoque;
+    const vendaTotalEstoque = venda * estoque;
+    const margemNegativa = lucroUnitario < 0;
+
+    return {
+      custo,
+      venda,
+      estoque,
+      lucroUnitario,
+      markupPercentual,
+      margemVendaPercentual,
+      lucroTotalEstoque,
+      custoTotalEstoque,
+      vendaTotalEstoque,
+      margemNegativa,
+    };
+  }, [fCompra, fVenda, fEstoque]);
 
   return (
     <main className="page">
@@ -690,12 +711,9 @@ export default function ProdutosPage() {
             <strong>{formatBRL(totals.valorEstoqueVenda)}</strong>
           </div>
           <div className="miniKpi miniKpiGold">
-            <span>Valor estoque</span>
+            <span>Custo estoque</span>
             <strong>{formatBRL(totals.valorEstoqueCompra)}</strong>
-          </div>
-          <div className="miniKpi miniKpiGold">
-            <span>Estoque disponível</span>
-            <strong>{formatBRL(totals.valorEstoqueDisponivel)}</strong>
+            <small className="kpiSub">Investido em estoque</small>
           </div>
           <div className="miniKpi miniKpiGold">
             <span>Lucro estoque</span>
@@ -732,8 +750,14 @@ export default function ProdutosPage() {
               const disp = Math.max(0, est - res);
               const bloqueado = p.ativo === false;
               const lucroUnitario = Number(p.precoVenda || 0) - Number(p.precoCompra || 0);
-              const markupUnitario = Number(p.precoCompra || 0) > 0 ? (lucroUnitario / Number(p.precoCompra || 0)) * 100 : 0;
-              const margemVendaUnitario = Number(p.precoVenda || 0) > 0 ? (lucroUnitario / Number(p.precoVenda || 0)) * 100 : 0;
+              const markupUnitario =
+                Number(p.precoCompra || 0) > 0
+                  ? (lucroUnitario / Number(p.precoCompra || 0)) * 100
+                  : 0;
+              const margemVendaUnitario =
+                Number(p.precoVenda || 0) > 0
+                  ? (lucroUnitario / Number(p.precoVenda || 0)) * 100
+                  : 0;
               const categoriaLabel = String(p.categoria || "—")
                 .replace("kits-presente", "Kits")
                 .replace("masculino", "Masc.")
@@ -789,7 +813,7 @@ export default function ProdutosPage() {
                     <div className="productPriceLine">
                       <span>Venda <b>{formatBRL(Number(p.precoVenda || 0))}</b></span>
                       <span>Compra <b>{formatBRL(Number(p.precoCompra || 0))}</b></span>
-                      <span>Lucro <b>{formatBRL(Math.max(0, lucroUnitario))}</b></span>
+                      <span>Lucro <b>{formatBRL(lucroUnitario)}</b></span>
                       <span>Markup <b>{markupUnitario.toFixed(0)}%</b></span>
                       <span>Venda <b>{margemVendaUnitario.toFixed(0)}%</b></span>
                     </div>
@@ -957,6 +981,32 @@ export default function ProdutosPage() {
                   value={fVenda}
                   onChange={(e) => setFVenda(e.target.value)}
                 />
+              </div>
+
+              <div className={margemFormulario.margemNegativa ? "autoMarginBox autoMarginDanger" : "autoMarginBox"}>
+                <div className="autoMarginTop">
+                  <span>Margem automática</span>
+                  <strong>{formatBRL(margemFormulario.lucroUnitario)}</strong>
+                </div>
+
+                <div className="autoMarginGrid">
+                  <div>
+                    <small>Markup sobre custo</small>
+                    <b>{margemFormulario.markupPercentual.toFixed(0)}%</b>
+                  </div>
+                  <div>
+                    <small>Margem sobre venda</small>
+                    <b>{margemFormulario.margemVendaPercentual.toFixed(0)}%</b>
+                  </div>
+                  <div>
+                    <small>Lucro no estoque</small>
+                    <b>{formatBRL(margemFormulario.lucroTotalEstoque)}</b>
+                  </div>
+                </div>
+
+                <p>
+                  Custo total: {formatBRL(margemFormulario.custoTotalEstoque)} • Venda total: {formatBRL(margemFormulario.vendaTotalEstoque)}
+                </p>
               </div>
 
               <div className="field">
@@ -1191,7 +1241,7 @@ export default function ProdutosPage() {
         .smartKpis {
           margin-top: 10px;
           display: grid;
-          grid-template-columns: repeat(9, minmax(0, 1fr));
+          grid-template-columns: repeat(7, minmax(0, 1fr));
           gap: 8px;
         }
         .miniKpi {
@@ -1219,6 +1269,13 @@ export default function ProdutosPage() {
           overflow: hidden;
           text-overflow: ellipsis;
         }
+        .miniKpiGold strong {
+          color: rgba(200, 162, 106, 0.98);
+        }
+        .miniKpiWarn {
+          border-color: rgba(255, 157, 92, 0.28);
+          background: rgba(255, 157, 92, 0.07);
+        }
         .miniKpi .kpiSub {
           display: block;
           margin-top: 3px;
@@ -1227,12 +1284,74 @@ export default function ProdutosPage() {
           color: rgba(255, 255, 255, 0.62);
           white-space: normal;
         }
-        .miniKpiGold strong {
-          color: rgba(200, 162, 106, 0.98);
+        .autoMarginBox {
+          grid-column: 1 / -1;
+          border-radius: 16px;
+          border: 1px solid rgba(200, 162, 106, 0.24);
+          background:
+            radial-gradient(circle at top left, rgba(200, 162, 106, 0.16), transparent 34%),
+            rgba(200, 162, 106, 0.07);
+          padding: 12px;
         }
-        .miniKpiWarn {
-          border-color: rgba(255, 157, 92, 0.28);
-          background: rgba(255, 157, 92, 0.07);
+        .autoMarginDanger {
+          border-color: rgba(255, 120, 120, 0.38);
+          background:
+            radial-gradient(circle at top left, rgba(255, 120, 120, 0.16), transparent 34%),
+            rgba(255, 120, 120, 0.07);
+        }
+        .autoMarginTop {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          align-items: center;
+        }
+        .autoMarginTop span {
+          font-size: 11px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          opacity: 0.78;
+          font-weight: 950;
+        }
+        .autoMarginTop strong {
+          color: rgba(200, 162, 106, 0.98);
+          font-size: 20px;
+          font-weight: 1000;
+        }
+        .autoMarginDanger .autoMarginTop strong {
+          color: #ffd1d1;
+        }
+        .autoMarginGrid {
+          margin-top: 10px;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .autoMarginGrid div {
+          min-width: 0;
+          border-radius: 13px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(0, 0, 0, 0.16);
+          padding: 9px;
+        }
+        .autoMarginGrid small {
+          display: block;
+          opacity: 0.62;
+          font-size: 10px;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+        }
+        .autoMarginGrid b {
+          display: block;
+          margin-top: 4px;
+          color: #fff;
+          font-size: 15px;
+        }
+        .autoMarginBox p {
+          margin: 9px 0 0;
+          opacity: 0.68;
+          font-size: 12px;
+          line-height: 1.35;
         }
 
         @media (max-width: 1280px) {
@@ -2343,7 +2462,8 @@ export default function ProdutosPage() {
           .smartKpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
           .productActions { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
           .productStockLine,
-          .productPriceLine { grid-template-columns: 1fr !important; }
+          .productPriceLine,
+          .autoMarginGrid { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </main>
