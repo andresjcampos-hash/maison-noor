@@ -143,6 +143,64 @@ async function asaasFetch(path: string, payload: any) {
   });
 }
 
+
+async function salvarClienteCartaoAutomatico(params: {
+  nome: string;
+  email: string;
+  cpfCnpj: string;
+  telefone: string;
+  numeroPedido: string;
+  valor: number;
+  status: "em_conversa" | "cartao_recusado" | "comprou" | "em_analise";
+  asaasCustomerId?: string | null;
+  asaasPaymentId?: string | null;
+  asaasStatus?: string | null;
+  erroTecnico?: any;
+}) {
+  try {
+    const db = admin.apps.length ? admin.firestore() : null;
+    if (!db || !params.cpfCnpj) return;
+
+    const agoraIso = new Date().toISOString();
+    const statusCliente = params.status === "comprou" ? "comprou" : params.status;
+
+    const payloadBase = {
+      cpf: params.cpfCnpj,
+      cpfCnpj: params.cpfCnpj,
+      nome: params.nome,
+      email: params.email,
+      telefone: params.telefone,
+      whatsapp: params.telefone,
+      origem: "checkout-site-cartao",
+      status: statusCliente,
+      ultimoPedido: params.numeroPedido,
+      ultimoValor: params.valor,
+      ultimaFormaPagamento: "cartao",
+      asaasCustomerId: params.asaasCustomerId || null,
+      asaasPaymentId: params.asaasPaymentId || null,
+      asaasStatus: params.asaasStatus || null,
+      erroCartao: params.erroTecnico || null,
+      atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: agoraIso,
+      criadoEm: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: agoraIso,
+    };
+
+    await db.collection("clientes").doc(params.cpfCnpj).set(payloadBase, { merge: true });
+
+    await db.collection("clientes_vip").doc(params.cpfCnpj).set(
+      {
+        ...payloadBase,
+        preferencia: "Não informado",
+        estilo: "Não informado",
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.error("Erro ao salvar cliente automático do cartão no CRM:", error);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -264,6 +322,16 @@ export async function POST(req: Request) {
     if (!cvv || cvv.length < 3) {
       return NextResponse.json({ erro: true, mensagem: "CVV inválido." }, { status: 400 });
     }
+
+    await salvarClienteCartaoAutomatico({
+      nome,
+      email,
+      cpfCnpj,
+      telefone,
+      numeroPedido,
+      valor,
+      status: "em_conversa",
+    });
 
     const customerPayload: any = {
       name: nome,
@@ -409,6 +477,20 @@ export async function POST(req: Request) {
           );
       }
 
+      await salvarClienteCartaoAutomatico({
+        nome,
+        email,
+        cpfCnpj,
+        telefone,
+        numeroPedido,
+        valor,
+        status: "cartao_recusado",
+        asaasCustomerId: customerData.id,
+        asaasPaymentId: paymentData?.id || null,
+        asaasStatus: paymentData?.status || "RECUSADO",
+        erroTecnico: paymentData || null,
+      });
+
       return NextResponse.json(
         {
           erro: true,
@@ -468,6 +550,20 @@ export async function POST(req: Request) {
           { merge: true }
         );
     }
+
+    await salvarClienteCartaoAutomatico({
+      nome,
+      email,
+      cpfCnpj,
+      telefone,
+      numeroPedido,
+      valor,
+      status: pagamentoAprovado ? "comprou" : pagamentoEmAnalise ? "em_analise" : "em_conversa",
+      asaasCustomerId: customerData.id,
+      asaasPaymentId: paymentData?.id || null,
+      asaasStatus: statusAsaas || paymentData?.status || null,
+      erroTecnico: pagamentoAprovado || pagamentoEmAnalise ? null : paymentData || null,
+    });
 
     return NextResponse.json({
       ok: true,
