@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 
 // 🔌 Firebase
 import { db } from "@/lib/firebase";
@@ -659,6 +660,11 @@ export default function ProdutosPage() {
             <button className="btn btnPrimaryMini" onClick={openNew} type="button">
               + Novo
             </button>
+
+            <Link href="/crm/etiquetas" className="btn btnEtiqueta">
+              Emitir Etiquetas
+            </Link>
+
             <button className="btn" onClick={refresh} type="button">
               Atualizar
             </button>
@@ -1125,6 +1131,25 @@ export default function ProdutosPage() {
           cursor: pointer;
           font-weight: 900;
           color: #f2f2f2;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .btnEtiqueta {
+          min-height: 42px;
+          padding: 0 12px;
+          border-radius: 14px;
+          border: 1px solid rgba(200, 162, 106, 0.25);
+          background: rgba(200, 162, 106, 0.08);
+          cursor: pointer;
+          font-weight: 900;
+          color: #f2f2f2;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .toast {
