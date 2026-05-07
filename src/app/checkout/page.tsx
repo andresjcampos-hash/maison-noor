@@ -672,7 +672,7 @@ export default function CheckoutPage() {
       await limparSacolaAposPedido();
 
       setCheckoutFeedback(`Pedido ${pedidoNumeroTexto} salvo com sucesso.`);
-      window.open(`https://wa.me/5512982627108?text=${texto}`, "_blank");
+      window.open(`https://wa.me/5512982389658?text=${texto}`, "_blank");
 
       if (typeof window !== "undefined") {
         const target = `/checkout/sucesso?pedido=${encodeURIComponent(String(pedidoSalvo?.numeroPedido || ""))}&forma=whatsapp`;
@@ -681,7 +681,7 @@ export default function CheckoutPage() {
     } catch (error) {
       console.error("Erro ao salvar pedido:", error);
       setCheckoutFeedback("Não foi possível salvar o pedido automaticamente. Você ainda pode finalizar pelo WhatsApp.");
-      window.open(`https://wa.me/5512982627108?text=${fallbackTexto}`, "_blank");
+      window.open(`https://wa.me/5512982389658?text=${fallbackTexto}`, "_blank");
     } finally {
       setSavingOrder(false);
     }

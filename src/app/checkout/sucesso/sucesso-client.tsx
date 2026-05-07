@@ -98,7 +98,7 @@ export default function CheckoutSucessoClient() {
       `Olá! Quero continuar o atendimento do pedido ${numeroTexto} na Maison Noor.`
     );
 
-    return `https://wa.me/5512982627108?text=${texto}`;
+    return `https://wa.me/5512982389658?text=${texto}`;
   }, [numeroPedido]);
 
   return (

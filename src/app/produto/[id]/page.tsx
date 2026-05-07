@@ -451,7 +451,7 @@ Pode me passar mais detalhes e as opções de pagamento?`);
 
     if (typeof window !== "undefined") {
       window.setTimeout(() => {
-        window.open(`https://wa.me/5512982627108?text=${mensagem}`, "_blank");
+        window.open(`https://wa.me/5512982389658?text=${mensagem}`, "_blank");
       }, 180);
     }
   }
@@ -615,7 +615,7 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                   </div>
 
                   <a
-                    href={`https://wa.me/5512982627108?text=${encodeURIComponent(
+                    href={`https://wa.me/5512982389658?text=${encodeURIComponent(
                       `Olá! Tenho dúvidas sobre o perfume ${produtoPronto.nome}. Pode me ajudar a escolher?`
                     )}`}
                     target="_blank"
@@ -829,7 +829,7 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               </button>
 
               <a
-                href={`https://wa.me/5512982627108?text=${encodeURIComponent(
+                href={`https://wa.me/5512982389658?text=${encodeURIComponent(
                   produtoPronto.disponivel <= 0
                     ? `Olá! Vi o perfume ${produtoPronto.nome} no site, mas apareceu como indisponível. Ele vai voltar ao estoque?`
                     : mensagemWhatsapp
@@ -1076,7 +1076,7 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               Comprar agora
             </button>
             <a
-              href={`https://wa.me/5512982627108?text=${encodeURIComponent(
+              href={`https://wa.me/5512982389658?text=${encodeURIComponent(
                 produtoPronto.disponivel <= 0
                   ? `Olá! Vi o perfume ${produtoPronto.nome} no site, mas apareceu como indisponível. Ele vai voltar ao estoque?`
                   : mensagemWhatsapp

@@ -1300,7 +1300,7 @@
                     </a>
 
                     <a
-                      href="https://wa.me/5512982627108?text=Olá! Preciso de ajuda com a minha conta Maison Noor."
+                      href="https://wa.me/5512982389658?text=Olá! Preciso de ajuda com a minha conta Maison Noor."
                       target="_blank"
                       rel="noreferrer"
                       style={styles.quickActionCard}
@@ -1632,7 +1632,7 @@
                       </div>
 
                       <a
-                        href="https://wa.me/5512982627108?text=Olá! Preciso de ajuda com meu pedido na Maison Noor."
+                        href="https://wa.me/5512982389658?text=Olá! Preciso de ajuda com meu pedido na Maison Noor."
                         target="_blank"
                         rel="noreferrer"
                         style={styles.softInfoCardLink}
@@ -1773,7 +1773,7 @@
 
                           <div style={{ ...styles.orderActionsRow, gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))" }}>
                             <a
-                              href={`https://wa.me/5512982627108?text=${encodeURIComponent(
+                              href={`https://wa.me/5512982389658?text=${encodeURIComponent(
                                 pedido.status === "expirado_pagamento"
                                   ? `Olá! Quero reativar o pagamento do pedido #${pedido.numero} na Maison Noor.`
                                   : pedido.status === "aguardando_pagamento"
@@ -1801,7 +1801,7 @@
 
                             {pedido.status === "expirado_pagamento" ? (
                               <a
-                                href={`https://wa.me/5512982627108?text=${encodeURIComponent(`Olá! Quero falar com a Maison Noor sobre o pedido expirado #${pedido.numero}.`)}`}
+                                href={`https://wa.me/5512982389658?text=${encodeURIComponent(`Olá! Quero falar com a Maison Noor sobre o pedido expirado #${pedido.numero}.`)}`}
                                 target="_blank"
                                 rel="noreferrer"
                                 style={styles.softInfoCardLinkSecondary}

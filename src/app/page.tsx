@@ -265,7 +265,7 @@ function getPagBankLink(produto: ProdutoFirebase) {
 }
 
 function getFallbackPagamentoWhatsapp(produto: any) {
-  return `https://wa.me/5512982627108?text=${encodeURIComponent(
+  return `https://wa.me/5512982389658?text=${encodeURIComponent(
     `Olá! Quero comprar o perfume ${produto.nome} 😍
 
 Vi no site e fiquei interessado.
@@ -814,7 +814,7 @@ export default function HomePage() {
     );
 
     window.setTimeout(() => {
-      window.open(`https://wa.me/5512982627108?text=${mensagem}`, "_blank");
+      window.open(`https://wa.me/5512982389658?text=${mensagem}`, "_blank");
     }, 900);
   }
 
@@ -1318,7 +1318,7 @@ export default function HomePage() {
                   Instagram
                 </a>
                 <a
-                  href="https://wa.me/5512982627108"
+                  href="https://wa.me/5512982389658"
                   target="_blank"
                   rel="noreferrer"
                   style={styles.mobileSocialLink}
@@ -1612,7 +1612,7 @@ export default function HomePage() {
                       </button>
 
                       <a
-                        href={`https://wa.me/5512982627108?text=${encodeURIComponent(
+                        href={`https://wa.me/5512982389658?text=${encodeURIComponent(
                           `Olá! Tenho interesse no presente ${produto.nome} 😍
 
 Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
@@ -1850,10 +1850,10 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
                       <a
                         href={
                           produto.indisponivel
-                            ? `https://wa.me/5512982627108?text=${encodeURIComponent(
+                            ? `https://wa.me/5512982389658?text=${encodeURIComponent(
                                 `Olá! Tenho interesse no produto ${produto.nome}, mas vi que ele está indisponível no site. Pode me avisar sobre reposição ou alternativas?`
                               )}`
-                            : `https://wa.me/5512982627108?text=${encodeURIComponent(
+                            : `https://wa.me/5512982389658?text=${encodeURIComponent(
                                 `Olá! Quero comprar o perfume ${produto.nome} 😍
 
 Vi no site e fiquei interessado.
@@ -2213,7 +2213,7 @@ Pode me passar as opções de pagamento?`
             <div style={{ ...styles.footerColumn, alignItems: isMobile ? "center" : "flex-start" }}>
               <h4 style={styles.footerHeading}><span style={styles.footerHeadingIcon}>✦</span> Atendimento</h4>
               <a href="https://instagram.com/maison.noor.parfums" target="_blank" rel="noreferrer" style={styles.footerLink}>Instagram</a>
-              <a href="https://wa.me/5512982627108" target="_blank" rel="noreferrer" style={styles.footerLink}>WhatsApp</a>
+              <a href="https://wa.me/5512982389658" target="_blank" rel="noreferrer" style={styles.footerLink}>WhatsApp</a>
               <span style={styles.footerMutedText}>Seg a sáb • atendimento consultivo</span>
               <a href="/login" style={styles.footerLink}>CRM</a>
             </div>
@@ -2455,7 +2455,7 @@ Pode me passar as opções de pagamento?`
       )}
 
       <a
-        href="https://wa.me/5512982627108?text=Olá! Vim pelo site da Maison Noor e gostaria de atendimento."
+        href="https://wa.me/5512982389658?text=Olá! Vim pelo site da Maison Noor e gostaria de atendimento."
         target="_blank"
         rel="noreferrer"
         style={{

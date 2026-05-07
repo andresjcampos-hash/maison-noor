@@ -313,7 +313,7 @@ export default function CheckoutPixPage() {
             </Link>
           ) : (
             <a
-              href="https://wa.me/5512982627108"
+              href="https://wa.me/5512982389658"
               target="_blank"
               rel="noreferrer"
               style={styles.darkButton}
