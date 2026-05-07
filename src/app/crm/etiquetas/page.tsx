@@ -245,8 +245,6 @@ export default function EtiquetasPage() {
                   <div class="fitaName">${nomeProduto(produto)}</div>
                   <div class="fitaMeta">${marcaProduto(produto)}</div>
                 </div>
-
-                <div class="fitaPrice">${moeda(precoProduto(produto))}</div>
               </div>
 
               <div class="fitaRight">
@@ -254,11 +252,8 @@ export default function EtiquetasPage() {
                   <img class="fitaQr" src="${item.qrCode}" />
                 </div>
                 <div class="fitaCta">
-                  <div class="ctaIcon">▣</div>
-                  <div class="ctaText">
-                    <strong>ESCANEIE</strong>
-                    <span>E COMPRE</span>
-                  </div>
+                  <strong>ESCANEIE</strong>
+                  <span>E COMPRE</span>
                 </div>
               </div>
             </div>
@@ -401,7 +396,8 @@ export default function EtiquetasPage() {
                 min-width: 0;
                 display: flex;
                 flex-direction: column;
-                justify-content: space-between;
+                justify-content: center;
+                gap: 0.8mm;
               }
 
               .brandRow {
@@ -465,13 +461,6 @@ export default function EtiquetasPage() {
                 color: #6b5b42;
               }
 
-              .fitaPrice {
-                font-size: 11px;
-                font-weight: 950;
-                color: #111111;
-                line-height: 1;
-              }
-
               .fitaRight {
                 width: 38mm;
                 display: flex;
@@ -507,53 +496,29 @@ export default function EtiquetasPage() {
                 background: #080808;
                 border: 1px solid #d7b06d;
                 display: flex;
-                flex-direction: row;
+                flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                gap: 1.15mm;
-                text-align: left;
+                text-align: center;
                 line-height: 1;
                 padding: 0.8mm 1mm;
               }
 
-              .ctaIcon {
-                width: 5.2mm;
-                height: 7.2mm;
-                border-radius: 0.8mm;
-                border: 0.45mm solid #d7b06d;
-                color: #d7b06d;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 4.2px;
-                font-weight: 950;
-                flex-shrink: 0;
-              }
-
-              .ctaText {
-                display: flex;
-                flex-direction: column;
-                align-items: flex-start;
-                justify-content: center;
-              }
-
               .fitaCta strong {
                 display: block;
-                font-size: 6.2px;
+                font-size: 6.1px;
                 font-weight: 950;
                 color: #ffffff;
-                letter-spacing: 0.045em;
-                white-space: nowrap;
+                letter-spacing: 0.06em;
               }
 
               .fitaCta span {
                 display: block;
-                margin-top: 0.65mm;
-                font-size: 6.3px;
+                margin-top: 0.7mm;
+                font-size: 6.4px;
                 font-weight: 950;
                 color: #d7b06d;
-                letter-spacing: 0.035em;
-                white-space: nowrap;
+                letter-spacing: 0.04em;
               }
 
               @media print {
@@ -757,18 +722,13 @@ export default function EtiquetasPage() {
                           <div className="previewName">{nomeProduto(produto)}</div>
                           <div className="previewMeta">{marcaProduto(produto)}</div>
                         </div>
-
-                        <div className="previewPrice">{moeda(precoProduto(produto))}</div>
                       </div>
 
                       <div className="previewFitaRight">
                         <div className="previewQr">QR</div>
                         <div className="previewCta">
-                          <div className="previewCtaIcon">▣</div>
-                          <div className="previewCtaText">
-                            <strong>ESCANEIE</strong>
-                            <span>E COMPRE</span>
-                          </div>
+                          <strong>ESCANEIE</strong>
+                          <span>E COMPRE</span>
                         </div>
                       </div>
                     </>
@@ -1131,7 +1091,8 @@ export default function EtiquetasPage() {
           min-width: 0;
           display: flex;
           flex-direction: column;
-          justify-content: space-between;
+          justify-content: center;
+          gap: 6px;
         }
 
         .previewBrand {
@@ -1190,12 +1151,6 @@ export default function EtiquetasPage() {
           color: #6b5b42;
         }
 
-        .previewPrice {
-          font-size: 20px;
-          font-weight: 950;
-          line-height: 1;
-        }
-
         .previewFitaRight {
           width: 150px;
           display: flex;
@@ -1228,51 +1183,26 @@ export default function EtiquetasPage() {
           background: #080808;
           border: 1px solid #d7b06d;
           display: flex;
-          flex-direction: row;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          text-align: left;
-          line-height: 1;
-          padding: 5px 6px;
-        }
-
-        .previewCtaIcon {
-          width: 20px;
-          height: 28px;
-          border-radius: 4px;
-          border: 2px solid #d7b06d;
-          color: #d7b06d;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 7px;
-          font-weight: 950;
-          flex-shrink: 0;
-        }
-
-        .previewCtaText {
-          display: flex;
           flex-direction: column;
-          align-items: flex-start;
+          align-items: center;
           justify-content: center;
+          text-align: center;
+          line-height: 1;
         }
 
         .previewCta strong {
-          font-size: 11px;
+          font-size: 13px;
           font-weight: 950;
           color: #ffffff;
-          letter-spacing: 0.035em;
-          white-space: nowrap;
+          letter-spacing: 0.05em;
         }
 
         .previewCta span {
           margin-top: 3px;
-          font-size: 11px;
+          font-size: 13px;
           font-weight: 950;
           color: #d7b06d;
-          letter-spacing: 0.025em;
-          white-space: nowrap;
+          letter-spacing: 0.04em;
         }
 
         .empty {
