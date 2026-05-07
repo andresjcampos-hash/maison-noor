@@ -90,6 +90,17 @@ function IconProdutos() {
   );
 }
 
+function IconRelatorios() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M5 3h14a2 2 0 0 1 2 2v16H3V5a2 2 0 0 1 2-2Zm2 4v2h10V7H7Zm0 4v2h10v-2H7Zm0 4v2h6v-2H7Z"
+      />
+    </svg>
+  );
+}
+
 export default function Nav() {
   const pathname = usePathname();
   const router = useRouter();
@@ -103,6 +114,7 @@ export default function Nav() {
       { href: "/crm/pedidos", label: "Pedidos", icon: <IconPedidos /> },
       { href: "/crm/financeiro", label: "Financeiro", icon: <IconFinanceiro /> },
       { href: "/crm/produtos", label: "Produtos", icon: <IconProdutos /> },
+      { href: "/crm/relatorios", label: "Relatórios", icon: <IconRelatorios /> },
     ],
     []
   );
