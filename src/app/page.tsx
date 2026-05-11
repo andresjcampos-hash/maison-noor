@@ -650,33 +650,33 @@ export default function HomePage() {
   const heroBanners = useMemo<HeroBanner[]>(() => {
     return [
       {
-        id: "maes-1",
-        eyebrow: "Campanha Maison Noor",
-        title: "Dia das Mães com\nfragrâncias inesquecíveis",
-        subtitle: "Perfumes árabes premium para transformar momentos especiais em memórias marcantes.",
-        ctaLabel: "Ver presentes",
-        ctaHref: "#produtos",
-        image: "/banners/dia-das-maes-1.jpg",
-        align: "left",
-      },
-      {
-        id: "maes-2",
-        eyebrow: "Seleção premium",
-        title: "Selecionado para\nsurpreender com\nsofisticação\ne presença.",
-        subtitle: "Curadoria Maison Noor com fragrâncias elegantes, intensas e presença inesquecível.",
+        id: "namorados-1",
+        eyebrow: "Dia dos Namorados",
+        title: "Prepare-se para\nsurpreender quem faz\nseu coração acelerar.",
+        subtitle: "O Dia dos Namorados Maison Noor está chegando com fragrâncias inesquecíveis.",
         ctaLabel: "Escolher presente",
         ctaHref: "#produtos",
-        image: "/banners/dia-das-maes-2.jpg",
+        image: "/banners/banner-namorados-maison-noor.jpg",
         align: "left",
       },
       {
-        id: "maes-3",
-        eyebrow: "Condição especial",
-        title: "Aceitamos PIX e\nCartões de Crédito\npara o seu presente ideal.",
-        subtitle: "Finalize com atendimento humano, pedido salvo e acompanhamento pela sua conta.",
+        id: "colecao-2",
+        eyebrow: "Coleção Maison Noor",
+        title: "Fragrâncias que\nimpressionam.",
+        subtitle: "Perfumes árabes selecionados para quem busca presença, elegância e personalidade.",
+        ctaLabel: "Explorar coleção",
+        ctaHref: "#produtos",
+        image: "/banners/perfumes.jpg",
+        align: "left",
+      },
+      {
+        id: "compra-segura-3",
+        eyebrow: "Compra segura",
+        title: "Sofisticação com\natendimento VIP.",
+        subtitle: "Escolha sua fragrância, adicione à sacola e finalize com segurança pelo checkout ou WhatsApp.",
         ctaLabel: "Comprar agora",
         ctaHref: "#produtos",
-        image: "/banners/dia-das-maes-3.jpg",
+        image: "/banners/perfumes.png",
         align: "left",
       },
     ];
@@ -1371,7 +1371,7 @@ export default function HomePage() {
               textAlign: heroAtual?.align === "center" ? "center" : "left",
               justifyContent: "flex-start",
               backgroundImage: heroAtual?.image
-                ? `linear-gradient(90deg, rgba(12,10,8,0.74) 0%, rgba(12,10,8,0.44) 34%, rgba(12,10,8,0.12) 100%), url(${heroAtual.image})`
+                ? `linear-gradient(90deg, rgba(12,10,8,0.84) 0%, rgba(12,10,8,0.56) 34%, rgba(12,10,8,0.18) 100%), url(${heroAtual.image})`
                 : undefined,
               animation: "maisonHeroZoom 9s ease-in-out infinite alternate",
             }}
@@ -1466,17 +1466,17 @@ export default function HomePage() {
         </div>
       </section>
 
-      {produtosPresentes.length > 0 && (
+      {false && produtosPresentes.length > 0 && (
         <section
           id="presentes"
           style={{
             ...styles.deferSection,
             ...styles.section,
             padding: isMobile
-              ? "0 14px 28px"
+              ? "18px 14px 32px"
               : isTablet
-              ? "0 20px 32px"
-              : "0 28px 34px",
+              ? "20px 20px 38px"
+              : "24px 28px 44px",
           }}
         >
           <div style={styles.presentesSectionCard}>
@@ -1487,7 +1487,7 @@ export default function HomePage() {
               }}
             >
               <div>
-                <p style={styles.kicker}>Especial Dia das Mães</p>
+                <p style={styles.kicker}>Especial Dia dos Namorados</p>
                 <h2
                   style={{
                     ...styles.sectionTitle,
@@ -1495,10 +1495,10 @@ export default function HomePage() {
                     marginBottom: "6px",
                   }}
                 >
-                  Cestas e kits para presentear
+                  Fragrâncias para marcar momentos inesquecíveis
                 </h2>
                 <p style={styles.presentesSubtitle}>
-                  Seleções prontas para surpreender com elegância, perfume e apresentação premium.
+                  Presentes sofisticados para transformar o Dia dos Namorados em uma lembrança inesquecível.
                 </p>
               </div>
 
@@ -1508,7 +1508,7 @@ export default function HomePage() {
                   onClick={() => selecionarCategoria("Presentes")}
                   style={styles.presentesViewAllButton}
                 >
-                  Ver todos os presentes
+                  Ver presentes especiais
                 </button>
               )}
             </div>
@@ -1533,6 +1533,22 @@ export default function HomePage() {
                     cursor: "pointer",
                   }}
                   onClick={() => abrirProduto(produto.id)}
+                  onMouseEnter={(e) => {
+                    if (isMobile) return;
+                    e.currentTarget.style.transform = "translateY(-8px)";
+                    e.currentTarget.style.boxShadow = "0 24px 46px rgba(80, 48, 32, 0.14)";
+                    e.currentTarget.style.borderColor = "#D5A65E";
+                    const img = e.currentTarget.querySelector("img") as HTMLImageElement | null;
+                    if (img) img.style.transform = "scale(1.05)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (isMobile) return;
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 16px 34px rgba(48,34,20,0.08)";
+                    e.currentTarget.style.borderColor = produto.indisponivel ? "#E7D8D0" : "#EADBC8";
+                    const img = e.currentTarget.querySelector("img") as HTMLImageElement | null;
+                    if (img) img.style.transform = "scale(1)";
+                  }}
                 >
                   <Link href={`/produto/${produto.id}`} style={styles.productImageLink}>
                     <div
@@ -1541,7 +1557,7 @@ export default function HomePage() {
                         height: isMobile ? "180px" : "170px",
                       }}
                     >
-                      <span style={styles.presentesBadge}>Presente especial</span>
+                      <span style={styles.presentesBadge}>Edição romântica</span>
 
                       <img
                   decoding="async"
@@ -1561,7 +1577,7 @@ export default function HomePage() {
 
                   <div style={styles.cardContent}>
                     <div style={styles.cardTopBlock}>
-                      <p style={styles.cardBrand}>Kit Presente Maison Noor</p>
+                      <p style={styles.cardBrand}>Seleção Romântica Maison Noor</p>
 
                       <Link href={`/produto/${produto.id}`} style={styles.productTitleLink}>
                         <h3
@@ -1576,7 +1592,7 @@ export default function HomePage() {
                       </Link>
 
                       <p style={styles.presentesDescription}>
-                        Ideal para surpreender no Dia das Mães com um presente elegante e pronto para entregar.
+                        Seleção especial Maison Noor para surpreender no Dia dos Namorados com elegância e presença.
                       </p>
 
                       {produto.indisponivel && <p style={styles.unavailableBadge}>Indisponível</p>}
@@ -1584,7 +1600,7 @@ export default function HomePage() {
 
                     <div style={styles.cardPriceBlock}>
                       <p style={styles.cardPrice}>{formatarMoeda(produto.precoFinal)}</p>
-                      <p style={styles.cardTrust}>Montagem especial • Presente pronto para impressionar ✨</p>
+                      <p style={styles.cardTrust}>Presente sofisticado • Curadoria Maison Noor ✨</p>
                     </div>
 
                     <div style={styles.cardActions}>
@@ -1608,21 +1624,21 @@ export default function HomePage() {
                         }}
                         disabled={produto.indisponivel}
                       >
-                        {produto.indisponivel ? "Indisponível" : "Adicionar presente"}
+                        {produto.indisponivel ? "Indisponível" : "Escolher presente"}
                       </button>
 
                       <a
                         href={`https://wa.me/5512982389658?text=${encodeURIComponent(
                           `Olá! Tenho interesse no presente ${produto.nome} 😍
 
-Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
+Vi no site da Maison Noor e gostaria de atendimento VIP para escolher esse presente de Dia dos Namorados.`
                         )}`}
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         style={styles.cardButton}
                       >
-                        Falar sobre este presente
+                        Atendimento VIP
                       </a>
                     </div>
                   </div>
@@ -1637,7 +1653,7 @@ Vi no site da Maison Noor e gostaria de mais detalhes sobre esse kit.`
                   onClick={() => selecionarCategoria("Presentes")}
                   style={styles.presentesViewAllButton}
                 >
-                  Ver todos os presentes
+                  Ver presentes especiais
                 </button>
               </div>
             )}
@@ -3079,22 +3095,23 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "linear-gradient(135deg, #121212, #2A211A)",
-    color: "#FFFFFF",
+    background: "linear-gradient(135deg, #D8B46E, #B9853C)",
+    color: "#241A12",
     textDecoration: "none",
     padding: "14px 26px",
     borderRadius: "14px",
-    fontWeight: 700,
+    fontWeight: 800,
     fontSize: "16px",
     minWidth: "220px",
-    boxShadow: "0 14px 26px rgba(12, 12, 12, 0.18)",
+    boxShadow: "0 16px 30px rgba(185, 133, 60, 0.28)",
+    border: "1px solid rgba(255, 232, 184, 0.55)",
     transition: "transform 0.22s ease, filter 0.22s ease, box-shadow 0.22s ease",
   },
   heroSecondaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.18)",
     color: "#FFFFFF",
     textDecoration: "none",
     padding: "14px 22px",
@@ -3249,9 +3266,9 @@ const styles: Record<string, CSSProperties> = {
   },
   presentesSectionCard: {
     borderRadius: "28px",
-    border: "1px solid #E7D8C8",
-    background: "linear-gradient(180deg, #FFF9F2, #F7ECDD)",
-    boxShadow: "0 18px 40px rgba(62, 44, 24, 0.08)",
+    border: "1px solid rgba(214, 184, 142, 0.72)",
+    background: "radial-gradient(circle at top right, rgba(151, 58, 45, 0.10), transparent 34%), linear-gradient(180deg, #FFF9F2, #F6E8D8)",
+    boxShadow: "0 22px 48px rgba(62, 44, 24, 0.10)",
     padding: "22px",
   },
   presentesSubtitle: {
@@ -3262,10 +3279,10 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: "700px",
   },
   presentesViewAllButton: {
-    minHeight: "46px",
+    minHeight: "48px",
     borderRadius: "999px",
     border: "1px solid #D8C1A2",
-    padding: "0 18px",
+    padding: "0 22px",
     background: "linear-gradient(135deg, #FFF9F1, #F0DFC8)",
     color: "#6B523A",
     fontWeight: 700,
@@ -3281,15 +3298,15 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "6px 10px",
+    padding: "7px 11px",
     borderRadius: "999px",
-    background: "linear-gradient(135deg, rgba(212,175,119,0.96), rgba(190,145,85,0.96))",
-    color: "#2B2118",
+    background: "linear-gradient(135deg, rgba(120, 38, 38, 0.96), rgba(166, 91, 55, 0.96))",
+    color: "#FFF4E4",
     fontSize: "10px",
-    fontWeight: 700,
+    fontWeight: 800,
     letterSpacing: "0.06em",
     textTransform: "uppercase",
-    boxShadow: "0 8px 16px rgba(20,16,12,0.08)",
+    boxShadow: "0 10px 20px rgba(60, 24, 18, 0.16)",
   },
   presentesDescription: {
     margin: "4px 0 0",
@@ -3315,11 +3332,12 @@ const styles: Record<string, CSSProperties> = {
     background: "linear-gradient(180deg, #FFFEFC, #FCF6EE)",
     borderRadius: "26px",
     boxShadow: "0 16px 34px rgba(48,34,20,0.08)",
-    transition: "0.3s ease",
+    transition: "transform 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease",
     border: "1px solid #EADBC8",
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
+    willChange: "transform, box-shadow",
   },
   cardUnavailable: {
     border: "1px solid #E7D8D0",
@@ -3336,7 +3354,7 @@ const styles: Record<string, CSSProperties> = {
   },
   cardImageWrap: {
     width: "100%",
-    background: "linear-gradient(180deg, rgba(255,253,249,0.96), rgba(244,234,220,0.72))",
+    background: "radial-gradient(circle at center, rgba(212,175,119,0.16), transparent 42%), linear-gradient(180deg, rgba(255,253,249,0.96), rgba(244,234,220,0.72))",
     borderBottom: "1px solid #EFE3D4",
     display: "flex",
     alignItems: "center",
