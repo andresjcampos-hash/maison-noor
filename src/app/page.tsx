@@ -1466,6 +1466,55 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section
+        style={{
+          ...styles.comingSoonSection,
+          padding: isMobile ? "0 14px 18px" : isTablet ? "0 20px 22px" : "0 28px 26px",
+        }}
+      >
+        <div
+          style={{
+            ...styles.comingSoonCard,
+            padding: isMobile ? "18px 18px" : isTablet ? "20px 26px" : "22px 30px",
+          }}
+        >
+          <div style={styles.comingSoonGlowOne} />
+          <div style={styles.comingSoonGlowTwo} />
+
+          <div
+            style={{
+              ...styles.comingSoonContent,
+              maxWidth: isMobile ? "100%" : "760px",
+            }}
+          >
+            <p style={styles.comingSoonKicker}>Em breve na Maison Noor</p>
+            <h2
+              style={{
+                ...styles.comingSoonTitle,
+                fontSize: isMobile ? "22px" : isTablet ? "26px" : "30px",
+              }}
+            >
+              Novas fragrâncias exclusivas estão chegando.
+            </h2>
+            <p
+              style={{
+                ...styles.comingSoonText,
+                fontSize: isMobile ? "13px" : "14px",
+              }}
+            >
+              Seleções árabes premium escolhidas para surpreender quem busca presença,
+              sofisticação e autenticidade. Prepare-se para novidades especiais na Maison Noor.
+            </p>
+
+            {!isMobile && (
+              <span style={styles.comingSoonNote}>
+                Coleções selecionadas • Curadoria premium • Atendimento VIP
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
+
       {false && produtosPresentes.length > 0 && (
         <section
           id="presentes"
@@ -3263,6 +3312,90 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "14px",
     lineHeight: 1.6,
     maxWidth: "560px",
+  },
+  comingSoonSection: {
+    maxWidth: "1360px",
+    margin: "0 auto",
+  },
+  comingSoonCard: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: "22px",
+    border: "1px solid rgba(216, 193, 162, 0.16)",
+    background: "linear-gradient(135deg, rgba(19,15,12,0.98), rgba(42,31,22,0.98))",
+    boxShadow: "0 14px 34px rgba(34, 24, 15, 0.14)",
+    color: "#F6E9D6",
+  },
+  comingSoonGlowOne: {
+    position: "absolute",
+    top: "-90px",
+    right: "-60px",
+    width: "220px",
+    height: "220px",
+    borderRadius: "999px",
+    background: "rgba(212, 175, 119, 0.14)",
+    filter: "blur(22px)",
+  },
+  comingSoonGlowTwo: {
+    position: "absolute",
+    bottom: "-110px",
+    left: "-80px",
+    width: "220px",
+    height: "220px",
+    borderRadius: "999px",
+    background: "rgba(255, 244, 220, 0.07)",
+    filter: "blur(24px)",
+  },
+  comingSoonContent: {
+    position: "relative",
+    zIndex: 2,
+  },
+  comingSoonKicker: {
+    margin: "0 0 8px",
+    color: "#D8BE97",
+    fontSize: "11px",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.18em",
+  },
+  comingSoonTitle: {
+    margin: "0 0 8px",
+    color: "#FFF6EB",
+    lineHeight: 1.08,
+    fontWeight: 800,
+    letterSpacing: "-0.04em",
+  },
+  comingSoonText: {
+    margin: "0 0 10px",
+    color: "rgba(246, 233, 214, 0.78)",
+    lineHeight: 1.55,
+    maxWidth: "660px",
+  },
+  comingSoonActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "16px",
+    flexWrap: "wrap",
+  },
+  comingSoonButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "42px",
+    padding: "0 20px",
+    borderRadius: "999px",
+    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+    color: "#241A12",
+    textDecoration: "none",
+    fontWeight: 800,
+    fontSize: "14px",
+    boxShadow: "0 14px 28px rgba(120, 87, 45, 0.20)",
+    border: "1px solid rgba(255, 232, 184, 0.25)",
+  },
+  comingSoonNote: {
+    color: "rgba(246, 233, 214, 0.62)",
+    fontSize: "13px",
+    lineHeight: 1.5,
   },
   presentesSectionCard: {
     borderRadius: "28px",
