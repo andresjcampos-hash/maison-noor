@@ -25,6 +25,15 @@ type FormaPag =
 
 type FiltroPeriodo = "mes" | "periodo" | "todos";
 
+type DreAuto = "receita" | "imposto" | "cmv" | "operacional" | "marketing" | "financeiro";
+
+type CentroAuto = {
+  centro: string;
+  categoria: string;
+  dre: DreAuto;
+  motivo: string;
+};
+
 type Lancamento = {
   id: string;
   data: string;
@@ -32,6 +41,9 @@ type Lancamento = {
   tipo: TipoLanc;
   descricao: string;
   categoria?: string;
+  centroCusto?: string;
+  documentoFiscalId?: string;
+  origemFiscal?: string;
   forma: FormaPag;
   valor: number;
   status: StatusLanc;
@@ -49,6 +61,110 @@ const FIRESTORE_DOC = "default";
 const SUB_LISTA = "lista";
 const SUB_LANCAMENTOS = "lancamentos";
 const FIRESTORE_COLLECTION_PATH = `${FIRESTORE_ROOT}/${FIRESTORE_DOC}/${SUB_LISTA}`;
+
+const CENTROS_CUSTO_PADRAO = [
+  "Vendas",
+  "Eventos",
+  "Estoque",
+  "Marketing",
+  "Operacional",
+  "Fiscal/Impostos",
+  "Administrativo",
+  "Financeiro",
+  "Taxas Financeiras",
+  "Logística/Frete",
+  "Outros",
+];
+
+const REGRAS_AUTOMACAO: Array<{ palavras: string[]; retorno: CentroAuto }> = [
+  {
+    palavras: ["facebook", "meta", "ads", "google ads", "anuncio", "anúncio", "trafego", "tráfego", "impulsionamento", "instagram"],
+    retorno: { centro: "Marketing", categoria: "Marketing", dre: "marketing", motivo: "descrição ligada a anúncios/marketing" },
+  },
+  {
+    palavras: ["fornecedor", "estoque", "mercadoria", "compra", "nfe", "nf-e", "xml", "produto", "perfume", "lote"],
+    retorno: { centro: "Estoque", categoria: "CMV / Mercadorias", dre: "cmv", motivo: "descrição ligada a compra de mercadorias/estoque" },
+  },
+  {
+    palavras: ["asaas", "mercado pago", "pagbank", "taxa", "cartao", "cartão", "credito", "crédito", "debito", "débito", "gateway"],
+    retorno: { centro: "Taxas Financeiras", categoria: "Taxas Financeiras", dre: "financeiro", motivo: "descrição ligada a taxas de pagamento" },
+  },
+  {
+    palavras: ["frete", "correios", "transportadora", "envio", "entrega", "logistica", "logística", "motoboy"],
+    retorno: { centro: "Logística/Frete", categoria: "Frete", dre: "operacional", motivo: "descrição ligada a entrega/frete" },
+  },
+  {
+    palavras: ["imposto", "icms", "pis", "cofins", "simples", "das", "tributo", "tributário", "tributaria", "fiscal"],
+    retorno: { centro: "Fiscal/Impostos", categoria: "Impostos", dre: "imposto", motivo: "descrição ligada a impostos/fiscal" },
+  },
+  {
+    palavras: ["evento", "feira", "stand", "barraca", "expositor", "arraia", "arraiá"],
+    retorno: { centro: "Eventos", categoria: "Eventos", dre: "operacional", motivo: "descrição ligada a eventos/feiras" },
+  },
+  {
+    palavras: ["embalagem", "sacola", "sacolas", "etiqueta", "caixa", "fitinha", "fita olfativa", "papelaria"],
+    retorno: { centro: "Operacional", categoria: "Embalagens e Materiais", dre: "operacional", motivo: "descrição ligada a materiais operacionais" },
+  },
+  {
+    palavras: ["combustivel", "combustível", "gasolina", "uber", "estacionamento", "pedagio", "pedágio"],
+    retorno: { centro: "Operacional", categoria: "Deslocamento", dre: "operacional", motivo: "descrição ligada a deslocamento operacional" },
+  },
+  {
+    palavras: ["venda", "pedido", "cliente", "checkout", "pix recebido", "recebimento"],
+    retorno: { centro: "Vendas", categoria: "Venda", dre: "receita", motivo: "descrição ligada a venda/recebimento" },
+  },
+];
+
+function normalizarCentroCusto(value?: string): string {
+  const v = String(value || "").trim();
+  return v || "Sem centro de custo";
+}
+
+function detectarCentroAutomatico(
+  descricao: string,
+  categoria?: string,
+  origemFiscal?: string,
+  origemPedidoId?: string
+): CentroAuto | null {
+  const texto = `${descricao || ""} ${categoria || ""} ${origemFiscal || ""} ${origemPedidoId || ""}`
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  for (const regra of REGRAS_AUTOMACAO) {
+    const encontrou = regra.palavras.some((p) =>
+      texto.includes(
+        p
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+      )
+    );
+
+    if (encontrou) return regra.retorno;
+  }
+
+  return null;
+}
+
+function classificarLancamentoAutomatico(l: Partial<Lancamento>): Partial<Lancamento> {
+  const auto = detectarCentroAutomatico(
+    String(l.descricao || ""),
+    l.categoria,
+    l.origemFiscal,
+    l.origemPedidoId
+  );
+
+  const tipo = l.tipo === "despesa" ? "despesa" : "receita";
+  const categoriaAtual = String(l.categoria || "").trim();
+  const centroAtual = String(l.centroCusto || "").trim();
+
+  return {
+    ...l,
+    categoria: categoriaAtual || auto?.categoria || (tipo === "receita" ? "Venda" : "Operacional"),
+    centroCusto: centroAtual || auto?.centro || (tipo === "receita" ? "Vendas" : "Operacional"),
+  };
+}
 
 function nowISO(): string {
   return new Date().toISOString();
@@ -180,13 +296,16 @@ function normalizeLancamento(docId: string, raw: any): Lancamento | null {
       ? formaRaw
       : "outros";
 
-  return {
+  const base = {
     id: docId,
     data: dataIso,
     competencia: raw?.competencia || toCompetencia(dataIso),
     tipo: raw?.tipo === "despesa" ? "despesa" : "receita",
     descricao,
     categoria: raw?.categoria ? String(raw.categoria) : undefined,
+    centroCusto: raw?.centroCusto ? String(raw.centroCusto) : undefined,
+    documentoFiscalId: raw?.documentoFiscalId ? String(raw.documentoFiscalId) : undefined,
+    origemFiscal: raw?.origemFiscal ? String(raw.origemFiscal) : undefined,
     forma,
     valor: Number(raw?.valor) || 0,
     status: raw?.status === "pendente" ? "pendente" : "pago",
@@ -195,7 +314,9 @@ function normalizeLancamento(docId: string, raw: any): Lancamento | null {
     clienteNome: raw?.clienteNome ? String(raw.clienteNome) : undefined,
     createdAt: tsToISO(raw?.createdAt),
     updatedAt: tsToISO(raw?.updatedAt),
-  };
+  } as Lancamento;
+
+  return classificarLancamentoAutomatico(base) as Lancamento;
 }
 
 async function fetchCollection(subcol: string): Promise<Lancamento[]> {
@@ -317,6 +438,7 @@ export default function FinanceiroPage() {
   const [tipoFilter, setTipoFilter] = useState<"todos" | TipoLanc>("todos");
   const [statusFilter, setStatusFilter] =
     useState<"todos" | StatusLanc>("todos");
+  const [centroCustoFilter, setCentroCustoFilter] = useState<string>("todos");
 
   const [periodoTipo, setPeriodoTipo] = useState<FiltroPeriodo>("mes");
   const [competenciaFilter, setCompetenciaFilter] = useState<string>(currentMonth());
@@ -333,6 +455,7 @@ export default function FinanceiroPage() {
   const [fTipo, setFTipo] = useState<TipoLanc>("receita");
   const [fDescricao, setFDescricao] = useState("");
   const [fCategoria, setFCategoria] = useState("");
+  const [fCentroCusto, setFCentroCusto] = useState("Vendas");
   const [fForma, setFForma] = useState<FormaPag>("pix");
   const [fValor, setFValor] = useState<string>("0");
   const [fStatus, setFStatus] = useState<StatusLanc>("pago");
@@ -414,6 +537,7 @@ export default function FinanceiroPage() {
     setFTipo("receita");
     setFDescricao("");
     setFCategoria("");
+    setFCentroCusto("");
     setFForma("pix");
     setFValor("0");
     setFStatus("pago");
@@ -428,6 +552,7 @@ export default function FinanceiroPage() {
     setFTipo(l.tipo);
     setFDescricao(l.descricao);
     setFCategoria(l.categoria || "");
+    setFCentroCusto(l.centroCusto || "Sem centro de custo");
     setFForma(l.forma);
     setFValor(String(l.valor ?? 0));
     setFStatus(l.status);
@@ -444,15 +569,20 @@ export default function FinanceiroPage() {
     if (!fData) return showToast("⚠️ Informe a data.");
 
     const isoData = isoFromDateInput(fData);
+    const automacao = detectarCentroAutomatico(desc, fCategoria);
+    const categoriaFinal = fCategoria.trim() || automacao?.categoria || (fTipo === "receita" ? "Venda" : "Operacional");
+    const centroFinal = fCentroCusto.trim() || automacao?.centro || (fTipo === "receita" ? "Vendas" : "Operacional");
+
     const payloadBase: Partial<Lancamento> = {
       data: isoData,
       competencia: toCompetencia(isoData),
       tipo: fTipo,
       descricao: desc,
+      categoria: categoriaFinal,
+      centroCusto: centroFinal,
       forma: fForma,
       valor: Math.max(0, toNum(fValor)),
       status: fStatus,
-      ...(fCategoria.trim() && { categoria: fCategoria.trim() }),
       ...(fObs.trim() && { observacoes: fObs.trim() }),
     };
 
@@ -593,6 +723,9 @@ export default function FinanceiroPage() {
               tipo: x.tipo === "despesa" ? "despesa" : "receita",
               descricao: String(x.descricao || "").trim(),
               categoria: x.categoria ? String(x.categoria) : undefined,
+              centroCusto: x.centroCusto ? String(x.centroCusto) : undefined,
+              documentoFiscalId: x.documentoFiscalId ? String(x.documentoFiscalId) : undefined,
+              origemFiscal: x.origemFiscal ? String(x.origemFiscal) : undefined,
               forma,
               valor: Number(x.valor) || 0,
               status: x.status === "pendente" ? "pendente" : "pago",
@@ -635,7 +768,7 @@ export default function FinanceiroPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openId, fData, fDescricao, fValor, fCategoria, fForma, fStatus, fTipo, fObs]);
+  }, [openId, fData, fDescricao, fValor, fCategoria, fCentroCusto, fForma, fStatus, fTipo, fObs]);
 
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
@@ -646,6 +779,7 @@ export default function FinanceiroPage() {
       .filter((l) => {
         if (tipoFilter !== "todos" && l.tipo !== tipoFilter) return false;
         if (statusFilter !== "todos" && l.status !== statusFilter) return false;
+        if (centroCustoFilter !== "todos" && normalizarCentroCusto(l.centroCusto) !== centroCustoFilter) return false;
 
         if (periodoTipo === "mes" && competenciaFilter && l.competencia !== competenciaFilter) {
           return false;
@@ -658,11 +792,11 @@ export default function FinanceiroPage() {
         }
 
         if (!qq) return true;
-        const hay = `${l.descricao} ${l.categoria || ""} ${l.forma} ${l.clienteNome || ""}`.toLowerCase();
+        const hay = `${l.descricao} ${l.categoria || ""} ${normalizarCentroCusto(l.centroCusto)} ${l.forma} ${l.clienteNome || ""} ${l.documentoFiscalId || ""} ${l.origemFiscal || ""}`.toLowerCase();
         return hay.includes(qq);
       })
       .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
-  }, [items, q, tipoFilter, statusFilter, periodoTipo, competenciaFilter, dataInicio, dataFim]);
+  }, [items, q, tipoFilter, statusFilter, centroCustoFilter, periodoTipo, competenciaFilter, dataInicio, dataFim]);
 
   const totals = useMemo(() => {
     let totalReceitas = 0;
@@ -827,6 +961,261 @@ export default function FinanceiroPage() {
     };
   }, [filtered]);
 
+  const centrosCustoDisponiveis = useMemo(() => {
+    const set = new Set<string>(CENTROS_CUSTO_PADRAO);
+    for (const l of items) set.add(normalizarCentroCusto(l.centroCusto));
+    return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [items]);
+
+  const dreGerencial = useMemo(() => {
+    const porCentro = new Map<string, { centro: string; receitas: number; despesas: number; saldo: number; pendente: number; qtd: number }>();
+    const porCategoria = new Map<string, { categoria: string; receitas: number; despesas: number; saldo: number; qtd: number }>();
+    let receitasOperacionais = 0;
+    let deducoesImpostos = 0;
+    let custoMercadorias = 0;
+    let despesasOperacionais = 0;
+    let despesasMarketing = 0;
+    let despesasAdm = 0;
+
+    for (const l of filtered) {
+      const valor = Number(l.valor) || 0;
+      const centro = normalizarCentroCusto(l.centroCusto);
+      const categoria = String(l.categoria || "Sem categoria");
+      const catLower = categoria.toLowerCase();
+      const centroLower = centro.toLowerCase();
+
+      const pc = porCentro.get(centro) || { centro, receitas: 0, despesas: 0, saldo: 0, pendente: 0, qtd: 0 };
+      const pg = porCategoria.get(categoria) || { categoria, receitas: 0, despesas: 0, saldo: 0, qtd: 0 };
+
+      if (l.tipo === "receita") {
+        pc.receitas += valor;
+        pg.receitas += valor;
+        receitasOperacionais += valor;
+      } else {
+        pc.despesas += valor;
+        pg.despesas += valor;
+
+        if (centroLower.includes("fiscal") || centroLower.includes("imposto") || catLower.includes("imposto") || catLower.includes("tribut")) {
+          deducoesImpostos += valor;
+        } else if (centroLower.includes("estoque") || catLower.includes("mercadoria") || catLower.includes("produto") || catLower.includes("compra") || catLower.includes("fornecedor")) {
+          custoMercadorias += valor;
+        } else if (centroLower.includes("marketing") || catLower.includes("marketing") || catLower.includes("anúncio") || catLower.includes("trafego") || catLower.includes("tráfego")) {
+          despesasMarketing += valor;
+          despesasOperacionais += valor;
+        } else if (centroLower.includes("admin") || centroLower.includes("financeiro") || catLower.includes("admin") || catLower.includes("taxa")) {
+          despesasAdm += valor;
+          despesasOperacionais += valor;
+        } else {
+          despesasOperacionais += valor;
+        }
+      }
+
+      if (l.status === "pendente") pc.pendente += valor;
+      pc.saldo = pc.receitas - pc.despesas;
+      pg.saldo = pg.receitas - pg.despesas;
+      pc.qtd += 1;
+      pg.qtd += 1;
+      porCentro.set(centro, pc);
+      porCategoria.set(categoria, pg);
+    }
+
+    const receitaLiquida = receitasOperacionais - deducoesImpostos;
+    const lucroBruto = receitaLiquida - custoMercadorias;
+    const resultadoOperacional = lucroBruto - despesasOperacionais;
+    const margemLiquida = receitasOperacionais > 0 ? (resultadoOperacional / receitasOperacionais) * 100 : 0;
+
+    return {
+      receitasOperacionais,
+      deducoesImpostos,
+      receitaLiquida,
+      custoMercadorias,
+      lucroBruto,
+      despesasOperacionais,
+      despesasMarketing,
+      despesasAdm,
+      resultadoOperacional,
+      margemLiquida,
+      porCentro: Array.from(porCentro.values()).sort((a, b) => Math.abs(b.saldo) - Math.abs(a.saldo)),
+      porCategoria: Array.from(porCategoria.values()).sort((a, b) => Math.abs(b.saldo) - Math.abs(a.saldo)).slice(0, 8),
+    };
+  }, [filtered]);
+
+  const fluxoFuturo = useMemo(() => {
+    const hoje = new Date();
+    const limite7 = new Date();
+    limite7.setDate(hoje.getDate() + 7);
+
+    const limite30 = new Date();
+    limite30.setDate(hoje.getDate() + 30);
+
+    let receber7 = 0;
+    let pagar7 = 0;
+    let receber30 = 0;
+    let pagar30 = 0;
+    let pendentesVencidos = 0;
+    let valorVencido = 0;
+
+    for (const l of items) {
+      if (l.status !== "pendente") continue;
+
+      const data = new Date(l.data);
+      if (Number.isNaN(data.getTime())) continue;
+
+      const valor = Number(l.valor) || 0;
+      const vencido = data.getTime() < new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
+
+      if (vencido) {
+        pendentesVencidos += 1;
+        valorVencido += valor;
+      }
+
+      if (data <= limite7) {
+        if (l.tipo === "receita") receber7 += valor;
+        else pagar7 += valor;
+      }
+
+      if (data <= limite30) {
+        if (l.tipo === "receita") receber30 += valor;
+        else pagar30 += valor;
+      }
+    }
+
+    const saldo7 = receber7 - pagar7;
+    const saldo30 = receber30 - pagar30;
+    const riscoCaixa = saldo7 < 0 || saldo30 < 0 || valorVencido > 0;
+
+    return {
+      receber7,
+      pagar7,
+      saldo7,
+      receber30,
+      pagar30,
+      saldo30,
+      pendentesVencidos,
+      valorVencido,
+      riscoCaixa,
+    };
+  }, [items]);
+
+  const dashboardFiscal = useMemo(() => {
+    const receitaBruta = dreGerencial.receitasOperacionais;
+    const impostosLancados = dreGerencial.deducoesImpostos;
+    const impostoEstimadoSimples = receitaBruta > 0 ? receitaBruta * 0.06 : 0;
+    const impostosConsiderados = impostosLancados > 0 ? impostosLancados : impostoEstimadoSimples;
+    const receitaLiquidaFiscal = receitaBruta - impostosConsiderados;
+    const cmv = dreGerencial.custoMercadorias;
+    const lucroBruto = receitaLiquidaFiscal - cmv;
+    const despesasOperacionais = dreGerencial.despesasOperacionais;
+    const lucroLiquidoGerencial = lucroBruto - despesasOperacionais;
+    const cargaTributaria = receitaBruta > 0 ? (impostosConsiderados / receitaBruta) * 100 : 0;
+    const margemBruta = receitaBruta > 0 ? (lucroBruto / receitaBruta) * 100 : 0;
+    const margemLiquida = receitaBruta > 0 ? (lucroLiquidoGerencial / receitaBruta) * 100 : 0;
+    const documentosFiscais = filtered.filter((l) => l.documentoFiscalId || l.origemFiscal).length;
+    const lancamentosFiscais = filtered.filter((l) => {
+      const centro = normalizarCentroCusto(l.centroCusto).toLowerCase();
+      const categoria = String(l.categoria || "").toLowerCase();
+      return centro.includes("fiscal") || centro.includes("imposto") || categoria.includes("imposto") || categoria.includes("tribut") || Boolean(l.documentoFiscalId || l.origemFiscal);
+    }).length;
+
+    const porMes = new Map<string, { competencia: string; receita: number; impostos: number; despesas: number; lucro: number }>();
+    for (const l of filtered) {
+      const competencia = l.competencia || toCompetencia(l.data);
+      const valor = Number(l.valor) || 0;
+      const centro = normalizarCentroCusto(l.centroCusto).toLowerCase();
+      const categoria = String(l.categoria || "").toLowerCase();
+      const row = porMes.get(competencia) || { competencia, receita: 0, impostos: 0, despesas: 0, lucro: 0 };
+
+      if (l.tipo === "receita") {
+        row.receita += valor;
+      } else {
+        row.despesas += valor;
+        if (centro.includes("fiscal") || centro.includes("imposto") || categoria.includes("imposto") || categoria.includes("tribut")) {
+          row.impostos += valor;
+        }
+      }
+
+      row.lucro = row.receita - row.impostos - row.despesas;
+      porMes.set(competencia, row);
+    }
+
+    const evolucaoMensal = Array.from(porMes.values())
+      .sort((a, b) => a.competencia.localeCompare(b.competencia))
+      .slice(-6);
+
+    const despesasPorCentro = dreGerencial.porCentro
+      .filter((item) => item.despesas > 0)
+      .sort((a, b) => b.despesas - a.despesas)
+      .slice(0, 6)
+      .map((item) => ({
+        centro: item.centro,
+        valor: item.despesas,
+        percentual: totals.totalDespesas > 0 ? (item.despesas / totals.totalDespesas) * 100 : 0,
+      }));
+
+    const alertas: Array<{ titulo: string; descricao: string; tipo: "critico" | "alerta" | "sucesso" | "info" }> = [];
+
+    if (receitaBruta > 0 && cargaTributaria >= 12) {
+      alertas.push({
+        tipo: "alerta",
+        titulo: "Carga tributária elevada",
+        descricao: `Impostos representam ${cargaTributaria.toFixed(1)}% da receita bruta no filtro atual.`,
+      });
+    }
+
+    if (receitaBruta > 0 && margemLiquida < 20) {
+      alertas.push({
+        tipo: "critico",
+        titulo: "Margem líquida em atenção",
+        descricao: `Margem líquida gerencial em ${margemLiquida.toFixed(1)}%. Revise CMV, descontos e despesas.`,
+      });
+    }
+
+    if (despesasPorCentro[0] && receitaBruta > 0 && (despesasPorCentro[0].valor / receitaBruta) * 100 > 25) {
+      alertas.push({
+        tipo: "alerta",
+        titulo: "Centro de custo concentrado",
+        descricao: `${despesasPorCentro[0].centro} está consumindo ${((despesasPorCentro[0].valor / receitaBruta) * 100).toFixed(1)}% da receita bruta.`,
+      });
+    }
+
+    if (documentosFiscais === 0 && filtered.length > 0) {
+      alertas.push({
+        tipo: "info",
+        titulo: "Pouca origem fiscal vinculada",
+        descricao: "Nenhum documento fiscal vinculado aos lançamentos filtrados. A integração automática do Fiscal será o próximo ganho.",
+      });
+    }
+
+    if (!alertas.length) {
+      alertas.push({
+        tipo: "sucesso",
+        titulo: "Fiscal saudável no filtro",
+        descricao: "Receita, impostos, CMV e despesas estão dentro de uma leitura gerencial positiva.",
+      });
+    }
+
+    return {
+      receitaBruta,
+      impostosLancados,
+      impostoEstimadoSimples,
+      impostosConsiderados,
+      receitaLiquidaFiscal,
+      cmv,
+      lucroBruto,
+      despesasOperacionais,
+      lucroLiquidoGerencial,
+      cargaTributaria,
+      margemBruta,
+      margemLiquida,
+      documentosFiscais,
+      lancamentosFiscais,
+      evolucaoMensal,
+      despesasPorCentro,
+      alertas: alertas.slice(0, 4),
+      usandoEstimativaImposto: impostosLancados <= 0 && receitaBruta > 0,
+    };
+  }, [dreGerencial, filtered, totals.totalDespesas]);
+
   const receitasRecentes = filtered.filter((l) => l.tipo === "receita").slice(0, 4);
   const despesasRecentes = filtered.filter((l) => l.tipo === "despesa").slice(0, 4);
   const origemPedidoCount = filtered.filter((l) => l.origemPedidoId).length;
@@ -929,6 +1318,16 @@ export default function FinanceiroPage() {
           </div>
 
           <div className="field">
+            <label>Centro de custo</label>
+            <select className="input" value={centroCustoFilter} onChange={(e) => setCentroCustoFilter(e.target.value)}>
+              <option value="todos">Todos</option>
+              {centrosCustoDisponiveis.map((centro) => (
+                <option key={centro} value={centro}>{centro}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
             <label>Filtro</label>
             <select className="input" value={periodoTipo} onChange={(e) => setPeriodoTipo(e.target.value as FiltroPeriodo)}>
               <option value="mes">Mês</option>
@@ -988,6 +1387,183 @@ export default function FinanceiroPage() {
           </div>
           <div><small>Entradas</small><b className="green">{formatBRL(financeiroPremium.entradasHoje)}</b></div>
           <div><small>Saídas</small><b className="red">{formatBRL(financeiroPremium.saidasHoje)}</b></div>
+        </div>
+      </section>
+
+      <section className="dreGerencialPanel">
+        <div className="dreHead">
+          <div>
+            <div className="sectionKicker">DRE Gerencial</div>
+            <h2>Resultado por centro de custo</h2>
+            <p>Visão gerencial separando receita operacional, impostos/deduções, custo de mercadoria, despesas operacionais e resultado final.</p>
+          </div>
+          <div className={dreGerencial.resultadoOperacional >= 0 ? "dreResult positive" : "dreResult negative"}>
+            <span>Resultado operacional</span>
+            <strong>{formatBRL(dreGerencial.resultadoOperacional)}</strong>
+            <small>Margem {dreGerencial.margemLiquida.toFixed(1)}%</small>
+          </div>
+        </div>
+
+        <div className="dreStatement">
+          <DreLine label="Receita bruta operacional" value={dreGerencial.receitasOperacionais} positive />
+          <DreLine label="(-) Impostos e deduções" value={dreGerencial.deducoesImpostos} negative />
+          <DreLine label="Receita líquida" value={dreGerencial.receitaLiquida} highlight />
+          <DreLine label="(-) Custo de mercadorias / estoque" value={dreGerencial.custoMercadorias} negative />
+          <DreLine label="Lucro bruto" value={dreGerencial.lucroBruto} highlight />
+          <DreLine label="(-) Despesas operacionais" value={dreGerencial.despesasOperacionais} negative />
+          <DreLine label="Resultado operacional" value={dreGerencial.resultadoOperacional} highlight finalLine />
+        </div>
+
+        <div className="centroCustoGrid">
+          <div className="centroPanel">
+            <h3>Centros de custo</h3>
+            <div className="centroRows">
+              {dreGerencial.porCentro.length ? dreGerencial.porCentro.slice(0, 8).map((item) => (
+                <div className="centroRow" key={item.centro}>
+                  <div>
+                    <strong>{item.centro}</strong>
+                    <small>{item.qtd} lançamento(s) • pendente {formatBRL(item.pendente)}</small>
+                  </div>
+                  <div className="centroValues">
+                    <span className="green">{formatBRL(item.receitas)}</span>
+                    <span className="red">{formatBRL(item.despesas)}</span>
+                    <b className={item.saldo >= 0 ? "green" : "red"}>{formatBRL(item.saldo)}</b>
+                  </div>
+                </div>
+              )) : <div className="emptyMini">Nenhum centro de custo no filtro.</div>}
+            </div>
+          </div>
+
+          <div className="centroPanel">
+            <h3>Categorias gerenciais</h3>
+            <div className="centroRows">
+              {dreGerencial.porCategoria.length ? dreGerencial.porCategoria.map((item) => (
+                <div className="centroRow compact" key={item.categoria}>
+                  <div>
+                    <strong>{item.categoria}</strong>
+                    <small>{item.qtd} lançamento(s)</small>
+                  </div>
+                  <b className={item.saldo >= 0 ? "green" : "red"}>{formatBRL(item.saldo)}</b>
+                </div>
+              )) : <div className="emptyMini">Nenhuma categoria no filtro.</div>}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="cashForecastPanel">
+        <div className="forecastHead">
+          <div>
+            <div className="sectionKicker">Fluxo de Caixa Futuro</div>
+            <h2>Previsão automática de caixa</h2>
+            <p>Leitura dos lançamentos pendentes para prever entradas, saídas, vencidos e risco financeiro nos próximos 7 e 30 dias.</p>
+          </div>
+          <div className={fluxoFuturo.riscoCaixa ? "forecastRisk danger" : "forecastRisk ok"}>
+            <span>Status do caixa</span>
+            <strong>{fluxoFuturo.riscoCaixa ? "Atenção" : "Saudável"}</strong>
+            <small>{fluxoFuturo.pendentesVencidos} pendente(s) vencido(s)</small>
+          </div>
+        </div>
+
+        <div className="forecastGrid">
+          <Kpi title="Previsão 7 dias" value={formatBRL(fluxoFuturo.saldo7)} hint="Receber - pagar" tone={fluxoFuturo.saldo7 >= 0 ? "green" : "red"} />
+          <Kpi title="Previsão 30 dias" value={formatBRL(fluxoFuturo.saldo30)} hint="Receber - pagar" tone={fluxoFuturo.saldo30 >= 0 ? "green" : "red"} />
+          <Kpi title="A receber 30 dias" value={formatBRL(fluxoFuturo.receber30)} hint="Receitas pendentes" tone="green" />
+          <Kpi title="A pagar 30 dias" value={formatBRL(fluxoFuturo.pagar30)} hint="Despesas pendentes" tone="red" />
+          <Kpi title="Vencidos" value={formatBRL(fluxoFuturo.valorVencido)} hint={`${fluxoFuturo.pendentesVencidos} lançamento(s)`} tone={fluxoFuturo.valorVencido > 0 ? "gold" : "green"} />
+        </div>
+      </section>
+
+      <section className="fiscalDashboard">
+        <div className="fiscalHead">
+          <div>
+            <div className="sectionKicker">Dashboard Fiscal Inteligente</div>
+            <h2>Visão executiva fiscal + DRE</h2>
+            <p>
+              Leitura automática de receita bruta, impostos, carga tributária, CMV, margem e lucro líquido gerencial.
+              {dashboardFiscal.usandoEstimativaImposto ? " Como ainda não há impostos lançados no filtro, o painel exibe uma estimativa gerencial de 6%." : " Os impostos estão usando lançamentos classificados como Fiscal/Impostos."}
+            </p>
+          </div>
+          <div className={dashboardFiscal.lucroLiquidoGerencial >= 0 ? "fiscalResult positive" : "fiscalResult negative"}>
+            <span>Lucro líquido gerencial</span>
+            <strong>{formatBRL(dashboardFiscal.lucroLiquidoGerencial)}</strong>
+            <small>Margem líquida {dashboardFiscal.margemLiquida.toFixed(1)}%</small>
+          </div>
+        </div>
+
+        <div className="fiscalKpiGrid">
+          <FiscalKpi label="Receita bruta" value={formatBRL(dashboardFiscal.receitaBruta)} hint="Faturamento do filtro" tone="green" />
+          <FiscalKpi label="Impostos" value={formatBRL(dashboardFiscal.impostosConsiderados)} hint={dashboardFiscal.usandoEstimativaImposto ? "Estimativa gerencial 6%" : "Lançado no financeiro"} tone="gold" />
+          <FiscalKpi label="Carga tributária" value={`${dashboardFiscal.cargaTributaria.toFixed(1)}%`} hint="Impostos / receita" tone="gold" />
+          <FiscalKpi label="Receita líquida" value={formatBRL(dashboardFiscal.receitaLiquidaFiscal)} hint="Receita após impostos" tone="green" />
+          <FiscalKpi label="CMV / Estoque" value={formatBRL(dashboardFiscal.cmv)} hint="Custo de mercadorias" tone="red" />
+          <FiscalKpi label="Lucro bruto" value={formatBRL(dashboardFiscal.lucroBruto)} hint={`Margem bruta ${dashboardFiscal.margemBruta.toFixed(1)}%`} tone={dashboardFiscal.lucroBruto >= 0 ? "green" : "red"} />
+          <FiscalKpi label="Despesas operacionais" value={formatBRL(dashboardFiscal.despesasOperacionais)} hint="Operação, marketing, taxas" tone="red" />
+          <FiscalKpi label="Docs fiscais" value={String(dashboardFiscal.documentosFiscais)} hint={`${dashboardFiscal.lancamentosFiscais} lançamento(s) fiscais`} />
+        </div>
+
+        <div className="fiscalGrid">
+          <div className="fiscalPanel">
+            <div className="sectionKicker">Evolução mensal</div>
+            <h3>Receita x impostos x lucro</h3>
+            <div className="fiscalMiniChart">
+              {dashboardFiscal.evolucaoMensal.length ? dashboardFiscal.evolucaoMensal.map((item) => {
+                const max = Math.max(1, ...dashboardFiscal.evolucaoMensal.flatMap((row) => [row.receita, row.impostos, Math.abs(row.lucro)]));
+                const receitaH = Math.max(4, Math.round((item.receita / max) * 100));
+                const impostoH = Math.max(4, Math.round((item.impostos / max) * 100));
+                const lucroH = Math.max(4, Math.round((Math.abs(item.lucro) / max) * 100));
+                return (
+                  <div className="fiscalMonth" key={item.competencia}>
+                    <div className="fiscalBars">
+                      <i className="receita" style={{ height: `${receitaH}%` }} title={`Receita: ${formatBRL(item.receita)}`} />
+                      <i className="imposto" style={{ height: `${impostoH}%` }} title={`Impostos: ${formatBRL(item.impostos)}`} />
+                      <i className={item.lucro >= 0 ? "lucro" : "prejuizo"} style={{ height: `${lucroH}%` }} title={`Lucro: ${formatBRL(item.lucro)}`} />
+                    </div>
+                    <strong>{item.competencia.slice(5)}/{item.competencia.slice(2, 4)}</strong>
+                    <small>{formatBRL(item.lucro)}</small>
+                  </div>
+                );
+              }) : <div className="emptyMini">Sem dados para evolução mensal.</div>}
+            </div>
+            <div className="fiscalLegend">
+              <span><i className="receita" /> Receita</span>
+              <span><i className="imposto" /> Impostos</span>
+              <span><i className="lucro" /> Lucro</span>
+            </div>
+          </div>
+
+          <div className="fiscalPanel">
+            <div className="sectionKicker">Centro de custo</div>
+            <h3>Peso das despesas</h3>
+            <div className="costRanking">
+              {dashboardFiscal.despesasPorCentro.length ? dashboardFiscal.despesasPorCentro.map((item) => (
+                <div className="costRow" key={item.centro}>
+                  <div>
+                    <strong>{item.centro}</strong>
+                    <small>{item.percentual.toFixed(1)}% das despesas</small>
+                  </div>
+                  <span>{formatBRL(item.valor)}</span>
+                  <i style={{ width: `${Math.max(5, item.percentual)}%` }} />
+                </div>
+              )) : <div className="emptyMini">Nenhuma despesa por centro de custo.</div>}
+            </div>
+          </div>
+
+          <div className="fiscalPanel fiscalAlertsPanel">
+            <div className="sectionKicker">Inteligência fiscal</div>
+            <h3>Alertas executivos</h3>
+            <div className="fiscalAlerts">
+              {dashboardFiscal.alertas.map((item, index) => (
+                <div className={`fiscalAlert ${item.tipo}`} key={`${item.titulo}_${index}`}>
+                  <span>{item.tipo === "critico" ? "⚠️" : item.tipo === "alerta" ? "🔔" : item.tipo === "sucesso" ? "✅" : "💡"}</span>
+                  <div>
+                    <strong>{item.titulo}</strong>
+                    <small>{item.descricao}</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1098,7 +1674,7 @@ export default function FinanceiroPage() {
                   <span className={`pill ${l.tipo}`}>{l.tipo === "receita" ? "Receita" : "Despesa"}</span>
                 </div>
                 <div className="entryMeta">
-                  {formatDateBR(l.data)} • {l.categoria || "Sem categoria"} • {formaLabel(l.forma)}
+                  {formatDateBR(l.data)} • {l.categoria || "Sem categoria"} • {normalizarCentroCusto(l.centroCusto)} • {formaLabel(l.forma)}
                   {l.clienteNome ? ` • ${l.clienteNome}` : ""}
                 </div>
               </div>
@@ -1146,6 +1722,7 @@ export default function FinanceiroPage() {
               <div className="field"><label>Tipo</label><select className="input" value={fTipo} onChange={(e) => setFTipo(e.target.value as TipoLanc)}><option value="receita">Receita</option><option value="despesa">Despesa</option></select></div>
               <div className="field wide"><label>Descrição</label><input className="input" value={fDescricao} onChange={(e) => setFDescricao(e.target.value)} /></div>
               <div className="field"><label>Categoria</label><input className="input" value={fCategoria} onChange={(e) => setFCategoria(e.target.value)} placeholder="Venda, Estoque, Frete..." /></div>
+              <div className="field"><label>Centro de custo</label><input className="input" list="centros-custo-list" value={fCentroCusto} onChange={(e) => setFCentroCusto(e.target.value)} placeholder="Ex: Estoque, Marketing, Fiscal/Impostos" /><datalist id="centros-custo-list">{centrosCustoDisponiveis.map((centro) => <option key={centro} value={centro} />)}</datalist></div>
               <div className="field"><label>Forma</label><select className="input" value={fForma} onChange={(e) => setFForma(e.target.value as FormaPag)}><option value="pix">Pix</option><option value="dinheiro">Dinheiro</option><option value="credito">Crédito</option><option value="debito">Débito</option><option value="boleto">Boleto</option><option value="transferencia">Transferência</option><option value="outros">Outros</option></select></div>
               <div className="field"><label>Valor</label><input className="input" value={fValor} onChange={(e) => setFValor(e.target.value)} /></div>
               <div className="field"><label>Status</label><select className="input" value={fStatus} onChange={(e) => setFStatus(e.target.value as StatusLanc)}><option value="pago">Pago</option><option value="pendente">Pendente</option></select></div>
@@ -1795,6 +2372,481 @@ export default function FinanceiroPage() {
           text-align: center;
         }
 
+        .dreGerencialPanel {
+          margin-top: 12px;
+          padding: 14px;
+          border-radius: 20px;
+          border: 1px solid rgba(200,162,106,.18);
+          background:
+            radial-gradient(circle at top left, rgba(117,255,171,.08), transparent 30%),
+            linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012));
+          box-shadow: 0 16px 42px rgba(0,0,0,.16);
+        }
+
+        .dreStatement {
+          margin-top: 12px;
+          display: grid;
+          gap: 6px;
+          padding: 10px;
+          border-radius: 16px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(0,0,0,.18);
+        }
+
+        .dreLine {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          min-height: 34px;
+          padding: 6px 8px;
+          border-radius: 11px;
+          font-size: 12px;
+        }
+
+        .dreLine.highlight {
+          background: rgba(200,162,106,.07);
+          border: 1px solid rgba(200,162,106,.14);
+          font-weight: 950;
+        }
+
+        .dreLine.finalLine {
+          border-color: rgba(117,255,171,.18);
+          background: rgba(117,255,171,.06);
+        }
+
+        .dreLine b {
+          white-space: nowrap;
+          color: rgba(200,162,106,.98);
+        }
+
+        .dreLine.positive b { color: #4dff9a; }
+        .dreLine.negative b { color: #ff8585; }
+
+        .centroCustoGrid {
+          margin-top: 10px;
+          display: grid;
+          grid-template-columns: 1.2fr .8fr;
+          gap: 10px;
+        }
+
+        .centroPanel {
+          padding: 11px;
+          border-radius: 17px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(0,0,0,.18);
+        }
+
+        .centroPanel h3 {
+          margin: 0 0 9px;
+          font-size: 15px;
+        }
+
+        .centroRows {
+          display: grid;
+          gap: 7px;
+        }
+
+        .centroRow {
+          display: grid;
+          grid-template-columns: minmax(0,1fr) auto;
+          gap: 10px;
+          align-items: center;
+          padding: 9px;
+          border-radius: 13px;
+          border: 1px solid rgba(255,255,255,.075);
+          background: rgba(255,255,255,.025);
+        }
+
+        .centroRow strong {
+          display: block;
+          font-size: 12px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .centroRow small {
+          display: block;
+          margin-top: 3px;
+          opacity: .62;
+          font-size: 10.5px;
+        }
+
+        .centroValues {
+          display: grid;
+          gap: 2px;
+          text-align: right;
+          font-size: 11px;
+          font-weight: 900;
+        }
+
+        .centroValues b,
+        .centroRow.compact > b {
+          font-size: 12px;
+          white-space: nowrap;
+        }
+
+
+        .fiscalDashboard {
+          margin-top: 12px;
+          padding: 14px;
+          border-radius: 20px;
+          border: 1px solid rgba(200,162,106,.2);
+          background:
+            radial-gradient(circle at top left, rgba(200,162,106,.12), transparent 32%),
+            radial-gradient(circle at top right, rgba(77,255,154,.055), transparent 30%),
+            linear-gradient(180deg, rgba(255,255,255,.044), rgba(255,255,255,.012));
+          box-shadow: 0 16px 42px rgba(0,0,0,.16);
+        }
+
+        .fiscalHead {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+
+        .fiscalHead h2 {
+          margin: 4px 0 0;
+          font-size: 20px;
+          line-height: 1.12;
+        }
+
+        .fiscalHead p {
+          max-width: 820px;
+          font-size: 12px;
+        }
+
+        .fiscalResult {
+          min-width: 220px;
+          padding: 11px 12px;
+          border-radius: 16px;
+          border: 1px solid rgba(200,162,106,.2);
+          background: rgba(0,0,0,.22);
+          display: grid;
+          gap: 3px;
+          text-align: right;
+        }
+
+        .fiscalResult span,
+        .fiscalResult small {
+          font-size: 10px;
+          opacity: .68;
+          text-transform: uppercase;
+          letter-spacing: .1em;
+          font-weight: 950;
+        }
+
+        .fiscalResult strong {
+          font-size: 21px;
+          line-height: 1.08;
+        }
+
+        .fiscalResult.positive strong { color: #4dff9a; }
+        .fiscalResult.negative strong { color: #ff8585; }
+
+        .fiscalKpiGrid {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+          gap: 9px;
+        }
+
+        .fiscalKpi {
+          min-height: 78px;
+          padding: 10px;
+          border-radius: 15px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(0,0,0,.19);
+          display: grid;
+          align-content: center;
+        }
+
+        .fiscalKpi span {
+          font-size: 9px;
+          opacity: .7;
+          text-transform: uppercase;
+          letter-spacing: .1em;
+          font-weight: 950;
+        }
+
+        .fiscalKpi strong {
+          margin-top: 5px;
+          font-size: 16px;
+          color: rgba(200,162,106,.98);
+          overflow-wrap: anywhere;
+        }
+
+        .fiscalKpi small {
+          margin-top: 4px;
+          opacity: .62;
+          font-size: 10px;
+        }
+
+        .fiscalKpi.green strong { color: #4dff9a; }
+        .fiscalKpi.red strong { color: #ff8585; }
+        .fiscalKpi.gold strong { color: #f3c979; }
+
+        .fiscalGrid {
+          margin-top: 10px;
+          display: grid;
+          grid-template-columns: 1.05fr .9fr 1.05fr;
+          gap: 10px;
+        }
+
+        .fiscalPanel {
+          min-width: 0;
+          padding: 11px;
+          border-radius: 17px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(0,0,0,.18);
+        }
+
+        .fiscalPanel h3 {
+          margin: 4px 0 10px;
+          font-size: 15px;
+        }
+
+        .fiscalMiniChart {
+          min-height: 166px;
+          display: grid;
+          grid-template-columns: repeat(6, minmax(44px, 1fr));
+          gap: 8px;
+          align-items: end;
+          overflow-x: auto;
+        }
+
+        .fiscalMonth {
+          min-width: 44px;
+          display: grid;
+          gap: 5px;
+          align-items: end;
+          text-align: center;
+        }
+
+        .fiscalBars {
+          height: 112px;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          align-items: end;
+          gap: 3px;
+          padding: 5px;
+          border-radius: 13px;
+          border: 1px solid rgba(255,255,255,.07);
+          background: rgba(0,0,0,.2);
+        }
+
+        .fiscalBars i,
+        .fiscalLegend i {
+          display: block;
+          border-radius: 999px 999px 4px 4px;
+        }
+
+        .fiscalBars i.receita,
+        .fiscalLegend i.receita { background: linear-gradient(180deg,#6dffad,#2edb7d); }
+        .fiscalBars i.imposto,
+        .fiscalLegend i.imposto { background: linear-gradient(180deg,#f3c979,#b98b38); }
+        .fiscalBars i.lucro,
+        .fiscalLegend i.lucro { background: linear-gradient(180deg,#8cc8ff,#4a9df3); }
+        .fiscalBars i.prejuizo { background: linear-gradient(180deg,#ff9a9a,#e85f5f); }
+
+        .fiscalMonth strong {
+          font-size: 10px;
+          opacity: .72;
+        }
+
+        .fiscalMonth small {
+          font-size: 9.5px;
+          color: rgba(200,162,106,.95);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .fiscalLegend {
+          margin-top: 8px;
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .fiscalLegend span {
+          min-height: 24px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 0 8px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(0,0,0,.18);
+          font-size: 10px;
+          font-weight: 900;
+        }
+
+        .fiscalLegend i {
+          width: 8px;
+          height: 8px;
+          border-radius: 999px;
+        }
+
+        .costRanking,
+        .fiscalAlerts {
+          display: grid;
+          gap: 8px;
+        }
+
+        .costRow {
+          position: relative;
+          overflow: hidden;
+          min-height: 54px;
+          padding: 9px;
+          border-radius: 13px;
+          border: 1px solid rgba(255,255,255,.075);
+          background: rgba(255,255,255,.025);
+          display: grid;
+          grid-template-columns: minmax(0,1fr) auto;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .costRow strong {
+          display: block;
+          font-size: 12px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .costRow small {
+          display: block;
+          margin-top: 3px;
+          opacity: .62;
+          font-size: 10.5px;
+        }
+
+        .costRow span {
+          font-weight: 950;
+          color: rgba(200,162,106,.98);
+          font-size: 12px;
+          white-space: nowrap;
+        }
+
+        .costRow i {
+          position: absolute;
+          left: 0;
+          bottom: 0;
+          height: 3px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #f3c979, rgba(200,162,106,.2));
+        }
+
+        .fiscalAlert {
+          display: grid;
+          grid-template-columns: 34px minmax(0,1fr);
+          gap: 8px;
+          padding: 9px;
+          border-radius: 14px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(0,0,0,.18);
+        }
+
+        .fiscalAlert > span {
+          width: 32px;
+          height: 32px;
+          border-radius: 12px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(200,162,106,.18);
+          background: rgba(200,162,106,.07);
+        }
+
+        .fiscalAlert strong {
+          display: block;
+          font-size: 12px;
+        }
+
+        .fiscalAlert small {
+          display: block;
+          margin-top: 3px;
+          opacity: .66;
+          font-size: 10.5px;
+          line-height: 1.28;
+        }
+
+        .fiscalAlert.critico { border-color: rgba(255,120,120,.28); }
+        .fiscalAlert.alerta { border-color: rgba(255,201,98,.28); }
+        .fiscalAlert.sucesso { border-color: rgba(117,255,171,.24); }
+
+
+
+        .cashForecastPanel {
+          margin-top: 12px;
+          padding: 14px;
+          border-radius: 20px;
+          border: 1px solid rgba(200,162,106,.18);
+          background:
+            radial-gradient(circle at top left, rgba(77,255,154,.08), transparent 30%),
+            linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012));
+          box-shadow: 0 16px 42px rgba(0,0,0,.16);
+        }
+
+        .forecastHead {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+
+        .forecastHead h2 {
+          margin: 4px 0 0;
+          font-size: 20px;
+          line-height: 1.12;
+        }
+
+        .forecastHead p {
+          max-width: 780px;
+          font-size: 12px;
+        }
+
+        .forecastRisk {
+          min-width: 180px;
+          padding: 11px 12px;
+          border-radius: 16px;
+          border: 1px solid rgba(200,162,106,.2);
+          background: rgba(0,0,0,.22);
+          display: grid;
+          gap: 3px;
+          text-align: right;
+        }
+
+        .forecastRisk span,
+        .forecastRisk small {
+          font-size: 10px;
+          opacity: .68;
+          text-transform: uppercase;
+          letter-spacing: .1em;
+          font-weight: 950;
+        }
+
+        .forecastRisk strong {
+          font-size: 20px;
+          line-height: 1.08;
+        }
+
+        .forecastRisk.ok strong { color: #4dff9a; }
+        .forecastRisk.danger strong { color: #ff8585; }
+
+        .forecastGrid {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 9px;
+        }
+
+
         @media (max-width: 1100px) {
           .insightGrid,
           .listsGrid {
@@ -1819,15 +2871,58 @@ export default function FinanceiroPage() {
 
 
         @media (max-width: 1100px) {
-          .financePremiumGrid { grid-template-columns: 1fr !important; }
+          .financePremiumGrid, .centroCustoGrid, .fiscalGrid { grid-template-columns: 1fr !important; }
           .cashToday { grid-template-columns: 1fr !important; }
-          .dreResult { text-align: left !important; }
+          .dreResult, .fiscalResult { text-align: left !important; }
         }
       `}</style>
     </main>
   );
 }
 
+
+function FiscalKpi({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: "green" | "red" | "gold";
+}) {
+  return (
+    <div className={`fiscalKpi ${tone || ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{hint}</small>
+    </div>
+  );
+}
+
+function DreLine({
+  label,
+  value,
+  positive,
+  negative,
+  highlight,
+  finalLine,
+}: {
+  label: string;
+  value: number;
+  positive?: boolean;
+  negative?: boolean;
+  highlight?: boolean;
+  finalLine?: boolean;
+}) {
+  return (
+    <div className={`dreLine ${positive ? "positive" : ""} ${negative ? "negative" : ""} ${highlight ? "highlight" : ""} ${finalLine ? "finalLine" : ""}`}>
+      <span>{label}</span>
+      <b>{formatBRL(value)}</b>
+    </div>
+  );
+}
 
 function DreCard({
   label,
