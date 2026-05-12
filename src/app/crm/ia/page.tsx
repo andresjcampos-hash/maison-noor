@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  orderBy,
+  query,
+} from "firebase/firestore";
 
 type TipoLanc = "receita" | "despesa";
 type StatusLanc = "pago" | "pendente";
@@ -13,13 +18,16 @@ type Produto = {
   id: string;
   nome: string;
   marca?: string;
+  volumeMl?: number;
   categoria?: string;
   precoCompra?: number;
   precoVenda?: number;
   estoque?: number;
   reservado?: number;
   ativo?: boolean;
+  createdAt?: string;
   updatedAt?: string;
+  observacoes?: string;
 };
 
 type Lancamento = {
@@ -52,6 +60,13 @@ type RecomendacaoIA = {
   valor?: number;
 };
 
+type KpiIA = {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: "green" | "red" | "gold" | "blue";
+};
+
 const CENTROS_FISCAIS = ["fiscal", "imposto", "tribut", "icms", "pis", "cofins", "simples", "das"];
 const CENTROS_ESTOQUE = ["estoque", "cmv", "mercadoria", "produto", "compra", "fornecedor"];
 const CENTROS_MARKETING = ["marketing", "anuncio", "anúncio", "trafego", "tráfego", "ads", "meta", "instagram", "facebook"];
@@ -67,6 +82,11 @@ function pad(n: number): string {
 function currentMonth(): string {
   const d = new Date();
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+}
+
+function startOfCurrentMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01T00:00:00.000Z`;
 }
 
 function formatBRL(n: number): string {
@@ -112,14 +132,7 @@ function contemAlgum(texto: string, palavras: string[]): boolean {
   return palavras.some((p) => t.includes(normalizarTexto(p)));
 }
 
-function diasDesde(iso?: string): number {
-  if (!iso) return 999;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 999;
-  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
-}
-
-function margemProduto(p: Produto) {
+function getMargemProduto(p: Produto) {
   const compra = toNumber(p.precoCompra);
   const venda = toNumber(p.precoVenda);
   const lucro = venda - compra;
@@ -128,27 +141,12 @@ function margemProduto(p: Produto) {
   return { compra, venda, lucro, margemVenda, markup };
 }
 
-function areaLabel(area: AreaIA): string {
-  const map: Record<AreaIA, string> = {
-    financeiro: "Financeiro",
-    estoque: "Estoque",
-    produto: "Produto",
-    fiscal: "Fiscal",
-    comercial: "Comercial",
-    operacional: "Operacional",
-  };
-  return map[area];
-}
-
-function prioridadeLabel(p: Prioridade): string {
-  const map: Record<Prioridade, string> = {
-    critico: "Crítico",
-    alto: "Alto",
-    medio: "Médio",
-    baixo: "Baixo",
-    positivo: "Positivo",
-  };
-  return map[p];
+function diasDesde(iso?: string): number {
+  if (!iso) return 999;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 999;
+  const hoje = new Date();
+  return Math.max(0, Math.floor((hoje.getTime() - d.getTime()) / 86400000));
 }
 
 async function fetchProdutos(): Promise<Produto[]> {
@@ -160,13 +158,16 @@ async function fetchProdutos(): Promise<Produto[]> {
         id: d.id,
         nome: String(data.nome || ""),
         marca: data.marca ? String(data.marca) : undefined,
+        volumeMl: toNumber(data.volumeMl),
         categoria: data.categoria ? String(data.categoria) : undefined,
         precoCompra: toNumber(data.precoCompra),
         precoVenda: toNumber(data.precoVenda),
         estoque: toNumber(data.estoque),
         reservado: toNumber(data.reservado),
         ativo: data.ativo !== false,
+        createdAt: tsToISO(data.createdAt),
         updatedAt: tsToISO(data.updatedAt),
+        observacoes: data.observacoes ? String(data.observacoes) : undefined,
       };
     });
   } catch (e) {
@@ -178,6 +179,7 @@ async function fetchProdutos(): Promise<Produto[]> {
 function normalizeLancamento(docId: string, raw: any): Lancamento | null {
   const descricao = String(raw?.descricao || "").trim();
   if (!descricao) return null;
+
   const dataIso = tsToISO(raw?.data);
 
   return {
@@ -228,7 +230,6 @@ async function fetchFinanceiro(): Promise<Lancamento[]> {
 function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): RecomendacaoIA[] {
   const recs: RecomendacaoIA[] = [];
   const ativos = produtos.filter((p) => p.ativo !== false);
-  const mesAtual = currentMonth();
 
   let receita = 0;
   let despesas = 0;
@@ -239,7 +240,6 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
   let pendentePagar = 0;
 
   for (const l of lancamentos) {
-    if ((l.competencia || l.data.slice(0, 7)) !== mesAtual) continue;
     const valor = toNumber(l.valor);
     const texto = `${l.descricao} ${l.categoria || ""} ${l.centroCusto || ""}`;
 
@@ -268,13 +268,13 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
   });
 
   const margemBaixa = ativos
-    .map((p) => ({ produto: p, ...margemProduto(p) }))
+    .map((p) => ({ produto: p, ...getMargemProduto(p) }))
     .filter((x) => x.venda > 0 && x.margemVenda > 0 && x.margemVenda < 25)
     .sort((a, b) => a.margemVenda - b.margemVenda)
     .slice(0, 5);
 
   const margemNegativa = ativos
-    .map((p) => ({ produto: p, ...margemProduto(p) }))
+    .map((p) => ({ produto: p, ...getMargemProduto(p) }))
     .filter((x) => x.venda > 0 && x.lucro < 0)
     .slice(0, 5);
 
@@ -288,14 +288,24 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
     0
   );
 
+  const valorEstoqueCompra = ativos.reduce(
+    (acc, p) => acc + toNumber(p.precoCompra) * toNumber(p.estoque),
+    0
+  );
+
+  const valorEstoqueVenda = ativos.reduce(
+    (acc, p) => acc + toNumber(p.precoVenda) * toNumber(p.estoque),
+    0
+  );
+
   if (margem < 20 && receita > 0) {
     recs.push({
       id: "margem-baixa",
       area: "financeiro",
       prioridade: "critico",
       titulo: "Margem operacional abaixo do ideal",
-      descricao: `A margem do mês está em ${formatPercent(margem)}. Custos, descontos ou despesas estão pressionando o resultado.`,
-      acao: "Revisar despesas, CMV, preço de venda e promoções antes de aumentar o volume.",
+      descricao: `A margem do período está em ${formatPercent(margem)}. Isso indica que custos, descontos ou despesas estão pressionando o resultado.`,
+      acao: "Revisar despesas, CMV, preço de venda e promoções antes de aumentar o volume de vendas.",
       impacto: "Pode recuperar lucro sem depender de vender mais.",
       valor: lucro,
     });
@@ -309,7 +319,7 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
       titulo: "Risco de caixa por contas a pagar",
       descricao: `Há ${formatBRL(pendentePagar)} a pagar contra ${formatBRL(pendenteReceber)} a receber.`,
       acao: "Priorizar cobranças, renegociar vencimentos e evitar novas compras até equilibrar o caixa.",
-      impacto: "Reduz risco de aperto financeiro.",
+      impacto: "Reduz risco de aperto financeiro nos próximos dias.",
       valor: pendentePagar - pendenteReceber,
     });
   }
@@ -320,7 +330,7 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
       area: "estoque",
       prioridade: "alto",
       titulo: `${semEstoque.length} produto(s) sem estoque disponível`,
-      descricao: "Produtos ativos aparecem sem disponibilidade para venda.",
+      descricao: `Produtos ativos aparecem sem disponibilidade para venda. Isso pode gerar perda de receita no site e no atendimento.`,
       acao: `Revisar recompra ou desativar temporariamente: ${semEstoque.slice(0, 3).map((p) => p.nome).join(", ")}.`,
       impacto: "Evita venda perdida e melhora a experiência do cliente.",
     });
@@ -333,7 +343,7 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
       prioridade: "medio",
       titulo: `${estoqueBaixo.length} produto(s) perto de acabar`,
       descricao: "Há produtos com 1 ou 2 unidades disponíveis.",
-      acao: `Avaliar recompra dos itens estratégicos: ${estoqueBaixo.slice(0, 3).map((p) => p.nome).join(", ")}.`,
+      acao: `Avaliar recompra dos itens mais estratégicos: ${estoqueBaixo.slice(0, 3).map((p) => p.nome).join(", ")}.`,
       impacto: "Ajuda a manter produtos importantes disponíveis.",
     });
   }
@@ -356,7 +366,7 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
       area: "produto",
       prioridade: "alto",
       titulo: "Produtos com margem baixa",
-      descricao: "Alguns produtos têm margem sobre venda abaixo de 25%.",
+      descricao: `Alguns produtos têm margem sobre venda abaixo de 25%.`,
       acao: `Revisar preço ou negociar compra: ${margemBaixa.slice(0, 3).map((x) => `${x.produto.nome} (${formatPercent(x.margemVenda)})`).join(", ")}.`,
       impacto: "Aumenta lucro sem aumentar estoque.",
     });
@@ -369,7 +379,7 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
       prioridade: "medio",
       titulo: "Capital parado em estoque",
       descricao: `${produtosParados.length} produto(s) estão há 45+ dias sem atualização. Capital estimado parado: ${formatBRL(capitalParado)}.`,
-      acao: "Criar campanha, combo, destaque no Instagram ou ação de giro.",
+      acao: "Criar campanha, combo, destaque no Instagram ou ação de giro para esses produtos.",
       impacto: "Transforma estoque parado em caixa.",
       valor: capitalParado,
     });
@@ -381,7 +391,7 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
       area: "comercial",
       prioridade: "medio",
       titulo: "Marketing consumindo parte relevante da receita",
-      descricao: `Marketing representa ${formatPercent(pesoMarketing)} da receita do mês.`,
+      descricao: `Marketing representa ${formatPercent(pesoMarketing)} da receita filtrada.`,
       acao: "Comparar campanhas com vendas geradas e pausar anúncios sem retorno claro.",
       impacto: "Melhora ROI e preserva margem.",
       valor: marketing,
@@ -395,7 +405,7 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
       prioridade: "alto",
       titulo: "CMV alto em relação à receita",
       descricao: `Custo de mercadorias representa ${formatPercent(pesoCmv)} da receita.`,
-      acao: "Revisar preço de venda, custo médio, descontos e compras.",
+      acao: "Revisar preço de venda, custo médio, descontos e compras de fornecedores.",
       impacto: "Protege lucro bruto da operação.",
       valor: cmv,
     });
@@ -408,10 +418,28 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
       prioridade: "medio",
       titulo: "Carga tributária elevada",
       descricao: `Impostos representam ${formatPercent(cargaTributaria)} da receita.`,
-      acao: "Conferir classificação fiscal e validar se há imposto duplicado ou mal categorizado.",
+      acao: "Conferir classificação fiscal dos lançamentos e validar se há imposto duplicado ou mal categorizado.",
       impacto: "Evita leitura distorcida do DRE.",
       valor: impostos,
     });
+  }
+
+  if (valorEstoqueCompra > 0 && valorEstoqueVenda > 0) {
+    const lucroPotencial = valorEstoqueVenda - valorEstoqueCompra;
+    const margemPotencial = valorEstoqueVenda > 0 ? (lucroPotencial / valorEstoqueVenda) * 100 : 0;
+
+    if (margemPotencial >= 35) {
+      recs.push({
+        id: "estoque-potencial",
+        area: "estoque",
+        prioridade: "positivo",
+        titulo: "Estoque com bom potencial de lucro",
+        descricao: `O estoque atual tem margem potencial estimada de ${formatPercent(margemPotencial)}.`,
+        acao: "Priorizar venda dos produtos com maior margem e bom estoque disponível.",
+        impacto: "Pode acelerar geração de caixa com boa rentabilidade.",
+        valor: lucroPotencial,
+      });
+    }
   }
 
   if (!recs.length) {
@@ -420,7 +448,7 @@ function buildRecomendacoes(produtos: Produto[], lancamentos: Lancamento[]): Rec
       area: "operacional",
       prioridade: "positivo",
       titulo: "Operação sem alertas críticos",
-      descricao: "Não encontrei riscos relevantes nos dados atuais.",
+      descricao: "Não encontrei riscos relevantes nos dados atuais de produtos e financeiro.",
       acao: "Manter acompanhamento semanal de margem, estoque e caixa.",
       impacto: "Ajuda a manter previsibilidade da operação.",
     });
@@ -447,32 +475,39 @@ export default function IAEmpresarialPage() {
 
   function showToast(msg: string, ms = 1800) {
     setToast(msg);
-    window.setTimeout(() => setToast(""), ms);
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => setToast(""), ms);
+    }
   }
 
-  async function carregar(showMsg = false) {
+  async function carregar() {
+    setLoading(true);
     try {
-      setLoading(true);
-      const [p, f] = await Promise.all([fetchProdutos(), fetchFinanceiro()]);
-      setProdutos(p);
-      setLancamentos(f);
-      if (showMsg) showToast("🧠 IA atualizada!");
-    } catch (err) {
-      console.error(err);
-      showToast("⚠️ Erro ao carregar dados da IA.");
+      const [produtosData, financeiroData] = await Promise.all([
+        fetchProdutos(),
+        fetchFinanceiro(),
+      ]);
+      setProdutos(produtosData);
+      setLancamentos(financeiroData);
+      showToast("🧠 IA atualizada!");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void carregar(false);
+    void carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const contexto = useMemo(() => {
     const mesAtual = currentMonth();
-    const lancMes = lancamentos.filter((l) => (l.competencia || l.data.slice(0, 7)) === mesAtual);
-    const ativos = produtos.filter((p) => p.ativo !== false);
+    const inicioMes = new Date(startOfCurrentMonth()).getTime();
+
+    const lancMes = lancamentos.filter((l) => {
+      const data = new Date(l.data).getTime();
+      return (l.competencia || "").startsWith(mesAtual) || data >= inicioMes;
+    });
 
     let receitaMes = 0;
     let despesaMes = 0;
@@ -496,27 +531,33 @@ export default function IAEmpresarialPage() {
       }
     }
 
-    const lucroMes = receitaMes - despesaMes;
-    const margemMes = receitaMes > 0 ? (lucroMes / receitaMes) * 100 : 0;
-    const cargaTributaria = receitaMes > 0 ? (impostoMes / receitaMes) * 100 : 0;
-    const cmvPercent = receitaMes > 0 ? (cmvMes / receitaMes) * 100 : 0;
-
+    const ativos = produtos.filter((p) => p.ativo !== false);
+    const estoqueTotal = ativos.reduce((acc, p) => acc + toNumber(p.estoque), 0);
+    const disponivelTotal = ativos.reduce((acc, p) => acc + Math.max(0, toNumber(p.estoque) - toNumber(p.reservado)), 0);
     const valorCustoEstoque = ativos.reduce((acc, p) => acc + toNumber(p.precoCompra) * toNumber(p.estoque), 0);
     const valorVendaEstoque = ativos.reduce((acc, p) => acc + toNumber(p.precoVenda) * toNumber(p.estoque), 0);
     const lucroPotencial = valorVendaEstoque - valorCustoEstoque;
+
     const semEstoque = ativos.filter((p) => Math.max(0, toNumber(p.estoque) - toNumber(p.reservado)) <= 0).length;
+    const margemProdutoMedia = ativos.length
+      ? ativos.reduce((acc, p) => acc + getMargemProduto(p).margemVenda, 0) / ativos.length
+      : 0;
 
-    const margemProdutoMedia = valorVendaEstoque > 0 ? (lucroPotencial / valorVendaEstoque) * 100 : 0;
+    const lucroMes = receitaMes - despesaMes;
+    const margemMes = receitaMes > 0 ? (lucroMes / receitaMes) * 100 : 0;
+    const cargaTributaria = receitaMes > 0 ? (impostoMes / receitaMes) * 100 : 0;
+    const cmvPercentual = receitaMes > 0 ? (cmvMes / receitaMes) * 100 : 0;
 
-    let score = 100;
-    if (margemMes < 20 && receitaMes > 0) score -= 18;
-    if (pendentePagar > pendenteReceber) score -= 14;
-    if (semEstoque > 0) score -= Math.min(18, semEstoque * 2);
-    if (cargaTributaria > 12) score -= 8;
-    if (cmvPercent > 55) score -= 10;
-    if (margemProdutoMedia < 25 && valorVendaEstoque > 0) score -= 12;
+    const score =
+      100
+      - (margemMes < 20 && receitaMes > 0 ? 20 : 0)
+      - (pendentePagar > pendenteReceber ? 15 : 0)
+      - (semEstoque > 0 ? 10 : 0)
+      - (cmvPercentual > 55 ? 15 : 0)
+      - (cargaTributaria > 12 ? 10 : 0);
 
     return {
+      mesAtual,
       receitaMes,
       despesaMes,
       lucroMes,
@@ -524,13 +565,15 @@ export default function IAEmpresarialPage() {
       impostoMes,
       cargaTributaria,
       cmvMes,
-      cmvPercent,
+      cmvPercentual,
       pendenteReceber,
       pendentePagar,
+      ativos: ativos.length,
+      estoqueTotal,
+      disponivelTotal,
       valorCustoEstoque,
       valorVendaEstoque,
       lucroPotencial,
-      ativos: ativos.length,
       semEstoque,
       margemProdutoMedia,
       score: Math.max(0, Math.min(100, score)),
@@ -547,7 +590,7 @@ export default function IAEmpresarialPage() {
     });
   }, [recomendacoes, areaFilter, prioridadeFilter]);
 
-  const kpis = useMemo(() => [
+  const kpis: KpiIA[] = useMemo(() => [
     {
       label: "Score IA",
       value: `${contexto.score}/100`,
@@ -595,7 +638,7 @@ export default function IAEmpresarialPage() {
   }, [recomendacoes]);
 
   return (
-    <main className="iaPage">
+    <main className="page">
       <header className="hero">
         <div>
           <div className="kicker">MAISON NOOR • INTELIGÊNCIA</div>
@@ -607,7 +650,7 @@ export default function IAEmpresarialPage() {
 
         <div className="heroActions">
           <span className={loading ? "syncBadge loading" : "syncBadge"}>{loading ? "● Analisando dados..." : "● IA em tempo real"}</span>
-          <button className="btn primary" onClick={() => void carregar(true)} type="button">
+          <button className="btn primary" onClick={() => void carregar()} type="button">
             Atualizar IA
           </button>
         </div>
@@ -616,7 +659,7 @@ export default function IAEmpresarialPage() {
       {toast ? <div className="toast">{toast}</div> : null}
 
       <section className="scorePanel">
-        <div className="scoreText">
+        <div className="scoreLeft">
           <div className="sectionKicker">Diagnóstico geral</div>
           <h2>{contexto.score >= 80 ? "Operação saudável" : contexto.score >= 60 ? "Operação com pontos de atenção" : "Operação exige ação rápida"}</h2>
           <p>
@@ -625,13 +668,13 @@ export default function IAEmpresarialPage() {
           </p>
         </div>
 
-        <div className={contexto.score >= 80 ? "scoreCircle greenScore" : contexto.score >= 60 ? "scoreCircle goldScore" : "scoreCircle redScore"}>
+        <div className="scoreCircle">
           <strong>{contexto.score}</strong>
           <span>/100</span>
         </div>
       </section>
 
-      <section className="kpiGrid">
+      <section className="kpis">
         {kpis.map((kpi) => (
           <KpiCard key={kpi.label} {...kpi} />
         ))}
@@ -735,117 +778,560 @@ export default function IAEmpresarialPage() {
 
         <div className="deepPanel">
           <div className="sectionKicker">Leitura de estoque</div>
-          <h2>Capital e produtos</h2>
+          <h2>Capital e disponibilidade</h2>
           <div className="miniRows">
-            <MiniRow label="Valor em custo" value={formatBRL(contexto.valorCustoEstoque)} tone="gold" />
-            <MiniRow label="Valor em venda" value={formatBRL(contexto.valorVendaEstoque)} tone="green" />
+            <MiniRow label="Estoque físico" value={String(contexto.estoqueTotal)} />
+            <MiniRow label="Disponível" value={String(contexto.disponivelTotal)} />
+            <MiniRow label="Sem estoque" value={String(contexto.semEstoque)} tone={contexto.semEstoque > 0 ? "gold" : "green"} />
+            <MiniRow label="Custo em estoque" value={formatBRL(contexto.valorCustoEstoque)} tone="gold" />
+            <MiniRow label="Venda potencial" value={formatBRL(contexto.valorVendaEstoque)} tone="green" />
             <MiniRow label="Lucro potencial" value={formatBRL(contexto.lucroPotencial)} tone={contexto.lucroPotencial >= 0 ? "green" : "red"} />
-            <MiniRow label="Margem potencial" value={formatPercent(contexto.margemProdutoMedia)} tone={contexto.margemProdutoMedia >= 30 ? "green" : "gold"} />
-            <MiniRow label="Produtos ativos" value={String(contexto.ativos)} />
-            <MiniRow label="Sem estoque" value={String(contexto.semEstoque)} tone={contexto.semEstoque > 0 ? "red" : "green"} />
+          </div>
+        </div>
+
+        <div className="deepPanel">
+          <div className="sectionKicker">Fiscal e operação</div>
+          <h2>Impostos e CMV</h2>
+          <div className="miniRows">
+            <MiniRow label="Impostos do mês" value={formatBRL(contexto.impostoMes)} tone="gold" />
+            <MiniRow label="Carga tributária" value={formatPercent(contexto.cargaTributaria)} tone={contexto.cargaTributaria > 12 ? "red" : "green"} />
+            <MiniRow label="CMV do mês" value={formatBRL(contexto.cmvMes)} tone="red" />
+            <MiniRow label="CMV / Receita" value={formatPercent(contexto.cmvPercentual)} tone={contexto.cmvPercentual > 55 ? "red" : "green"} />
+            <MiniRow label="Margem média produto" value={formatPercent(contexto.margemProdutoMedia)} tone={contexto.margemProdutoMedia >= 30 ? "green" : "gold"} />
+            <MiniRow label="Lançamentos analisados" value={String(lancamentos.length)} />
           </div>
         </div>
       </section>
 
-      <style jsx global>{`
-        .iaPage { max-width:1240px; margin:0 auto; padding:14px 16px 28px; color:#f5f2ec; }
-        .hero, .scorePanel, .controlPanel, .recommendations, .deepPanel {
-          border:1px solid rgba(200,162,106,.18);
-          background:radial-gradient(circle at top left, rgba(200,162,106,.12), transparent 32%), linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012));
-          border-radius:20px;
-          box-shadow:0 16px 42px rgba(0,0,0,.16);
+      <style jsx>{`
+        .page {
+          max-width: 1240px;
+          margin: 0 auto;
+          padding: 18px;
+          color: #f5f2ec;
         }
-        .hero { padding:16px; display:flex; justify-content:space-between; align-items:flex-end; gap:14px; flex-wrap:wrap; }
-        .kicker, .sectionKicker { color:rgba(200,162,106,.95); font-size:10px; letter-spacing:.16em; text-transform:uppercase; font-weight:950; }
-        h1 { margin:5px 0 0; font-size:28px; line-height:1.05; letter-spacing:-.03em; }
-        h2 { margin:4px 0 0; font-size:21px; line-height:1.12; letter-spacing:-.02em; }
-        p { margin:7px 0 0; opacity:.72; line-height:1.38; font-size:13px; }
-        .heroActions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center; }
-        .btn { min-height:34px; display:inline-flex; align-items:center; justify-content:center; border-radius:12px; border:1px solid rgba(200,162,106,.25); background:rgba(200,162,106,.08); color:#f5f2ec; padding:0 12px; font-weight:900; cursor:pointer; }
-        .btn.primary { background:linear-gradient(180deg, rgba(200,162,106,.18), rgba(200,162,106,.07)); border-color:rgba(200,162,106,.42); }
-        .syncBadge { min-height:34px; display:inline-flex; align-items:center; padding:0 12px; border-radius:999px; border:1px solid rgba(88,214,141,.35); background:rgba(88,214,141,.09); color:#9ff0bc; font-size:12px; font-weight:900; }
-        .syncBadge.loading { border-color:rgba(255,201,98,.35); background:rgba(255,201,98,.09); color:#f3c979; }
-        .toast { position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:99; padding:10px 13px; border-radius:14px; border:1px solid rgba(200,162,106,.25); background:rgba(25,20,16,.96); font-weight:900; }
-        .scorePanel { margin-top:12px; padding:15px; display:grid; grid-template-columns:minmax(0,1fr) 128px; gap:14px; align-items:center; }
-        .scoreCircle { width:116px; height:116px; border-radius:999px; display:grid; place-items:center; align-content:center; border:1px solid rgba(200,162,106,.22); background:rgba(0,0,0,.22); justify-self:end; }
-        .scoreCircle strong { font-size:34px; line-height:1; }
-        .scoreCircle span { font-size:12px; opacity:.62; font-weight:900; }
-        .greenScore strong { color:#4dff9a; } .goldScore strong { color:#f3c979; } .redScore strong { color:#ff8585; }
-        .kpiGrid { margin-top:12px; display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:9px; }
-        .kpiCard { min-height:78px; padding:10px; border-radius:15px; border:1px solid rgba(255,255,255,.08); background:rgba(0,0,0,.18); display:grid; align-content:center; }
-        .kpiCard span { font-size:9px; opacity:.72; text-transform:uppercase; letter-spacing:.1em; font-weight:950; }
-        .kpiCard strong { margin-top:5px; font-size:17px; color:rgba(200,162,106,.98); overflow-wrap:anywhere; }
-        .kpiCard small { margin-top:4px; opacity:.62; font-size:10px; }
-        .kpiCard.green strong, .green { color:#4dff9a !important; } .kpiCard.red strong, .red { color:#ff8585 !important; } .kpiCard.gold strong, .gold { color:#f3c979 !important; } .kpiCard.blue strong { color:#8cc8ff !important; }
-        .controlPanel { margin-top:12px; padding:13px; display:grid; grid-template-columns:180px 180px minmax(0,1fr); gap:10px; align-items:end; }
-        .field { display:grid; gap:5px; min-width:0; }
-        .field label { font-size:9px; letter-spacing:.13em; text-transform:uppercase; opacity:.72; font-weight:950; }
-        .input { height:38px; border-radius:12px; border:1px solid rgba(255,255,255,.1); background:rgba(15,15,22,.92); color:#f5f2ec; padding:0 11px; outline:none; }
-        .areaPills { display:flex; gap:7px; flex-wrap:wrap; align-items:center; }
-        .areaPill { min-height:32px; border-radius:999px; border:1px solid rgba(200,162,106,.18); background:rgba(200,162,106,.06); color:#f5f2ec; padding:0 10px; font-weight:900; cursor:pointer; }
-        .areaPill.active { border-color:rgba(200,162,106,.45); background:rgba(200,162,106,.16); }
-        .areaPill b { color:#f3c979; }
-        .recommendations { margin-top:12px; padding:14px; }
-        .sectionHead { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:12px; }
-        .recGrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:10px; }
-        .recCard { position:relative; min-height:250px; border-radius:18px; border:1px solid rgba(255,255,255,.08); background:rgba(0,0,0,.18); padding:12px; display:grid; gap:10px; align-content:start; overflow:hidden; }
-        .recCard::before { content:""; position:absolute; inset:0 auto auto 0; width:4px; height:100%; background:rgba(200,162,106,.5); }
-        .recCard.critico::before { background:#ff8585; } .recCard.alto::before { background:#ffb36b; } .recCard.medio::before { background:#f3c979; } .recCard.positivo::before { background:#4dff9a; }
-        .recTop { display:flex; gap:6px; flex-wrap:wrap; }
-        .priority, .area { min-height:22px; display:inline-flex; align-items:center; padding:0 8px; border-radius:999px; font-size:9px; font-weight:950; text-transform:uppercase; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); }
-        .priority.critico { color:#ffd1d1; border-color:rgba(255,120,120,.3); background:rgba(255,120,120,.08); }
-        .priority.alto, .priority.medio { color:#ffe2a8; border-color:rgba(255,201,98,.3); background:rgba(255,201,98,.08); }
-        .priority.positivo { color:#bfffd5; border-color:rgba(117,255,171,.3); background:rgba(117,255,171,.08); }
-        .recCard h3 { margin:0; font-size:16px; line-height:1.18; }
-        .recCard p { margin:0; font-size:12px; opacity:.72; }
-        .actionBox, .impact { border-radius:14px; border:1px solid rgba(200,162,106,.14); background:rgba(200,162,106,.055); padding:9px; display:grid; gap:4px; }
-        .actionBox span, .impact span { font-size:9px; opacity:.65; text-transform:uppercase; letter-spacing:.1em; font-weight:950; }
-        .actionBox strong, .impact b { font-size:12px; line-height:1.3; }
-        .recValue { position:absolute; right:12px; bottom:12px; color:#f3c979; font-weight:950; font-size:13px; }
-        .empty { min-height:120px; display:grid; place-items:center; border-radius:14px; border:1px dashed rgba(255,255,255,.14); opacity:.7; text-align:center; }
-        .deepGrid { margin-top:12px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-        .deepPanel { padding:13px; }
-        .miniRows { margin-top:10px; display:grid; gap:8px; }
-        .miniRow { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:9px; border-radius:13px; border:1px solid rgba(255,255,255,.075); background:rgba(255,255,255,.025); }
-        .miniRow span { font-size:12px; opacity:.72; font-weight:850; }
-        .miniRow b { font-size:13px; white-space:nowrap; color:rgba(200,162,106,.98); }
-        .miniRow.green b { color:#4dff9a; } .miniRow.red b { color:#ff8585; } .miniRow.gold b { color:#f3c979; }
-        @media (max-width:1100px) {
-          .controlPanel, .deepGrid { grid-template-columns:1fr; }
-          .scorePanel { grid-template-columns:1fr; }
-          .scoreCircle { justify-self:start; }
+
+        .hero,
+        .scorePanel,
+        .controlPanel,
+        .recommendations,
+        .deepPanel {
+          border: 1px solid rgba(200, 162, 106, 0.18);
+          background:
+            radial-gradient(circle at top left, rgba(200, 162, 106, 0.12), transparent 32%),
+            linear-gradient(180deg, rgba(255,255,255,.042), rgba(255,255,255,.012));
+          border-radius: 22px;
+          box-shadow: 0 18px 48px rgba(0,0,0,.18);
         }
-        @media (max-width:680px) {
-          .iaPage { padding:10px; }
-          h1 { font-size:24px; }
-          .hero { align-items:flex-start; }
-          .heroActions { width:100%; justify-content:flex-start; }
-          .btn, .syncBadge { flex:1 1 auto; }
-          .kpiGrid { grid-template-columns:1fr; }
-          .recGrid { grid-template-columns:1fr; }
+
+        .hero {
+          padding: 18px;
+          display: flex;
+          justify-content: space-between;
+          gap: 14px;
+          align-items: flex-end;
+          flex-wrap: wrap;
+        }
+
+        .kicker,
+        .sectionKicker {
+          color: rgba(200, 162, 106, 0.95);
+          font-size: 11px;
+          letter-spacing: .18em;
+          text-transform: uppercase;
+          font-weight: 950;
+        }
+
+        h1 {
+          margin: 5px 0 0;
+          font-size: 30px;
+          line-height: 1.05;
+        }
+
+        h2 {
+          margin: 4px 0 0;
+          font-size: 22px;
+        }
+
+        p {
+          margin: 7px 0 0;
+          opacity: .76;
+          line-height: 1.42;
+        }
+
+        .heroActions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+          align-items: center;
+        }
+
+        .btn {
+          min-height: 36px;
+          border-radius: 13px;
+          border: 1px solid rgba(200,162,106,.24);
+          background: rgba(200,162,106,.075);
+          color: #f5f2ec;
+          padding: 0 12px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .btn.primary {
+          background: linear-gradient(180deg, rgba(200,162,106,.18), rgba(200,162,106,.075));
+          border-color: rgba(200,162,106,.42);
+        }
+
+        .syncBadge {
+          height: 36px;
+          display: inline-flex;
+          align-items: center;
+          padding: 0 12px;
+          border-radius: 999px;
+          border: 1px solid rgba(88,214,141,.38);
+          background: rgba(88,214,141,.1);
+          color: #9ff0bc;
+          font-size: 12px;
+          font-weight: 900;
+        }
+
+        .syncBadge.loading {
+          border-color: rgba(255, 201, 98, 0.38);
+          background: rgba(255, 201, 98, 0.1);
+          color: #ffe4a6;
+        }
+
+        .toast {
+          position: fixed;
+          top: 14px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 9999;
+          padding: 10px 13px;
+          border-radius: 14px;
+          border: 1px solid rgba(200,162,106,.25);
+          background: rgba(25,20,16,.96);
+          font-weight: 900;
+          box-shadow: 0 16px 40px rgba(0,0,0,.3);
+        }
+
+        .scorePanel {
+          margin-top: 14px;
+          padding: 16px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 150px;
+          gap: 16px;
+          align-items: center;
+        }
+
+        .scoreCircle {
+          width: 136px;
+          height: 136px;
+          border-radius: 999px;
+          border: 1px solid rgba(200,162,106,.35);
+          background:
+            radial-gradient(circle, rgba(200,162,106,.20), rgba(200,162,106,.05) 58%, rgba(0,0,0,.22));
+          display: grid;
+          place-items: center;
+          align-content: center;
+          justify-self: end;
+          box-shadow: inset 0 0 30px rgba(200,162,106,.08);
+        }
+
+        .scoreCircle strong {
+          font-size: 40px;
+          line-height: 1;
+          color: rgba(200,162,106,.98);
+        }
+
+        .scoreCircle span {
+          margin-top: 3px;
+          font-size: 12px;
+          opacity: .68;
+          font-weight: 950;
+        }
+
+        .kpis {
+          margin-top: 14px;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 10px;
+        }
+
+        .kpi {
+          min-height: 84px;
+          padding: 11px;
+          border-radius: 18px;
+          border: 1px solid rgba(200,162,106,.16);
+          background:
+            radial-gradient(circle at top left, rgba(200,162,106,.09), transparent 45%),
+            linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.01));
+          display: grid;
+          align-content: center;
+        }
+
+        .kpi span {
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: .12em;
+          opacity: .72;
+          font-weight: 950;
+        }
+
+        .kpi strong {
+          margin-top: 5px;
+          font-size: 18px;
+          line-height: 1.08;
+          color: rgba(200,162,106,.98);
+          overflow-wrap: anywhere;
+        }
+
+        .kpi small {
+          margin-top: 4px;
+          font-size: 10.5px;
+          opacity: .62;
+        }
+
+        .kpi.green strong,
+        .green {
+          color: #4dff9a !important;
+        }
+
+        .kpi.red strong,
+        .red {
+          color: #ff8585 !important;
+        }
+
+        .kpi.gold strong,
+        .gold {
+          color: #f3c979 !important;
+        }
+
+        .kpi.blue strong {
+          color: #8cc8ff !important;
+        }
+
+        .controlPanel {
+          margin-top: 14px;
+          padding: 12px;
+          display: grid;
+          grid-template-columns: 180px 180px minmax(0, 1fr);
+          gap: 10px;
+          align-items: end;
+        }
+
+        .field {
+          display: grid;
+          gap: 5px;
+          min-width: 0;
+        }
+
+        .field label {
+          font-size: 10px;
+          letter-spacing: .14em;
+          text-transform: uppercase;
+          opacity: .75;
+          font-weight: 950;
+        }
+
+        .input {
+          width: 100%;
+          min-height: 38px;
+          border-radius: 13px;
+          border: 1px solid rgba(255,255,255,.11);
+          background: rgba(15,15,22,.92);
+          color: #f5f2ec;
+          padding: 0 11px;
+          outline: none;
+        }
+
+        .areaPills {
+          display: flex;
+          gap: 7px;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: flex-end;
+        }
+
+        .areaPill {
+          min-height: 32px;
+          border-radius: 999px;
+          border: 1px solid rgba(200,162,106,.20);
+          background: rgba(200,162,106,.06);
+          color: #f5f2ec;
+          padding: 0 10px;
+          font-size: 11px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .areaPill.active {
+          background: rgba(200,162,106,.16);
+          border-color: rgba(200,162,106,.44);
+          color: #ffe1ad;
+        }
+
+        .areaPill b {
+          margin-left: 5px;
+          color: rgba(200,162,106,.98);
+        }
+
+        .recommendations {
+          margin-top: 14px;
+          padding: 14px;
+        }
+
+        .sectionHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-bottom: 12px;
+        }
+
+        .recGrid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+          gap: 10px;
+        }
+
+        .recCard {
+          position: relative;
+          overflow: hidden;
+          padding: 12px;
+          border-radius: 18px;
+          border: 1px solid rgba(255,255,255,.08);
+          background: rgba(0,0,0,.20);
+          display: grid;
+          gap: 9px;
+        }
+
+        .recCard.critico {
+          border-color: rgba(255,120,120,.30);
+          background:
+            radial-gradient(circle at top left, rgba(255,120,120,.10), transparent 35%),
+            rgba(0,0,0,.20);
+        }
+
+        .recCard.alto {
+          border-color: rgba(255,201,98,.28);
+        }
+
+        .recCard.positivo {
+          border-color: rgba(117,255,171,.24);
+        }
+
+        .recTop {
+          display: flex;
+          gap: 7px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+
+        .priority,
+        .area {
+          min-height: 24px;
+          display: inline-flex;
+          align-items: center;
+          border-radius: 999px;
+          padding: 0 9px;
+          font-size: 10px;
+          font-weight: 950;
+          text-transform: uppercase;
+          letter-spacing: .05em;
+          border: 1px solid rgba(255,255,255,.10);
+          background: rgba(255,255,255,.04);
+        }
+
+        .priority.critico {
+          color: #ffd1d1;
+          border-color: rgba(255,120,120,.34);
+          background: rgba(255,120,120,.10);
+        }
+
+        .priority.alto,
+        .priority.medio {
+          color: #ffe4a6;
+          border-color: rgba(255,201,98,.30);
+          background: rgba(255,201,98,.08);
+        }
+
+        .priority.positivo {
+          color: #bfffd5;
+          border-color: rgba(117,255,171,.28);
+          background: rgba(117,255,171,.08);
+        }
+
+        .area {
+          color: rgba(200,162,106,.98);
+          border-color: rgba(200,162,106,.22);
+          background: rgba(200,162,106,.06);
+        }
+
+        .recCard h3 {
+          margin: 0;
+          font-size: 16px;
+          line-height: 1.2;
+        }
+
+        .recCard p {
+          margin: 0;
+          font-size: 12.5px;
+          line-height: 1.42;
+          opacity: .72;
+        }
+
+        .actionBox {
+          padding: 10px;
+          border-radius: 14px;
+          border: 1px solid rgba(200,162,106,.14);
+          background: rgba(200,162,106,.06);
+        }
+
+        .actionBox span,
+        .impact span {
+          display: block;
+          font-size: 9px;
+          text-transform: uppercase;
+          letter-spacing: .1em;
+          opacity: .62;
+          font-weight: 950;
+          margin-bottom: 4px;
+        }
+
+        .actionBox strong,
+        .impact b {
+          display: block;
+          font-size: 12px;
+          line-height: 1.35;
+        }
+
+        .impact {
+          padding: 9px 10px;
+          border-radius: 14px;
+          background: rgba(255,255,255,.03);
+          border: 1px solid rgba(255,255,255,.07);
+        }
+
+        .recValue {
+          justify-self: start;
+          min-height: 28px;
+          display: inline-flex;
+          align-items: center;
+          border-radius: 999px;
+          padding: 0 10px;
+          border: 1px solid rgba(200,162,106,.24);
+          background: rgba(200,162,106,.08);
+          color: rgba(200,162,106,.98);
+          font-weight: 950;
+          font-size: 12px;
+        }
+
+        .deepGrid {
+          margin-top: 14px;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .deepPanel {
+          padding: 13px;
+        }
+
+        .miniRows {
+          margin-top: 10px;
+          display: grid;
+          gap: 7px;
+        }
+
+        .miniRow {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          align-items: center;
+          min-height: 38px;
+          padding: 8px 9px;
+          border-radius: 13px;
+          border: 1px solid rgba(255,255,255,.075);
+          background: rgba(0,0,0,.18);
+        }
+
+        .miniRow span {
+          opacity: .68;
+          font-size: 12px;
+          font-weight: 850;
+        }
+
+        .miniRow strong {
+          font-size: 12px;
+          white-space: nowrap;
+        }
+
+        .miniRow.green strong { color: #4dff9a; }
+        .miniRow.red strong { color: #ff8585; }
+        .miniRow.gold strong { color: #f3c979; }
+
+        .empty {
+          grid-column: 1 / -1;
+          min-height: 110px;
+          display: grid;
+          place-items: center;
+          border-radius: 16px;
+          border: 1px dashed rgba(255,255,255,.14);
+          opacity: .7;
+        }
+
+        @media (max-width: 1050px) {
+          .controlPanel {
+            grid-template-columns: 1fr 1fr;
+          }
+
+          .areaPills {
+            grid-column: 1 / -1;
+            justify-content: flex-start;
+          }
+
+          .deepGrid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 720px) {
+          .page {
+            padding: 12px;
+          }
+
+          .hero,
+          .scorePanel {
+            grid-template-columns: 1fr;
+          }
+
+          .scoreCircle {
+            justify-self: start;
+          }
+
+          .controlPanel {
+            grid-template-columns: 1fr;
+          }
+
+          .recGrid {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
     </main>
   );
 }
 
-function KpiCard({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  tone?: "green" | "red" | "gold" | "blue";
-}) {
+function KpiCard({ label, value, hint, tone }: KpiIA) {
   return (
-    <div className={`kpiCard ${tone || ""}`}>
+    <article className={`kpi ${tone || ""}`}>
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{hint}</small>
-    </div>
+    </article>
   );
 }
 
@@ -861,7 +1347,30 @@ function MiniRow({
   return (
     <div className={`miniRow ${tone || ""}`}>
       <span>{label}</span>
-      <b>{value}</b>
+      <strong>{value}</strong>
     </div>
   );
+}
+
+function prioridadeLabel(value: Prioridade): string {
+  const map: Record<Prioridade, string> = {
+    critico: "Crítico",
+    alto: "Alto",
+    medio: "Médio",
+    baixo: "Baixo",
+    positivo: "Positivo",
+  };
+  return map[value] || value;
+}
+
+function areaLabel(value: AreaIA): string {
+  const map: Record<AreaIA, string> = {
+    financeiro: "Financeiro",
+    estoque: "Estoque",
+    produto: "Produto",
+    fiscal: "Fiscal",
+    comercial: "Comercial",
+    operacional: "Operacional",
+  };
+  return map[value] || value;
 }
