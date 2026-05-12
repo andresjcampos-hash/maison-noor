@@ -134,7 +134,7 @@ export default function LoginPage() {
           </div>
           <div className="logoTextGroup">
             <span className="logoSmall">Maison Noor</span>
-            <span className="logoMain">CRM</span>
+            <span className="logoMain">ERP</span>
           </div>
         </div>
 
@@ -142,7 +142,7 @@ export default function LoginPage() {
 
         <p className="subtitle">
           Acesse o painel para gerenciar{" "}
-          <strong>leads, vendas, estoque e financeiro</strong>.
+          <strong>Fiscal • Financeiro • BI • IA • Estoque</strong>.
         </p>
 
         {/* Formulário */}
@@ -221,7 +221,7 @@ export default function LoginPage() {
         {/* Rodapé */}
         <div className="loginFooter">
           <span className="dot" aria-hidden />
-          <span className="footerText">Acesso restrito • Maison Noor CRM</span>
+          <span className="footerText">Acesso restrito • Maison Noor ERP</span>
         </div>
       </div>
 

@@ -113,10 +113,10 @@ export default function Nav() {
   }
 
   return (
-    <nav className="crmNavRoot" aria-label="Menu do CRM">
+    <nav className="crmNavRoot" aria-label="Menu do ERP">
       <div className="crmNav">
         <div className="crmNavSectionTitle">
-          <span>Menu</span>
+          <span>Módulos ERP</span>
         </div>
 
         <div className="crmNavList">

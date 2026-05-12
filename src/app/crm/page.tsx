@@ -1632,7 +1632,7 @@ export default function CrmPage() {
         <section className="crmTopBar">
           <div className="crmTopBrand">
             <div className="crmDashKicker">Maison Noor</div>
-            <h1>CRM • Dashboard</h1>
+            <h1>ERP • Dashboard</h1>
             <p>
               Visão inteligente dos pedidos, alertas, faturamento e automações
               do CRM em tempo real.
@@ -4676,7 +4676,7 @@ export default function CrmPage() {
           }
 
           /* =========================================================
-           MAISON NOOR CRM • AJUSTE 10/10 DEFINITIVO
+           MAISON NOOR ERP • AJUSTE 10/10 DEFINITIVO
            Mantém a estrutura atual, melhora alinhamento, leitura,
            microinterações e acabamento premium sem quebrar o CRM.
         ========================================================= */

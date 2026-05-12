@@ -26,13 +26,13 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
 
                 <div className="brandText">
                   <div className="kicker">Maison Noor</div>
-                  <div className="title">CRM</div>
+                  <div className="title">ERP</div>
                 </div>
               </div>
 
               <div className="brandLine" aria-hidden />
               <div className="brandHint">
-                Vendas • Leads • Estoque • Financeiro
+                Fiscal • Financeiro • BI • IA • Estoque
               </div>
             </div>
 

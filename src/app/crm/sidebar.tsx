@@ -9,7 +9,7 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
   return (
     <AuthGuard>
       <div className="crmShell">
-        <aside className="crmNav" aria-label="Navegação CRM">
+        <aside className="crmNav" aria-label="Navegação ERP Maison Noor">
           <div className="crmNavInner">
             <div className="brand">
               <div className="brandTop">
@@ -26,13 +26,13 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
 
                 <div className="brandText">
                   <div className="kicker">Maison Noor</div>
-                  <div className="title">CRM</div>
+                  <div className="title">ERP</div>
                 </div>
               </div>
 
               <div className="brandLine" aria-hidden />
               <div className="brandHint">
-                Vendas • Leads • Estoque • Financeiro
+                BI • Fiscal • Financeiro • Estoque • IA
               </div>
             </div>
 
@@ -111,6 +111,23 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
             );
           }
 
+          .crmNav::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 1px;
+            height: 100%;
+            background: linear-gradient(
+              180deg,
+              transparent,
+              rgba(200, 162, 106, 0.62),
+              transparent
+            );
+            opacity: 0.42;
+            pointer-events: none;
+          }
+
           .crmNavInner {
             position: relative;
             min-height: 100vh;
@@ -121,14 +138,21 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
           }
 
           .brand {
+            position: relative;
+            overflow: hidden;
             padding: 14px;
             border-radius: 20px;
-            border: 1px solid rgba(200, 162, 106, 0.2);
+            border: 1px solid rgba(200, 162, 106, 0.22);
             background:
               radial-gradient(
                 700px 220px at 10% 0%,
-                rgba(200, 162, 106, 0.16),
+                rgba(200, 162, 106, 0.18),
                 transparent 55%
+              ),
+              linear-gradient(
+                180deg,
+                rgba(255, 255, 255, 0.035),
+                rgba(255, 255, 255, 0.008)
               ),
               rgba(0, 0, 0, 0.24);
             box-shadow:
@@ -136,7 +160,23 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
               inset 0 1px 0 rgba(255, 255, 255, 0.05);
           }
 
+          .brand::before {
+            content: "";
+            position: absolute;
+            inset: -80px auto auto -80px;
+            width: 180px;
+            height: 180px;
+            border-radius: 999px;
+            background: radial-gradient(
+              circle,
+              rgba(200, 162, 106, 0.16),
+              transparent 64%
+            );
+            pointer-events: none;
+          }
+
           .brandTop {
+            position: relative;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -158,6 +198,7 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
             justify-content: center;
             flex-shrink: 0;
             overflow: hidden;
+            box-shadow: 0 0 24px rgba(200, 162, 106, 0.1);
           }
 
           .brandLogo {
@@ -182,9 +223,9 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
           }
 
           .title {
-            font-size: 20px;
-            font-weight: 950;
-            letter-spacing: 0.02em;
+            font-size: 23px;
+            font-weight: 900;
+            letter-spacing: 0.04em;
             line-height: 1.05;
             background: linear-gradient(
               180deg,
@@ -197,6 +238,7 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
           }
 
           .brandLine {
+            position: relative;
             margin-top: 11px;
             height: 1px;
             background: linear-gradient(
@@ -210,7 +252,7 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
           .brandHint {
             margin-top: 9px;
             font-size: 11px;
-            opacity: 0.76;
+            opacity: 0.78;
             letter-spacing: 0.02em;
             line-height: 1.35;
           }
@@ -222,56 +264,50 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
 
           .navFooterLine {
             height: 1px;
-            margin-bottom: 10px;
             background: linear-gradient(
               90deg,
               transparent,
-              rgba(200, 162, 106, 0.25),
+              rgba(200, 162, 106, 0.24),
               transparent
             );
           }
 
           .navFooterText {
+            margin-top: 10px;
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 12px;
-            border-radius: 14px;
-            border: 1px solid rgba(200, 162, 106, 0.14);
-            background: rgba(0, 0, 0, 0.22);
+            gap: 7px;
+            font-size: 11px;
+            opacity: 0.7;
           }
 
           .dot {
-            width: 9px;
-            height: 9px;
+            width: 7px;
+            height: 7px;
             border-radius: 999px;
-            background: #d6b16f;
-            box-shadow: 0 0 16px rgba(214, 177, 111, 0.7);
-            flex-shrink: 0;
+            background: #4dff9a;
+            box-shadow: 0 0 14px rgba(77, 255, 154, 0.75);
           }
 
           .muted {
-            font-size: 12px;
             color: rgba(242, 242, 242, 0.72);
-            font-weight: 800;
           }
 
           .crmMain {
             min-height: 100vh;
-            margin-left: 280px;
+            padding-left: 280px;
           }
 
           .crmMainInner {
             min-height: 100vh;
-            width: 100%;
+            padding: 24px;
           }
 
-          @media (max-width: 900px) {
+          @media (max-width: 980px) {
             .crmNav {
               position: relative;
               width: 100%;
               height: auto;
-              min-height: auto;
               border-right: 0;
               border-bottom: 1px solid rgba(200, 162, 106, 0.16);
             }
@@ -281,7 +317,11 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
             }
 
             .crmMain {
-              margin-left: 0;
+              padding-left: 0;
+            }
+
+            .crmMainInner {
+              padding: 14px;
             }
           }
         `}</style>
