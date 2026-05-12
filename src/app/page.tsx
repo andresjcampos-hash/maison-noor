@@ -1382,8 +1382,8 @@ export default function HomePage() {
           <div
             style={{
               ...styles.heroBanner,
-              minHeight: isMobile ? "350px" : "360px",
-              padding: isMobile ? "30px 50px 28px" : "40px 30px",
+              minHeight: isMobile ? "230px" : "360px",
+              padding: isMobile ? "22px 42px 20px" : "40px 30px",
               borderRadius: isMobile ? "24px" : "28px",
               alignItems: heroAtual?.align === "center" ? "center" : "flex-start",
               textAlign: heroAtual?.align === "center" ? "center" : "left",
@@ -1411,8 +1411,8 @@ export default function HomePage() {
               <h1
                 style={{
                   ...styles.heroTitle,
-                  fontSize: isMobile ? "27px" : isTablet ? "34px" : "42px",
-                  maxWidth: isMobile ? "280px" : "620px",
+                  fontSize: isMobile ? "24px" : isTablet ? "34px" : "42px",
+                  maxWidth: isMobile ? "250px" : "620px",
                   lineHeight: isMobile ? 1.08 : 1.06,
                 }}
               >
@@ -1426,8 +1426,8 @@ export default function HomePage() {
               <p
                 style={{
                   ...styles.heroSubtitle,
-                  fontSize: isMobile ? "13px" : "15px",
-                  maxWidth: isMobile ? "270px" : "520px",
+                  fontSize: isMobile ? "12px" : "15px",
+                  maxWidth: isMobile ? "240px" : "520px",
                   marginTop: "8px",
                   lineHeight: isMobile ? 1.45 : 1.6,
                 }}
@@ -1442,10 +1442,10 @@ export default function HomePage() {
                     ...styles.heroPrimaryButton,
                     ...(isMobile
                       ? {
-                          minWidth: "220px",
+                          minWidth: "190px",
                           maxWidth: "100%",
-                          padding: "13px 18px",
-                          fontSize: "15px",
+                          padding: "11px 16px",
+                          fontSize: "14px",
                           borderRadius: "14px",
                         }
                       : {}),
