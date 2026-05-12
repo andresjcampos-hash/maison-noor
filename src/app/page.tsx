@@ -158,6 +158,7 @@ type HeroBanner = {
   ctaHref: string;
   image?: string;
   align?: "left" | "center";
+  mobilePosition?: string;
 };
 
 type NavItem = {
@@ -658,6 +659,7 @@ export default function HomePage() {
         ctaHref: "#produtos",
         image: "/banners/banner-namorados-maison-noor.jpg",
         align: "left",
+        mobilePosition: "58% center",
       },
       {
         id: "colecao-2",
@@ -668,6 +670,7 @@ export default function HomePage() {
         ctaHref: "#produtos",
         image: "/banners/perfumes.jpg",
         align: "left",
+        mobilePosition: "62% center",
       },
       {
         id: "compra-segura-3",
@@ -678,6 +681,7 @@ export default function HomePage() {
         ctaHref: "#produtos",
         image: "/banners/perfumes.png",
         align: "left",
+        mobilePosition: "64% center",
       },
     ];
   }, []);
@@ -1348,7 +1352,13 @@ export default function HomePage() {
           <button
             type="button"
             onClick={() => navegarHero("anterior")}
-            style={{ ...styles.heroArrow, left: isMobile ? "12px" : "18px" }}
+            style={{
+              ...styles.heroArrow,
+              left: isMobile ? "10px" : "18px",
+              width: isMobile ? "42px" : "48px",
+              height: isMobile ? "42px" : "48px",
+              fontSize: isMobile ? "24px" : "28px",
+            }}
             aria-label="Slide anterior"
           >
             ‹
@@ -1357,7 +1367,13 @@ export default function HomePage() {
           <button
             type="button"
             onClick={() => navegarHero("proximo")}
-            style={{ ...styles.heroArrow, right: isMobile ? "12px" : "18px" }}
+            style={{
+              ...styles.heroArrow,
+              right: isMobile ? "10px" : "18px",
+              width: isMobile ? "42px" : "48px",
+              height: isMobile ? "42px" : "48px",
+              fontSize: isMobile ? "24px" : "28px",
+            }}
             aria-label="Próximo slide"
           >
             ›
@@ -1366,14 +1382,21 @@ export default function HomePage() {
           <div
             style={{
               ...styles.heroBanner,
-              minHeight: isMobile ? "260px" : "360px",
+              minHeight: isMobile ? "350px" : "360px",
+              padding: isMobile ? "30px 50px 28px" : "40px 30px",
+              borderRadius: isMobile ? "24px" : "28px",
               alignItems: heroAtual?.align === "center" ? "center" : "flex-start",
               textAlign: heroAtual?.align === "center" ? "center" : "left",
               justifyContent: "flex-start",
+              backgroundPosition: isMobile
+                ? heroAtual?.mobilePosition || "center center"
+                : "center center",
               backgroundImage: heroAtual?.image
-                ? `linear-gradient(90deg, rgba(12,10,8,0.84) 0%, rgba(12,10,8,0.56) 34%, rgba(12,10,8,0.18) 100%), url(${heroAtual.image})`
+                ? isMobile
+                  ? `linear-gradient(90deg, rgba(12,10,8,0.90) 0%, rgba(12,10,8,0.70) 48%, rgba(12,10,8,0.22) 100%), url(${heroAtual.image})`
+                  : `linear-gradient(90deg, rgba(12,10,8,0.84) 0%, rgba(12,10,8,0.56) 34%, rgba(12,10,8,0.18) 100%), url(${heroAtual.image})`
                 : undefined,
-              animation: "maisonHeroZoom 9s ease-in-out infinite alternate",
+              animation: isMobile ? undefined : "maisonHeroZoom 9s ease-in-out infinite alternate",
             }}
           >
             <div
@@ -1388,9 +1411,9 @@ export default function HomePage() {
               <h1
                 style={{
                   ...styles.heroTitle,
-                  fontSize: isMobile ? "28px" : isTablet ? "34px" : "42px",
-                  maxWidth: isMobile ? "100%" : "620px",
-                  lineHeight: 1.06,
+                  fontSize: isMobile ? "27px" : isTablet ? "34px" : "42px",
+                  maxWidth: isMobile ? "280px" : "620px",
+                  lineHeight: isMobile ? 1.08 : 1.06,
                 }}
               >
                 {(heroAtual?.title || "").split("\n").map((line, index) => (
@@ -1404,15 +1427,30 @@ export default function HomePage() {
                 style={{
                   ...styles.heroSubtitle,
                   fontSize: isMobile ? "13px" : "15px",
-                  maxWidth: isMobile ? "100%" : "520px",
+                  maxWidth: isMobile ? "270px" : "520px",
                   marginTop: "8px",
+                  lineHeight: isMobile ? 1.45 : 1.6,
                 }}
               >
                 {heroAtual?.subtitle}
               </p>
 
               <div style={styles.heroBannerActions}>
-                <a href={heroAtual?.ctaHref || "#produtos"} style={styles.heroPrimaryButton}>
+                <a
+                  href={heroAtual?.ctaHref || "#produtos"}
+                  style={{
+                    ...styles.heroPrimaryButton,
+                    ...(isMobile
+                      ? {
+                          minWidth: "220px",
+                          maxWidth: "100%",
+                          padding: "13px 18px",
+                          fontSize: "15px",
+                          borderRadius: "14px",
+                        }
+                      : {}),
+                  }}
+                >
                   {heroAtual?.ctaLabel || "Ver coleção"}
                 </a>
                 {!isMobile && (
