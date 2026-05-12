@@ -199,17 +199,24 @@ export default function EstoqueInteligentePage() {
         if (!q) return true;
         return normalizar(`${p.nome} ${p.marca || ""} ${p.categoria || ""}`).includes(q);
       })
-      .map((p) => ({
-        ...p,
-        disp: disponivel(p),
-        dias: diasDesde(p.updatedAt),
-        margem: margemVenda(p),
-        markup: markup(p),
-        custoTotal: custoTotal(p),
-        vendaTotal: vendaTotal(p),
-        lucroTotal: lucroTotal(p),
-        acao: acaoProduto(p),
-      }));
+      .map((p) => {
+        const est = toNumber(p.estoque);
+        const res = toNumber(p.reservado);
+
+        return {
+          ...p,
+          est,
+          res,
+          disp: Math.max(0, est - res),
+          dias: diasDesde(p.updatedAt),
+          margem: margemVenda(p),
+          markup: markup(p),
+          custoTotal: custoTotal(p),
+          vendaTotal: vendaTotal(p),
+          lucroTotal: lucroTotal(p),
+          acao: acaoProduto(p),
+        };
+      });
   }, [items, busca, categoria, status]);
 
   const analytics = useMemo(() => {
