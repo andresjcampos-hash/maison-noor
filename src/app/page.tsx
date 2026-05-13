@@ -1168,6 +1168,7 @@ export default function HomePage() {
   const navItems: NavItem[] = [
     { label: "Início", targetId: "inicio", action: () => scrollToSection("inicio") },
     { label: "Produtos", targetId: "produtos", action: () => scrollToSection("produtos") },
+    { label: "Perfume IA", href: "/perfume-ia" },
     { label: "Novidades", href: "/novidades" },
     { label: "Maison Noor", targetId: "maison-noor", action: () => scrollToSection("maison-noor") },
   ];
@@ -1715,6 +1716,62 @@ export default function HomePage() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section
+        style={{
+          ...styles.perfumeIaSection,
+          padding: isMobile ? "0 14px 24px" : isTablet ? "0 20px 28px" : "0 28px 30px",
+        }}
+      >
+        <div
+          style={{
+            ...styles.perfumeIaCard,
+            gridTemplateColumns: isMobile ? "1fr" : "1.05fr 0.95fr",
+            padding: isMobile ? "22px" : isTablet ? "26px" : "30px",
+            gap: isMobile ? "18px" : "24px",
+          }}
+        >
+          <div style={styles.perfumeIaContent}>
+            <p style={styles.perfumeIaKicker}>Perfume IA Maison Noor</p>
+            <h2
+              style={{
+                ...styles.perfumeIaTitle,
+                fontSize: isMobile ? "27px" : isTablet ? "32px" : "38px",
+              }}
+            >
+              Descubra qual perfume combina com você.
+            </h2>
+            <p style={styles.perfumeIaText}>
+              Responda um quiz rápido sobre seu estilo, ocasião e intensidade desejada.
+              A curadoria inteligente da Maison Noor recomenda fragrâncias do catálogo com mais precisão.
+            </p>
+
+            <div
+              style={{
+                ...styles.perfumeIaPills,
+                gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+              }}
+            >
+              <span style={styles.perfumeIaPill}>✨ Quiz rápido</span>
+              <span style={styles.perfumeIaPill}>🎯 Recomendação personalizada</span>
+              <span style={styles.perfumeIaPill}>💬 Compra com consultoria</span>
+            </div>
+          </div>
+
+          <div style={styles.perfumeIaAside}>
+            <div style={styles.perfumeIaMiniCard}>
+              <span style={styles.perfumeIaMiniIcon}>🧠</span>
+              <strong style={styles.perfumeIaMiniTitle}>Qual é sua assinatura?</strong>
+              <p style={styles.perfumeIaMiniText}>
+                Doce, intenso, fresco, elegante ou marcante: encontre uma fragrância para seu momento.
+              </p>
+              <Link href="/perfume-ia" style={styles.perfumeIaButton}>
+                Encontrar meu perfume
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -2970,6 +3027,131 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     whiteSpace: "nowrap",
+  },
+  perfumeIaSection: {
+    maxWidth: "1360px",
+    margin: "0 auto",
+  },
+  perfumeIaCard: {
+    display: "grid",
+    alignItems: "center",
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: "30px",
+    border: "1px solid rgba(216, 193, 162, 0.34)",
+    background:
+      "radial-gradient(circle at top right, rgba(212,175,119,0.22), transparent 32%), linear-gradient(135deg, #17110C, #2B2118)",
+    boxShadow: "0 26px 58px rgba(30, 21, 12, 0.16)",
+    color: "#F6E9D6",
+  },
+  perfumeIaContent: {
+    position: "relative",
+    zIndex: 2,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: "12px",
+  },
+  perfumeIaKicker: {
+    margin: 0,
+    color: "#D8BE97",
+    fontSize: "12px",
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.18em",
+  },
+  perfumeIaTitle: {
+    margin: 0,
+    color: "#FFF6EB",
+    lineHeight: 1.04,
+    fontWeight: 800,
+    letterSpacing: "-0.05em",
+    fontFamily: "Georgia, 'Times New Roman', serif",
+    maxWidth: "660px",
+  },
+  perfumeIaText: {
+    margin: 0,
+    color: "rgba(246, 233, 214, 0.78)",
+    fontSize: "15px",
+    lineHeight: 1.75,
+    maxWidth: "700px",
+  },
+  perfumeIaPills: {
+    width: "100%",
+    display: "grid",
+    gap: "10px",
+    marginTop: "8px",
+  },
+  perfumeIaPill: {
+    minHeight: "42px",
+    borderRadius: "999px",
+    border: "1px solid rgba(216,193,162,0.18)",
+    background: "rgba(255,255,255,0.075)",
+    color: "#F6E9D6",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0 14px",
+    fontSize: "12px",
+    fontWeight: 800,
+    textAlign: "center",
+  },
+  perfumeIaAside: {
+    position: "relative",
+    zIndex: 2,
+    display: "flex",
+    alignItems: "stretch",
+  },
+  perfumeIaMiniCard: {
+    width: "100%",
+    borderRadius: "24px",
+    border: "1px solid rgba(216,193,162,0.18)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.045))",
+    padding: "22px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    gap: "10px",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.07)",
+  },
+  perfumeIaMiniIcon: {
+    width: "48px",
+    height: "48px",
+    borderRadius: "999px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+    color: "#241A12",
+    fontSize: "22px",
+    boxShadow: "0 12px 24px rgba(120, 87, 45, 0.20)",
+  },
+  perfumeIaMiniTitle: {
+    color: "#FFF6EB",
+    fontSize: "22px",
+    lineHeight: 1.12,
+  },
+  perfumeIaMiniText: {
+    margin: 0,
+    color: "rgba(246, 233, 214, 0.72)",
+    fontSize: "13px",
+    lineHeight: 1.65,
+  },
+  perfumeIaButton: {
+    marginTop: "8px",
+    minHeight: "50px",
+    borderRadius: "16px",
+    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+    border: "1px solid rgba(255, 232, 184, 0.36)",
+    color: "#241A12",
+    textDecoration: "none",
+    fontWeight: 900,
+    fontSize: "14px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0 18px",
+    boxShadow: "0 16px 30px rgba(120, 87, 45, 0.22)",
   },
   styleUniverseSection: {
     maxWidth: "1360px",

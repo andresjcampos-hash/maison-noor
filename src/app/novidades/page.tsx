@@ -273,7 +273,8 @@ export default function NovidadesPage() {
 
           <nav style={styles.headerActions}>
             <Link href="/" style={styles.secondaryButton}>Home</Link>
-            <Link href="/#produtos" style={styles.primaryButton}>Ver produtos</Link>
+            <Link href="/#produtos" style={styles.secondaryButton}>Ver produtos</Link>
+            <Link href="/perfume-ia" style={styles.primaryButton}>Perfume IA</Link>
           </nav>
         </div>
       </header>
@@ -294,6 +295,7 @@ export default function NovidadesPage() {
 
             <div style={styles.heroButtons}>
               <a href="#vitrine" style={styles.goldButton}>Explorar novidades</a>
+              <Link href="/perfume-ia" style={styles.lightHeroButton}>Descobrir meu perfume</Link>
               <a
                 href="https://wa.me/5512982389658?text=Olá! Quero saber quais são as novidades da Maison Noor."
                 target="_blank"
@@ -382,6 +384,20 @@ export default function NovidadesPage() {
 }
 
 const styles: Record<string, CSSProperties> = {
+  lightHeroButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "42px",
+    padding: "0 18px",
+    borderRadius: "999px",
+    background: "rgba(255,255,255,0.10)",
+    color: "#FFF6EB",
+    textDecoration: "none",
+    fontWeight: 800,
+    fontSize: "13px",
+    border: "1px solid rgba(255,255,255,0.20)",
+  },
   page: {
     minHeight: "100vh",
     background:
