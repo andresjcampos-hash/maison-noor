@@ -45,6 +45,18 @@ type ProdutoFirebase = {
   position?: number;
   destaque?: boolean;
   tipo?: string;
+  novidade?: boolean;
+  lancamento?: boolean;
+  novo?: boolean;
+  maisVendido?: boolean;
+  bestSeller?: boolean;
+  exclusivo?: boolean;
+  assinatura?: boolean;
+  altaFixacao?: boolean;
+  estoqueBaixo?: boolean;
+  tendencia?: boolean;
+  viral?: boolean;
+  reposicao?: boolean;
 };
 
 type ProdutoCarrinho = {
@@ -82,7 +94,7 @@ function getCartFromStorage(): ProdutoCarrinho[] {
       id: String(item?.id ?? item?.produtoId ?? item?.slug ?? nome),
       nome,
       preco,
-      imagem: String(item?.imagem ?? item?.imageUrl ?? item?.image ?? "/produtos/hero-perfume.png"),
+      imagem: String(item?.imagem ?? item?.imageUrl ?? item?.image ?? "/produtos/sem-imagem.png"),
       tamanho: String(item?.tamanho ?? "Maison Noor"),
     };
   };
@@ -180,15 +192,15 @@ const clientesVipCollection = collection(db, "clientes_vip");
 
 const depoimentosMaisonNoor = [
   {
-    nome: "Cliente Maison Noor",
+    nome: "Juliana • Cliente Maison Noor",
     frase: "Atendimento impecável e fragrâncias realmente marcantes. A experiência foi premium do início ao fim.",
   },
   {
-    nome: "Compra via WhatsApp",
+    nome: "Carlos • Compra via WhatsApp",
     frase: "Recebi ajuda para escolher o perfume ideal e o pedido chegou com apresentação muito elegante.",
   },
   {
-    nome: "Presente especial",
+    nome: "Fernanda • Presente especial",
     frase: "Escolhi para presentear e foi um sucesso. A curadoria da Maison Noor faz diferença.",
   },
 ];
@@ -202,6 +214,7 @@ const categorias = [
   "Unissex",
   "Presentes",
   "Promoções",
+  "Novidades",
   "Cremes",
   "Família Olfativa",
 ];
@@ -226,6 +239,120 @@ const trustBadges = [
     icon: "💬",
     title: "Atendimento VIP",
     text: "Suporte real para escolher sua fragrância.",
+  },
+];
+
+const premiumTopBadges = [
+  "✦ Perfumes originais",
+  "🚚 Envio rápido",
+  "💳 Pix e cartão",
+  "🎁 Embalagem premium",
+];
+
+const perfumeStyles = [
+  {
+    icon: "🔥",
+    title: "Intensos",
+    text: "Fragrâncias de presença para marcar ambiente.",
+    category: "Masculinos",
+  },
+  {
+    icon: "🌙",
+    title: "Noturnos",
+    text: "Perfumes envolventes para encontros e ocasiões especiais.",
+    category: "Unissex",
+  },
+  {
+    icon: "🍦",
+    title: "Doces",
+    text: "Assinaturas gourmand, confortáveis e inesquecíveis.",
+    category: "Femininos",
+  },
+  {
+    icon: "👑",
+    title: "Elegantes",
+    text: "Seleções refinadas para quem gosta de sofisticação.",
+    category: "Todos",
+  },
+  {
+    icon: "🌿",
+    title: "Frescos",
+    text: "Leves, versáteis e ideais para o dia a dia.",
+    category: "Unissex",
+  },
+  {
+    icon: "🎁",
+    title: "Presentes",
+    text: "Escolhas seguras para surpreender com bom gosto.",
+    category: "Presentes",
+  },
+];
+
+const olfactoryUniverses = [
+  {
+    icon: "🌙",
+    title: "Noites marcantes",
+    text: "Fragrâncias intensas e envolventes para criar presença em ocasiões especiais.",
+    category: "Unissex",
+  },
+  {
+    icon: "🍦",
+    title: "Gourmand irresistível",
+    text: "Perfumes doces, cremosos e confortáveis para deixar memória por onde passa.",
+    category: "Femininos",
+  },
+  {
+    icon: "🔥",
+    title: "Intensos e sedutores",
+    text: "Assinaturas fortes, marcantes e sofisticadas para quem gosta de projeção.",
+    category: "Masculinos",
+  },
+  {
+    icon: "🖤",
+    title: "Elegância misteriosa",
+    text: "Fragrâncias refinadas com presença discreta, luxuosa e memorável.",
+    category: "Todos",
+  },
+];
+
+const maisonExperienceCards = [
+  {
+    icon: "✦",
+    title: "Curadoria premium",
+    text: "Selecionamos fragrâncias árabes com foco em presença, sofisticação e experiência sensorial.",
+  },
+  {
+    icon: "🎁",
+    title: "Presente com impacto",
+    text: "Perfumes escolhidos para surpreender com elegância, memória olfativa e apresentação refinada.",
+  },
+  {
+    icon: "💬",
+    title: "Consultoria no WhatsApp",
+    text: "Atendimento humano para ajudar o cliente a escolher o perfume ideal para cada ocasião.",
+  },
+  {
+    icon: "🚚",
+    title: "Compra prática",
+    text: "Fluxo simples: escolha, sacola, checkout e suporte direto da Maison Noor até o fechamento.",
+  },
+];
+
+const brandPillars = [
+  {
+    icon: "✦",
+    title: "Curadoria sensorial",
+    text: "Selecionamos fragrâncias com presença, qualidade visual e assinatura olfativa marcante.",
+  },
+  {
+    icon: "◈",
+    title: "Atendimento de boutique",
+    text: "Você não escolhe sozinho: ajudamos a encontrar o perfume ideal para sua rotina, ocasião e estilo.",
+  },
+  {
+    icon: "⌁",
+    title: "Experiência memorável",
+    text: "Do primeiro clique ao recebimento, cada detalhe reforça a sensação premium da Maison Noor.",
   },
 ];
 
@@ -306,10 +433,61 @@ function ehPromocao(produto: ProdutoFirebase) {
 
 
 function getBadgeProduto(produto: any, index: number) {
-  if (produto.isPromocao) return "Seleção especial";
+  const texto = `${produto.nome || ""} ${produto.marca || ""} ${produto.observacoes || ""} ${produto.tipo || ""}`.toLowerCase();
+  const disponivel = Number(produto.disponivel ?? produto.estoque ?? 0);
+
+  // Prioridade dos selos: urgência e intenção comercial primeiro.
+  // Você pode controlar pelo Firebase com campos booleanos como:
+  // maisVendido, novo/novidade/lancamento, exclusivo, assinatura, altaFixacao, tendencia, viral, reposicao.
+  if (produto.maisVendido || produto.bestSeller) return "🔥 Mais vendido";
+  if (produto.novidade || produto.lancamento || produto.novo) return "✨ Novo na Maison";
+  if (produto.estoqueBaixo || (disponivel > 0 && disponivel <= 2)) return "⏳ Últimas unidades";
+  if (produto.reposicao) return "Reposição limitada";
+  if (produto.exclusivo) return "👑 Exclusivo";
+  if (produto.assinatura) return "Assinatura Maison";
+  if (produto.altaFixacao) return "Alta fixação";
+  if (produto.tendencia || produto.viral) return "Tendência Maison";
+  if (produto.isPromocao) return "Oferta Maison";
   if (produto.isKit) return "Presente ideal";
-  if (index === 0) return "Mais desejado";
-  return "";
+  if (produto.destaque) return "Escolha Maison";
+
+  // Fallback automático para manter a vitrine sempre viva, mesmo sem preencher campos extras no CRM.
+  if (index === 0) return "🔥 Mais desejado";
+  if (index === 1) return "Alta fixação";
+  if (index === 2) return "Assinatura marcante";
+  if (texto.includes("oud")) return "Oud premium";
+  if (texto.includes("yara")) return "Favorito do momento";
+  if (texto.includes("club de nuit") || texto.includes("bade") || texto.includes("asad")) return "Alta procura";
+
+  return "Curadoria premium";
+}
+
+function getProductMicroTags(produto: any) {
+  const texto = `${produto.nome || ""} ${produto.marca || ""} ${produto.observacoes || ""} ${produto.tipo || ""}`.toLowerCase();
+
+  const tags: string[] = [];
+
+  if (produto.maisVendido || produto.bestSeller) tags.push("Mais vendido");
+  else if (produto.novidade || produto.lancamento || produto.novo) tags.push("Novo");
+  else if (produto.estoqueBaixo || Number(produto.disponivel ?? 0) <= 2 && Number(produto.disponivel ?? 0) > 0) tags.push("Últimas unidades");
+
+  if (texto.includes("oud") || texto.includes("ambar") || texto.includes("âmbar") || texto.includes("oriental")) {
+    tags.push("Intenso");
+  } else if (texto.includes("yara") || texto.includes("candy") || texto.includes("vanilla") || texto.includes("baunilha")) {
+    tags.push("Doce");
+  } else if (texto.includes("fresh") || texto.includes("citr") || texto.includes("fresco")) {
+    tags.push("Fresco");
+  } else {
+    tags.push("Elegante");
+  }
+
+  if (produto.categoriaSite === "Masculinos") tags.push("Presença");
+  else if (produto.categoriaSite === "Femininos") tags.push("Envolvente");
+  else tags.push("Versátil");
+
+  tags.push(produto.volumeMl ? `${produto.volumeMl}ml` : "EDP");
+
+  return tags.slice(0, 3);
 }
 
 function getCardEssencia(produto: ProdutoFirebase & { categoriaSite?: string; nome?: string; observacoes?: string }) {
@@ -342,6 +520,7 @@ function categoriaDescricao(categoria: string) {
   if (categoria === "Unissex") return "Versatilidade premium para todos os estilos";
   if (categoria === "Presentes") return "Kits, cestas e combinações especiais para presentear com elegância";
   if (categoria === "Promoções") return "Ofertas especiais por tempo limitado";
+  if (categoria === "Novidades") return "Lançamentos e reposições recém-chegadas à Maison Noor";
   if (categoria === "Cremes") return "Cuidados perfumados e texturas sofisticadas";
   return "Explore os perfumes por notas e famílias olfativas";
 }
@@ -561,6 +740,18 @@ export default function HomePage() {
             position: data.position,
             destaque: data.destaque,
             tipo: data.tipo,
+            novidade: data.novidade ?? data.lancamento ?? data.novo ?? false,
+            lancamento: data.lancamento,
+            novo: data.novo,
+            maisVendido: data.maisVendido ?? data.bestSeller ?? false,
+            bestSeller: data.bestSeller,
+            exclusivo: data.exclusivo ?? false,
+            assinatura: data.assinatura ?? data.assinaturaMaison ?? false,
+            altaFixacao: data.altaFixacao ?? data.fixacaoAlta ?? false,
+            estoqueBaixo: data.estoqueBaixo ?? false,
+            tendencia: data.tendencia ?? false,
+            viral: data.viral ?? data.tiktok ?? false,
+            reposicao: data.reposicao ?? data.reposicaoLimitada ?? false,
           });
         });
 
@@ -654,7 +845,7 @@ export default function HomePage() {
         id: "namorados-1",
         eyebrow: "Dia dos Namorados",
         title: "Prepare-se para\nsurpreender quem faz\nseu coração acelerar.",
-        subtitle: "O Dia dos Namorados Maison Noor está chegando com fragrâncias inesquecíveis.",
+        subtitle: "O Dia dos Namorados Maison Noor está chegando com fragrâncias inesquecíveis para transformar presente em memória.",
         ctaLabel: "Escolher presente",
         ctaHref: "#produtos",
         image: "/banners/banner-namorados-maison-noor.jpg",
@@ -663,10 +854,10 @@ export default function HomePage() {
       },
       {
         id: "colecao-2",
-        eyebrow: "Coleção Maison Noor",
-        title: "Fragrâncias que\nimpressionam.",
-        subtitle: "Perfumes árabes selecionados para quem busca presença, elegância e personalidade.",
-        ctaLabel: "Explorar coleção",
+        eyebrow: "Boutique de perfumes árabes",
+        title: "Luxo árabe\nem sua forma\nmais marcante.",
+        subtitle: "Uma curadoria premium para quem busca elegância, intensidade e uma assinatura olfativa própria.",
+        ctaLabel: "Explorar curadoria",
         ctaHref: "#produtos",
         image: "/banners/perfumes.jpg",
         align: "left",
@@ -674,10 +865,10 @@ export default function HomePage() {
       },
       {
         id: "compra-segura-3",
-        eyebrow: "Compra segura",
-        title: "Sofisticação com\natendimento VIP.",
-        subtitle: "Escolha sua fragrância, adicione à sacola e finalize com segurança pelo checkout ou WhatsApp.",
-        ctaLabel: "Comprar agora",
+        eyebrow: "Experiência Maison Noor",
+        title: "Escolha com calma.\nCompre com\nconfiança.",
+        subtitle: "Atendimento consultivo, seleção refinada e fechamento seguro pelo checkout ou WhatsApp.",
+        ctaLabel: "Receber consultoria",
         ctaHref: "#produtos",
         image: "/banners/perfumes.png",
         align: "left",
@@ -722,6 +913,7 @@ export default function HomePage() {
       if (categoriaAtiva === "Todos") bateCategoria = true;
       else if (categoriaAtiva === "Presentes") bateCategoria = produto.isKit;
       else if (categoriaAtiva === "Promoções") bateCategoria = produto.isPromocao;
+      else if (categoriaAtiva === "Novidades") bateCategoria = Boolean((produto as any).novidade || (produto as any).lancamento || (produto as any).novo || textoCategoriaLivre.includes("novidade") || textoCategoriaLivre.includes("lançamento") || textoCategoriaLivre.includes("lancamento"));
       else if (categoriaAtiva === "Cremes") bateCategoria = textoCategoriaLivre.includes("creme") || textoCategoriaLivre.includes("body lotion") || textoCategoriaLivre.includes("hidratante");
       else if (categoriaAtiva === "Família Olfativa") bateCategoria = textoCategoriaLivre.includes("olfativa") || textoCategoriaLivre.includes("amadeir") || textoCategoriaLivre.includes("oriental") || textoCategoriaLivre.includes("floral") || textoCategoriaLivre.includes("cítrico") || textoCategoriaLivre.includes("citrico") || textoCategoriaLivre.includes("adocicado") || textoCategoriaLivre.includes("aquático") || textoCategoriaLivre.includes("aquatico") || textoCategoriaLivre.includes("ambar") || textoCategoriaLivre.includes("âmbar") || textoCategoriaLivre.includes("aromático") || textoCategoriaLivre.includes("aromatico");
       else bateCategoria = produto.categoriaSite === categoriaAtiva;
@@ -744,6 +936,12 @@ export default function HomePage() {
     });
   }, [produtosProntos]);
 
+
+  const produtosMaisDesejados = useMemo(() => {
+    return produtosProntos
+      .filter((produto) => !produto.indisponivel)
+      .slice(0, isMobile ? 4 : isTablet ? 6 : 10);
+  }, [produtosProntos, isMobile, isTablet]);
 
   const produtosVisiveis = useMemo(() => {
     return produtosFiltrados.slice(0, visibleProductsCount);
@@ -1003,6 +1201,14 @@ export default function HomePage() {
               : "16px 22px 16px",
           }}
         >
+          {!isMobile && (
+            <div style={styles.headerPremiumBar}>
+              {premiumTopBadges.map((item) => (
+                <span key={item} style={styles.headerPremiumItem}>{item}</span>
+              ))}
+            </div>
+          )}
+
           <div
             style={{
               ...styles.headerTopRow,
@@ -1393,8 +1599,8 @@ export default function HomePage() {
                 : "center center",
               backgroundImage: heroAtual?.image
                 ? isMobile
-                  ? `linear-gradient(90deg, rgba(12,10,8,0.90) 0%, rgba(12,10,8,0.70) 48%, rgba(12,10,8,0.22) 100%), url(${heroAtual.image})`
-                  : `linear-gradient(90deg, rgba(12,10,8,0.84) 0%, rgba(12,10,8,0.56) 34%, rgba(12,10,8,0.18) 100%), url(${heroAtual.image})`
+                  ? `radial-gradient(circle at 20% 20%, rgba(216,180,110,0.22), transparent 30%), linear-gradient(90deg, rgba(10,7,5,0.94) 0%, rgba(16,10,6,0.76) 48%, rgba(12,8,5,0.24) 100%), url(${heroAtual.image})`
+                  : `radial-gradient(circle at 16% 22%, rgba(216,180,110,0.24), transparent 28%), linear-gradient(90deg, rgba(10,7,5,0.90) 0%, rgba(15,10,7,0.62) 38%, rgba(12,8,5,0.16) 100%), url(${heroAtual.image})`
                 : undefined,
               animation: isMobile ? undefined : "maisonHeroZoom 9s ease-in-out infinite alternate",
             }}
@@ -1434,6 +1640,13 @@ export default function HomePage() {
               >
                 {heroAtual?.subtitle}
               </p>
+
+              {!isMobile && (
+                <div style={styles.heroSignatureRow}>
+                  <span style={styles.heroSignatureLine} />
+                  <span style={styles.heroSignatureText}>Curadoria premium • Luxo árabe • Atendimento consultivo</span>
+                </div>
+              )}
 
               <div style={styles.heroBannerActions}>
                 <a
@@ -1500,6 +1713,52 @@ export default function HomePage() {
                 <p style={styles.trustBadgeText}>{badge.text}</p>
               </div>
             </div>
+          ))}
+        </div>
+      </section>
+
+      <section
+        style={{
+          ...styles.styleUniverseSection,
+          padding: isMobile ? "0 14px 24px" : isTablet ? "0 20px 28px" : "0 28px 30px",
+        }}
+      >
+        <div style={styles.styleUniverseHeader}>
+          <div>
+            <p style={styles.kicker}>Escolha por estilo</p>
+            <h2
+              style={{
+                ...styles.sectionTitle,
+                fontSize: isMobile ? "25px" : isTablet ? "28px" : "32px",
+                marginBottom: "6px",
+              }}
+            >
+              Perfumes para cada momento
+            </h2>
+            <p style={styles.sectionSupportText}>
+              Uma forma mais fácil de encontrar a fragrância ideal pelo sentimento que você quer transmitir.
+            </p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            ...styles.styleUniverseGrid,
+            gridTemplateColumns: isMobile ? "1fr 1fr" : isTablet ? "repeat(3, 1fr)" : "repeat(6, 1fr)",
+            gap: isMobile ? "10px" : "14px",
+          }}
+        >
+          {perfumeStyles.map((item) => (
+            <button
+              key={item.title}
+              type="button"
+              onClick={() => selecionarCategoria(item.category)}
+              style={styles.styleUniverseCard}
+            >
+              <span style={styles.styleUniverseIcon}>{item.icon}</span>
+              <strong style={styles.styleUniverseTitle}>{item.title}</strong>
+              <span style={styles.styleUniverseText}>{item.text}</span>
+            </button>
           ))}
         </div>
       </section>
@@ -1656,7 +1915,7 @@ export default function HomePage() {
                           ...(produto.indisponivel ? styles.cardImageUnavailable : {}),
                         }}
                         onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = "/produtos/hero-perfume.png";
+                          (e.currentTarget as HTMLImageElement).src = "/produtos/sem-imagem.png";
                         }}
                       />
                     </div>
@@ -1744,6 +2003,66 @@ Vi no site da Maison Noor e gostaria de atendimento VIP para escolher esse prese
                 </button>
               </div>
             )}
+          </div>
+        </section>
+      )}
+
+      {produtosMaisDesejados.length > 0 && (
+        <section
+          style={{
+            ...styles.mostWantedSection,
+            padding: isMobile ? "0 14px 34px" : isTablet ? "0 20px 38px" : "0 28px 42px",
+          }}
+        >
+          <div style={styles.mostWantedCard}>
+            <div style={styles.sectionHeaderPremium}>
+              <div>
+                <p style={styles.kicker}>Mais desejados</p>
+                <h2
+                  style={{
+                    ...styles.sectionTitle,
+                    fontSize: isMobile ? "25px" : isTablet ? "28px" : "32px",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Seleção que chama atenção
+                </h2>
+                <p style={styles.sectionSupportText}>
+                  Produtos em destaque para quem quer comprar com mais confiança e escolher sem dúvida.
+                </p>
+              </div>
+
+              {!isMobile && (
+                <button type="button" onClick={() => scrollToSection("produtos")} style={styles.mostWantedButton}>
+                  Ver coleção completa
+                </button>
+              )}
+            </div>
+
+            <div style={styles.mostWantedRail}>
+              {produtosMaisDesejados.map((produto, index) => (
+                <Link key={`wanted-${produto.id}`} href={`/produto/${produto.id}`} style={styles.mostWantedItem}>
+                  <span style={styles.mostWantedRank}>#{index + 1}</span>
+                  <div style={styles.mostWantedImageWrap}>
+                    <img
+                      decoding="async"
+                      src={produto.imagemFinal}
+                      loading="lazy"
+                      alt={produto.nome}
+                      style={styles.mostWantedImage}
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = "/produtos/sem-imagem.png";
+                      }}
+                    />
+                  </div>
+                  <div style={styles.mostWantedInfo}>
+                    <strong style={styles.mostWantedTitle}>{produto.nome}</strong>
+                    <span style={styles.mostWantedMood}>{getCardEssencia(produto)}</span>
+                    <span style={styles.mostWantedPrice}>{formatarMoeda(produto.precoFinal)}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         </section>
       )}
@@ -1887,7 +2206,7 @@ Vi no site da Maison Noor e gostaria de atendimento VIP para escolher esse prese
                           ...(produto.indisponivel ? styles.cardImageUnavailable : {}),
                         }}
                         onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = "/produtos/hero-perfume.png";
+                          (e.currentTarget as HTMLImageElement).src = "/produtos/sem-imagem.png";
                         }}
                       />
                     </div>
@@ -1913,6 +2232,12 @@ Vi no site da Maison Noor e gostaria de atendimento VIP para escolher esse prese
 
                       <p style={styles.cardSize}>{produto.tamanho}</p>
                       <p style={styles.cardMood}>{getCardEssencia(produto)}</p>
+
+                      <div style={styles.productMicroTags}>
+                        {getProductMicroTags(produto).map((tag) => (
+                          <span key={`${produto.id}-${tag}`} style={styles.productMicroTag}>{tag}</span>
+                        ))}
+                      </div>
 
                       {produto.indisponivel && <p style={styles.unavailableBadge}>Indisponível</p>}
                     </div>
@@ -1947,7 +2272,7 @@ Vi no site da Maison Noor e gostaria de atendimento VIP para escolher esse prese
                         }}
                         disabled={produto.indisponivel}
                       >
-                        {produto.indisponivel ? "Indisponível" : "Adicionar à sacola"}
+                        {produto.indisponivel ? "Indisponível" : "Quero essa fragrância"}
                       </button>
 
                       <a
@@ -1973,7 +2298,7 @@ Pode me passar as opções de pagamento?`
                           ...(produto.indisponivel ? styles.unavailableWhatsButton : {}),
                         }}
                       >
-                        {produto.indisponivel ? "Consultar disponibilidade" : "Comprar com atendimento"}
+                        {produto.indisponivel ? "Consultar disponibilidade" : "Comprar com consultoria"}
                       </a>
                     </div>
                   </div>
@@ -2112,7 +2437,7 @@ Pode me passar as opções de pagamento?`
                   alt={produto.nome}
                   style={styles.recommendImage}
                   onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = "/produtos/hero-perfume.png";
+                    (e.currentTarget as HTMLImageElement).src = "/produtos/sem-imagem.png";
                   }}
                 />
               </div>
@@ -2173,6 +2498,52 @@ Pode me passar as opções de pagamento?`
       </section>
 
       <section
+        style={{
+          ...styles.curadoriaSection,
+          padding: isMobile ? "0 14px 34px" : isTablet ? "0 20px 38px" : "0 28px 42px",
+        }}
+      >
+        <div
+          style={{
+            ...styles.curadoriaCard,
+            gridTemplateColumns: isMobile ? "1fr" : "0.95fr 1.05fr",
+            padding: isMobile ? "24px" : "34px",
+            gap: isMobile ? "22px" : "34px",
+          }}
+        >
+          <div style={styles.curadoriaIntro}>
+            <p style={styles.darkKicker}>Curadoria Maison Noor</p>
+            <h2
+              style={{
+                ...styles.curadoriaTitle,
+                fontSize: isMobile ? "28px" : isTablet ? "34px" : "42px",
+              }}
+            >
+              Mais que vender perfumes, criamos uma experiência de escolha.
+            </h2>
+            <p style={styles.curadoriaText}>
+              Cada fragrância entra na Maison Noor para entregar presença, memória e sofisticação. A proposta é simples: ajudar você a encontrar uma assinatura olfativa que combine com seu momento.
+            </p>
+            <button type="button" onClick={() => scrollToSection("produtos")} style={styles.curadoriaButton}>
+              Conhecer a seleção
+            </button>
+          </div>
+
+          <div style={styles.curadoriaPillars}>
+            {brandPillars.map((item) => (
+              <div key={item.title} style={styles.curadoriaPillarCard}>
+                <span style={styles.curadoriaPillarIcon}>{item.icon}</span>
+                <div>
+                  <strong style={styles.curadoriaPillarTitle}>{item.title}</strong>
+                  <p style={styles.curadoriaPillarText}>{item.text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section
         id="maison-noor"
         style={{
           ...styles.aboutSection,
@@ -2192,11 +2563,10 @@ Pode me passar as opções de pagamento?`
               fontSize: isMobile ? "25px" : isTablet ? "28px" : "30px",
             }}
           >
-            A essência do luxo em cada fragrância
+A boutique digital de perfumes árabes
           </h2>
           <p style={styles.sectionText}>
-            Trabalhamos com perfumes árabes importados selecionados para quem valoriza identidade,
-            sofisticação e presença. Uma experiência elegante do primeiro clique ao atendimento final.
+            A Maison Noor nasceu para aproximar você do universo dos perfumes árabes com elegância, confiança e atendimento humano. Cada escolha carrega presença, memória e o desejo de transformar fragrâncias em momentos especiais.
           </p>
         </div>
       </section>
@@ -2309,6 +2679,7 @@ Pode me passar as opções de pagamento?`
               <button onClick={() => selecionarCategoria("Masculinos")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Masculinos</button>
               <button onClick={() => selecionarCategoria("Unissex")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Unissex</button>
               <button onClick={() => selecionarCategoria("Presentes")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Presentes</button>
+              <button onClick={() => selecionarCategoria("Novidades")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Novidades</button>
               <button onClick={() => selecionarCategoria("Cremes")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Cremes</button>
               <button onClick={() => selecionarCategoria("Família Olfativa")} style={{ ...styles.footerButtonLink, textAlign: isMobile ? "center" : "left" }}>Família Olfativa</button>
             </div>
@@ -2390,7 +2761,7 @@ Pode me passar as opções de pagamento?`
                           alt={item.nome}
                           style={styles.miniCartThumb}
                           onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src = "/produtos/hero-perfume.png";
+                            (e.currentTarget as HTMLImageElement).src = "/produtos/sem-imagem.png";
                           }}
                         />
                       </div>
@@ -2580,12 +2951,314 @@ Pode me passar as opções de pagamento?`
 }
 
 const styles: Record<string, CSSProperties> = {
+  headerPremiumBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "18px",
+    padding: "0 0 10px",
+    marginBottom: "10px",
+    borderBottom: "1px solid rgba(226, 210, 191, 0.78)",
+    color: "#8D6B3E",
+    fontSize: "11px",
+    fontWeight: 800,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+  },
+  headerPremiumItem: {
+    display: "inline-flex",
+    alignItems: "center",
+    whiteSpace: "nowrap",
+  },
+  styleUniverseSection: {
+    maxWidth: "1360px",
+    margin: "0 auto",
+  },
+  styleUniverseHeader: {
+    marginBottom: "16px",
+  },
+  styleUniverseGrid: {
+    display: "grid",
+  },
+  styleUniverseCard: {
+    minHeight: "156px",
+    borderRadius: "24px",
+    border: "1px solid #E6D7C5",
+    background: "linear-gradient(180deg, rgba(255,252,248,0.98), rgba(244,234,220,0.94))",
+    boxShadow: "0 14px 30px rgba(62, 44, 24, 0.07)",
+    padding: "18px 14px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    textAlign: "left",
+    cursor: "pointer",
+    color: "#3E3027",
+    transition: "transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
+  },
+  styleUniverseIcon: {
+    width: "42px",
+    height: "42px",
+    borderRadius: "999px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+    color: "#241A12",
+    fontSize: "20px",
+    boxShadow: "0 10px 18px rgba(120, 87, 45, 0.12)",
+  },
+  styleUniverseTitle: {
+    display: "block",
+    color: "#3E3027",
+    fontSize: "16px",
+    marginTop: "12px",
+  },
+  styleUniverseText: {
+    color: "#7C6E62",
+    fontSize: "12px",
+    lineHeight: 1.5,
+    marginTop: "8px",
+  },
+  mostWantedSection: {
+    maxWidth: "1360px",
+    margin: "0 auto",
+  },
+  mostWantedCard: {
+    borderRadius: "28px",
+    border: "1px solid rgba(216, 193, 162, 0.72)",
+    background: "radial-gradient(circle at top right, rgba(212,175,119,0.14), transparent 30%), linear-gradient(180deg, #FFF9F1, #F3E5D3)",
+    boxShadow: "0 22px 48px rgba(62, 44, 24, 0.10)",
+    padding: "22px",
+    overflow: "hidden",
+  },
+  mostWantedButton: {
+    minHeight: "48px",
+    borderRadius: "999px",
+    border: "1px solid #D8C1A2",
+    padding: "0 22px",
+    background: "linear-gradient(135deg, #1B1612, #2A211A)",
+    color: "#F6E9D6",
+    fontWeight: 800,
+    fontSize: "14px",
+    cursor: "pointer",
+    boxShadow: "0 14px 28px rgba(28, 20, 12, 0.16)",
+  },
+  mostWantedRail: {
+    display: "flex",
+    gap: "16px",
+    overflowX: "auto",
+    paddingBottom: "6px",
+    scrollbarWidth: "thin",
+  },
+  mostWantedItem: {
+    minWidth: "260px",
+    display: "grid",
+    gridTemplateColumns: "76px 1fr",
+    gap: "14px",
+    alignItems: "center",
+    position: "relative",
+    padding: "16px",
+    borderRadius: "22px",
+    border: "1px solid #E6D7C5",
+    background: "rgba(255,255,255,0.72)",
+    color: "#342922",
+    textDecoration: "none",
+    boxShadow: "0 12px 26px rgba(62,44,24,0.06)",
+  },
+  mostWantedRank: {
+    position: "absolute",
+    top: "10px",
+    left: "10px",
+    zIndex: 2,
+    minWidth: "34px",
+    height: "24px",
+    borderRadius: "999px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(24,18,12,0.82)",
+    color: "#F6E8D2",
+    fontSize: "11px",
+    fontWeight: 800,
+  },
+  mostWantedImageWrap: {
+    width: "76px",
+    height: "76px",
+    borderRadius: "18px",
+    background: "linear-gradient(180deg, rgba(255,252,247,0.9), rgba(243,230,214,0.65))",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "1px solid #E9DDCE",
+  },
+  mostWantedImage: {
+    width: "58px",
+    height: "58px",
+    objectFit: "contain",
+    mixBlendMode: "multiply",
+    filter: "drop-shadow(0 10px 18px rgba(40,28,18,0.12))",
+  },
+  mostWantedInfo: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "5px",
+    minWidth: 0,
+  },
+  mostWantedTitle: {
+    color: "#3F322A",
+    fontSize: "15px",
+    lineHeight: 1.18,
+  },
+  mostWantedMood: {
+    color: "#8B7A6A",
+    fontSize: "12px",
+    lineHeight: 1.35,
+  },
+  mostWantedPrice: {
+    color: "#9D7641",
+    fontWeight: 800,
+    fontSize: "15px",
+  },
+  productMicroTags: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "6px",
+    marginTop: "6px",
+  },
+  productMicroTag: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "24px",
+    padding: "0 8px",
+    borderRadius: "999px",
+    border: "1px solid #E6D7C5",
+    background: "rgba(255,255,255,0.72)",
+    color: "#8B6B46",
+    fontSize: "10px",
+    fontWeight: 800,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+  },
+  curadoriaSection: {
+    maxWidth: "1360px",
+    margin: "0 auto",
+  },
+  curadoriaCard: {
+    display: "grid",
+    alignItems: "center",
+    borderRadius: "32px",
+    overflow: "hidden",
+    background: "radial-gradient(circle at top left, rgba(216,180,110,0.18), transparent 34%), linear-gradient(135deg, #18120D, #2B2118)",
+    border: "1px solid rgba(216,193,162,0.22)",
+    boxShadow: "0 28px 60px rgba(30, 21, 12, 0.18)",
+    color: "#F6E9D6",
+  },
+  curadoriaIntro: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: "14px",
+  },
+  darkKicker: {
+    margin: 0,
+    color: "#D8BE97",
+    fontSize: "12px",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.18em",
+  },
+  curadoriaTitle: {
+    margin: 0,
+    color: "#FFF6EB",
+    lineHeight: 1.04,
+    fontWeight: 700,
+    letterSpacing: "-0.05em",
+    fontFamily: "Georgia, 'Times New Roman', serif",
+  },
+  curadoriaText: {
+    margin: 0,
+    color: "rgba(246, 233, 214, 0.78)",
+    fontSize: "16px",
+    lineHeight: 1.75,
+    maxWidth: "620px",
+  },
+  curadoriaButton: {
+    minHeight: "50px",
+    borderRadius: "999px",
+    border: "1px solid rgba(255, 232, 184, 0.36)",
+    padding: "0 24px",
+    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+    color: "#241A12",
+    fontWeight: 800,
+    fontSize: "14px",
+    cursor: "pointer",
+    boxShadow: "0 16px 30px rgba(120, 87, 45, 0.22)",
+  },
+  curadoriaPillars: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "14px",
+  },
+  curadoriaPillarCard: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "14px",
+    borderRadius: "22px",
+    border: "1px solid rgba(216,193,162,0.16)",
+    background: "rgba(255,255,255,0.065)",
+    padding: "18px",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+  },
+  curadoriaPillarIcon: {
+    width: "40px",
+    height: "40px",
+    borderRadius: "999px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+    color: "#241A12",
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+  curadoriaPillarTitle: {
+    display: "block",
+    color: "#FFF6EB",
+    fontSize: "16px",
+    marginBottom: "5px",
+  },
+  curadoriaPillarText: {
+    margin: 0,
+    color: "rgba(246, 233, 214, 0.70)",
+    fontSize: "13px",
+    lineHeight: 1.6,
+  },
+  heroSignatureRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    marginTop: "18px",
+  },
+  heroSignatureLine: {
+    width: "54px",
+    height: "1px",
+    background: "linear-gradient(90deg, #D4AF77, rgba(212,175,119,0))",
+  },
+  heroSignatureText: {
+    color: "rgba(255,246,235,0.78)",
+    fontSize: "12px",
+    fontWeight: 700,
+    letterSpacing: "0.10em",
+    textTransform: "uppercase",
+  },
   page: {
     background:
-      "radial-gradient(circle at top, rgba(215,192,160,0.22), transparent 24%), #F5EFE6",
+      "radial-gradient(circle at 12% 0%, rgba(215,192,160,0.26), transparent 26%), radial-gradient(circle at 88% 8%, rgba(191,148,88,0.14), transparent 24%), #F5EFE6",
     color: "#2B2B2B",
     minHeight: "100vh",
-    fontFamily: "Arial, sans-serif",
+    fontFamily: "Inter, Arial, sans-serif",
   },
   headerShell: {
     position: "fixed",
@@ -3135,14 +3808,14 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     borderRadius: "28px",
     overflow: "hidden",
-    backgroundColor: "#EDE5DA",
+    backgroundColor: "#18120D",
     backgroundSize: "cover",
     backgroundPosition: "center",
     display: "flex",
     padding: "40px 30px",
     boxSizing: "border-box",
-    border: "1px solid #E2D2BF",
-    boxShadow: "0 28px 60px rgba(43, 31, 21, 0.10)",
+    border: "1px solid rgba(216, 193, 162, 0.36)",
+    boxShadow: "0 34px 72px rgba(30, 21, 12, 0.20), inset 0 1px 0 rgba(255,255,255,0.10)",
   },
   heroOverlayContent: {
     position: "relative",
@@ -3163,8 +3836,9 @@ const styles: Record<string, CSSProperties> = {
     margin: "0 0 12px",
     color: "#FFFFFF",
     fontWeight: 700,
-    letterSpacing: "-0.03em",
-    textShadow: "0 4px 24px rgba(0,0,0,0.20)",
+    letterSpacing: "-0.055em",
+    textShadow: "0 4px 24px rgba(0,0,0,0.26)",
+    fontFamily: "Georgia, 'Times New Roman', serif",
   },
   heroSubtitle: {
     margin: 0,
@@ -3334,9 +4008,10 @@ const styles: Record<string, CSSProperties> = {
   sectionTitle: {
     margin: "8px 0 10px",
     color: "#3A2F29",
-    lineHeight: 1.15,
+    lineHeight: 1.12,
     fontWeight: 700,
-    letterSpacing: "-0.5px",
+    letterSpacing: "-0.04em",
+    fontFamily: "Georgia, 'Times New Roman', serif",
   },
   sectionText: {
     margin: 0,
@@ -3506,6 +4181,7 @@ const styles: Record<string, CSSProperties> = {
     transition: "transform 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease",
     border: "1px solid #EADBC8",
     overflow: "hidden",
+    position: "relative",
     display: "flex",
     flexDirection: "column",
     willChange: "transform, box-shadow",
@@ -4210,6 +4886,13 @@ const styles: Record<string, CSSProperties> = {
     color: "#E5C99C",
     fontSize: "16px",
     fontWeight: 700,
+  },
+  footerHeadingIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: "6px",
+    color: "#D8BE97",
   },
   footerLink: {
     color: "#D9CEC0",
