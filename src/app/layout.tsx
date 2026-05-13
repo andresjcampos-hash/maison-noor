@@ -1,17 +1,89 @@
 // app/layout.tsx
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
+const SITE_URL = "https://www.maisonnoor.com.br";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#1F1A14",
+};
 
 export const metadata: Metadata = {
-  title: "Maison Noor Parfums | Perfumes Árabes Premium",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Maison Noor Parfums | Perfumes Árabes Premium",
+    template: "%s | Maison Noor Parfums",
+  },
   description:
-    "Perfumes árabes originais com curadoria premium. Entrega rápida e fragrâncias exclusivas.",
+    "Perfumes árabes originais com curadoria premium, fragrâncias marcantes, atendimento consultivo e envio para todo o Brasil.",
+  applicationName: "Maison Noor Parfums",
+  keywords: [
+    "Maison Noor",
+    "Maison Noor Parfums",
+    "perfumes árabes",
+    "perfumes árabes premium",
+    "perfume árabe feminino",
+    "perfume árabe masculino",
+    "perfume importado",
+    "perfumaria árabe",
+    "fragrâncias árabes",
+    "perfumes em São José dos Campos",
+  ],
+  authors: [{ name: "Maison Noor Parfums" }],
+  creator: "Maison Noor Parfums",
+  publisher: "Maison Noor Parfums",
+  category: "E-commerce de perfumes",
+  alternates: {
+    canonical: "/",
+  },
   icons: {
     icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    url: SITE_URL,
+    siteName: "Maison Noor Parfums",
+    title: "Maison Noor Parfums | Perfumes Árabes Premium",
+    description:
+      "Descubra perfumes árabes originais com curadoria premium Maison Noor, atendimento consultivo e fragrâncias inesquecíveis.",
+    images: [
+      {
+        url: "/logo.png",
+        width: 1200,
+        height: 630,
+        alt: "Maison Noor Parfums - Perfumes Árabes Premium",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Maison Noor Parfums | Perfumes Árabes Premium",
+    description:
+      "Perfumes árabes originais com curadoria premium e atendimento consultivo Maison Noor.",
+    images: ["/logo.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
   },
 };
 
@@ -20,6 +92,40 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const organizationJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Maison Noor Parfums",
+    url: SITE_URL,
+    logo: `${SITE_URL}/logo.png`,
+    sameAs: [],
+    contactPoint: [
+      {
+        "@type": "ContactPoint",
+        telephone: "+55-12-98262-7108",
+        contactType: "customer service",
+        areaServed: "BR",
+        availableLanguage: ["Portuguese"],
+      },
+    ],
+  };
+
+  const storeJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Store",
+    name: "Maison Noor Parfums",
+    image: `${SITE_URL}/logo.png`,
+    url: SITE_URL,
+    telephone: "+55-12-98262-7108",
+    priceRange: "R$",
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: "São José dos Campos",
+      addressRegion: "SP",
+      addressCountry: "BR",
+    },
+  };
+
   return (
     <html lang="pt-BR">
       <body
@@ -32,6 +138,14 @@ export default function RootLayout({
           selection:text-black
         "
       >
+        <Script id="maison-noor-organization-jsonld" type="application/ld+json" strategy="afterInteractive">
+          {JSON.stringify(organizationJsonLd)}
+        </Script>
+
+        <Script id="maison-noor-store-jsonld" type="application/ld+json" strategy="afterInteractive">
+          {JSON.stringify(storeJsonLd)}
+        </Script>
+
         {GA_ID && (
           <>
             <Script

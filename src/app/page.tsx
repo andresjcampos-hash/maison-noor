@@ -1168,6 +1168,7 @@ export default function HomePage() {
   const navItems: NavItem[] = [
     { label: "Início", targetId: "inicio", action: () => scrollToSection("inicio") },
     { label: "Produtos", targetId: "produtos", action: () => scrollToSection("produtos") },
+    { label: "Novidades", href: "/novidades" },
     { label: "Maison Noor", targetId: "maison-noor", action: () => scrollToSection("maison-noor") },
   ];
 

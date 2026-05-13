@@ -60,6 +60,9 @@ type ProdutoFirebase = {
   fixacao?: string;
   projecao?: string;
   ocasiao?: string;
+  climaIdeal?: string;
+  intensidade?: string;
+  generoOlfativo?: string;
 };
 
 type ProdutoCarrinho = {
@@ -173,7 +176,8 @@ function inferirPerfil(produto: ProdutoFirebase) {
 
   let perfil = "sofisticado e versátil";
   let sensacao = "elegante, refinada e envolvente";
-  let ocasiacao = produto.ocasiao || "eventos, noites especiais e assinatura pessoal";
+  let ocasiacao =
+    produto.ocasiao || "eventos, noites especiais e assinatura pessoal";
 
   if (familia.includes("ambar") || familia.includes("oriental")) {
     perfil = "marcante e envolvente";
@@ -184,16 +188,202 @@ function inferirPerfil(produto: ProdutoFirebase) {
   } else if (familia.includes("floral")) {
     perfil = "delicado e sofisticado";
     sensacao = "charmosa, feminina e memorável";
-  } else if (familia.includes("cítric") || familia.includes("citrico") || familia.includes("aromatic")) {
+  } else if (
+    familia.includes("cítric") ||
+    familia.includes("citrico") ||
+    familia.includes("aromatic")
+  ) {
     perfil = "fresco e moderno";
     sensacao = "leve, limpa e energética";
   }
 
-  if (fixacao.includes("alta") || projecao.includes("alta") || projecao.includes("forte")) {
-    ocasiacao = produto.ocasiao || "noite, eventos, encontros e ocasiões de destaque";
+  if (
+    fixacao.includes("alta") ||
+    projecao.includes("alta") ||
+    projecao.includes("forte")
+  ) {
+    ocasiacao =
+      produto.ocasiao || "noite, eventos, encontros e ocasiões de destaque";
   }
 
   return { perfil, sensacao, ocasiacao };
+}
+
+function normalizarTextoAroma(valor?: string) {
+  return String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+function scorePorTexto(valor: string | undefined, padrao: number) {
+  const texto = normalizarTextoAroma(valor);
+
+  if (!texto) return padrao;
+  if (
+    texto.includes("muito alta") ||
+    texto.includes("extrema") ||
+    texto.includes("intensa") ||
+    texto.includes("forte")
+  )
+    return 92;
+  if (
+    texto.includes("alta") ||
+    texto.includes("longa") ||
+    texto.includes("duradoura")
+  )
+    return 84;
+  if (
+    texto.includes("moderada") ||
+    texto.includes("media") ||
+    texto.includes("média")
+  )
+    return 68;
+  if (
+    texto.includes("suave") ||
+    texto.includes("baixa") ||
+    texto.includes("leve")
+  )
+    return 48;
+
+  return padrao;
+}
+
+function inferirClima(produto: ProdutoFirebase) {
+  const texto = normalizarTextoAroma(
+    `${produto.nome || ""} ${produto.familiaOlfativa || ""} ${produto.observacoes || ""} ${produto.tipo || ""}`,
+  );
+
+  if (produto.climaIdeal) return produto.climaIdeal;
+  if (
+    texto.includes("fresh") ||
+    texto.includes("fresco") ||
+    texto.includes("citr") ||
+    texto.includes("aquatico") ||
+    texto.includes("aquático")
+  ) {
+    return "Dias quentes, rotina e uso casual elegante";
+  }
+  if (
+    texto.includes("oud") ||
+    texto.includes("ambar") ||
+    texto.includes("âmbar") ||
+    texto.includes("oriental") ||
+    texto.includes("baunilha") ||
+    texto.includes("vanilla")
+  ) {
+    return "Noites, clima ameno/frio e ocasiões de presença";
+  }
+  return "Versátil para dia, noite e momentos especiais";
+}
+
+function inferirIntensidade(produto: ProdutoFirebase) {
+  const texto = normalizarTextoAroma(
+    `${produto.nome || ""} ${produto.familiaOlfativa || ""} ${produto.fixacao || ""} ${produto.projecao || ""} ${produto.observacoes || ""}`,
+  );
+
+  if (produto.intensidade) return produto.intensidade;
+  if (
+    texto.includes("oud") ||
+    texto.includes("ambar") ||
+    texto.includes("âmbar") ||
+    texto.includes("oriental") ||
+    texto.includes("intens") ||
+    texto.includes("alta") ||
+    texto.includes("forte")
+  ) {
+    return "Marcante";
+  }
+  if (
+    texto.includes("fresh") ||
+    texto.includes("fresco") ||
+    texto.includes("citr") ||
+    texto.includes("leve")
+  ) {
+    return "Leve a moderada";
+  }
+  return "Moderada elegante";
+}
+
+function inferirGeneroOlfativo(produto: ProdutoFirebase) {
+  if (produto.generoOlfativo) return produto.generoOlfativo;
+  return categoriaSite(produto.categoria);
+}
+
+function dividirNotas(valor?: string): string[] {
+  const texto = String(valor || "").trim();
+  if (!texto || texto.toLowerCase() === "não informado" || texto.toLowerCase() === "nao informado") return [];
+
+  return texto
+    .split(/[,;•|\/]+/g)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function notasComFallback(valor: string | undefined, fallback: string[]) {
+  const notas = dividirNotas(valor);
+  return notas.length ? notas : fallback;
+}
+
+function montarCombinaCom(produto: ProdutoFirebase) {
+  const texto = normalizarTextoAroma(
+    `${produto.nome || ""} ${produto.familiaOlfativa || ""} ${produto.ocasiao || ""} ${produto.observacoes || ""} ${produto.tipo || ""}`,
+  );
+
+  const itens = new Set<string>();
+
+  if (texto.includes("oud") || texto.includes("ambar") || texto.includes("oriental") || texto.includes("intens")) {
+    itens.add("🌙 Noite");
+    itens.add("✨ Ocasiões especiais");
+    itens.add("🖤 Assinatura marcante");
+  }
+
+  if (texto.includes("floral") || texto.includes("rosa") || texto.includes("rose") || produto.categoria === "feminino") {
+    itens.add("🌹 Encontros");
+    itens.add("🎁 Presente premium");
+  }
+
+  if (texto.includes("fresh") || texto.includes("fresco") || texto.includes("citr") || texto.includes("aquatico")) {
+    itens.add("☀️ Dia a dia");
+    itens.add("🌿 Clima quente");
+  }
+
+  itens.add("🤎 Atendimento consultivo");
+  itens.add("💎 Curadoria Maison Noor");
+
+  return Array.from(itens).slice(0, 6);
+}
+
+const SITE_URL = "https://www.maisonnoor.com.br";
+
+function urlAbsoluta(valor?: string) {
+  const texto = String(valor || "").trim();
+  if (!texto) return `${SITE_URL}/logo.png`;
+  if (texto.startsWith("http://") || texto.startsWith("https://")) return texto;
+  return `${SITE_URL}${texto.startsWith("/") ? texto : `/${texto}`}`;
+}
+
+function limparDescricaoSeo(valor?: string) {
+  return String(valor || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 155);
+}
+
+function atualizarMetaTag(atributo: "name" | "property", chave: string, conteudo: string) {
+  if (typeof document === "undefined") return;
+
+  let meta = document.querySelector(`meta[${atributo}="${chave}"]`) as HTMLMetaElement | null;
+
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.setAttribute(atributo, chave);
+    document.head.appendChild(meta);
+  }
+
+  meta.setAttribute("content", conteudo);
 }
 
 export default function ProdutoPage() {
@@ -285,6 +475,9 @@ export default function ProdutoPage() {
           fixacao: data.fixacao,
           projecao: data.projecao,
           ocasiao: data.ocasiao,
+          climaIdeal: data.climaIdeal || data.clima || data.temperaturaIdeal,
+          intensidade: data.intensidade,
+          generoOlfativo: data.generoOlfativo || data.genero || data.publico,
         });
       } catch (e) {
         console.error(e);
@@ -307,7 +500,11 @@ export default function ProdutoPage() {
 
         if (produto.categoria) {
           consultas.push(
-            query(productsRef, where("categoria", "==", produto.categoria), limit(8))
+            query(
+              productsRef,
+              where("categoria", "==", produto.categoria),
+              limit(8),
+            ),
           );
         }
         consultas.push(query(productsRef, limit(8)));
@@ -334,7 +531,11 @@ export default function ProdutoPage() {
               nome: data.nome || "Perfume Maison Noor",
               marca: data.marca,
               preco: Number(data.precoVenda) || 0,
-              imagem: getImagemPrincipal({ ...data, id: item.id, nome: data.nome || "produto" }),
+              imagem: getImagemPrincipal({
+                ...data,
+                id: item.id,
+                nome: data.nome || "produto",
+              }),
               categoria: categoriaSite(data.categoria),
               tamanho: data.volumeMl ? `${data.volumeMl}ml` : "—",
             });
@@ -384,23 +585,107 @@ export default function ProdutoPage() {
       notasTopoFinal: produto.notasTopo || "Não informado",
       notasCoracaoFinal: produto.notasCoracao || "Não informado",
       notasFundoFinal: produto.notasFundo || "Não informado",
+      notasTopoLista: notasComFallback(produto.notasTopo, ["Abertura refinada", "Toque luminoso", "Primeira impressão elegante"]),
+      notasCoracaoLista: notasComFallback(produto.notasCoracao, ["Corpo sofisticado", "Presença envolvente", "Assinatura memorável"]),
+      notasFundoLista: notasComFallback(produto.notasFundo, ["Base elegante", "Rastro marcante", "Finalização premium"]),
+      combinaComLista: montarCombinaCom(produto),
       familiaOlfativaFinal: produto.familiaOlfativa || "Não informado",
       fixacaoFinal: produto.fixacao || "Boa fixação",
       projecaoFinal: produto.projecao || "Projeção moderada",
       ocasiaoFinal:
-        produto.ocasiao || "Uso diário, ocasiões especiais e momentos marcantes.",
+        produto.ocasiao ||
+        "Uso diário, ocasiões especiais e momentos marcantes.",
+      climaIdealFinal: inferirClima(produto),
+      intensidadeFinal: inferirIntensidade(produto),
+      generoOlfativoFinal: inferirGeneroOlfativo(produto),
+      fixacaoScore: scorePorTexto(produto.fixacao, 78),
+      projecaoScore: scorePorTexto(produto.projecao, 70),
+      intensidadeScore: scorePorTexto(inferirIntensidade(produto), 76),
+      versatilidadeScore:
+        normalizarTextoAroma(produto.ocasiao).includes("diário") ||
+        normalizarTextoAroma(produto.ocasiao).includes("dia")
+          ? 86
+          : 74,
       perfilComercial: perfil.perfil,
       sensacaoComercial: perfil.sensacao,
       ocasiacaoComercial: perfil.ocasiacao,
     };
   }, [produto]);
 
+  const seoData = useMemo(() => {
+    if (!produtoPronto) return null;
+
+    const marca = produtoPronto.marca || "Maison Noor";
+    const categoria = produtoPronto.categoriaFinal || "perfume árabe";
+    const preco = produtoPronto.precoFinal || 0;
+    const imagem = urlAbsoluta(produtoPronto.imagemFinal);
+    const url = `${SITE_URL}/produto/${produtoPronto.id}`;
+    const titulo = `${produtoPronto.nome} | Perfume Árabe Premium | Maison Noor`;
+    const descricao = limparDescricaoSeo(
+      `${produtoPronto.nome} ${marca}. ${produtoPronto.descricaoFinal} ${produtoPronto.tamanho !== "—" ? `Volume ${produtoPronto.tamanho}.` : ""} Curadoria premium Maison Noor.`,
+    );
+
+    return {
+      titulo,
+      descricao,
+      url,
+      imagem,
+      productJsonLd: {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: produtoPronto.nome,
+        brand: {
+          "@type": "Brand",
+          name: marca,
+        },
+        image: [imagem],
+        description: descricao,
+        sku: produtoPronto.id,
+        category: categoria,
+        offers: {
+          "@type": "Offer",
+          url,
+          priceCurrency: "BRL",
+          price: Number(preco || 0).toFixed(2),
+          availability:
+            produtoPronto.disponivel > 0
+              ? "https://schema.org/InStock"
+              : "https://schema.org/OutOfStock",
+          itemCondition: "https://schema.org/NewCondition",
+          seller: {
+            "@type": "Organization",
+            name: "Maison Noor Parfums",
+          },
+        },
+      },
+    };
+  }, [produtoPronto]);
+
+  useEffect(() => {
+    if (!seoData) return;
+
+    document.title = seoData.titulo;
+    atualizarMetaTag("name", "description", seoData.descricao);
+    atualizarMetaTag("name", "keywords", "perfume árabe, perfumes árabes premium, Maison Noor, perfume importado, fragrância árabe");
+    atualizarMetaTag("property", "og:title", seoData.titulo);
+    atualizarMetaTag("property", "og:description", seoData.descricao);
+    atualizarMetaTag("property", "og:type", "product");
+    atualizarMetaTag("property", "og:url", seoData.url);
+    atualizarMetaTag("property", "og:image", seoData.imagem);
+    atualizarMetaTag("property", "og:site_name", "Maison Noor Parfums");
+    atualizarMetaTag("name", "twitter:card", "summary_large_image");
+    atualizarMetaTag("name", "twitter:title", seoData.titulo);
+    atualizarMetaTag("name", "twitter:description", seoData.descricao);
+    atualizarMetaTag("name", "twitter:image", seoData.imagem);
+  }, [seoData]);
+
   useEffect(() => {
     setImagemSelecionada(0);
   }, [produtoPronto?.id]);
 
   useEffect(() => {
-    if (!produtoPronto?.galeria?.length || produtoPronto.galeria.length <= 1) return;
+    if (!produtoPronto?.galeria?.length || produtoPronto.galeria.length <= 1)
+      return;
 
     const interval = window.setInterval(() => {
       setImagemSelecionada((prev) => (prev + 1) % produtoPronto.galeria.length);
@@ -442,7 +727,8 @@ export default function ProdutoPage() {
     if (!produtoPronto || produtoPronto.disponivel <= 0) return;
     adicionarSacola();
 
-    const mensagem = encodeURIComponent(`Olá! Tenho interesse no perfume ${produtoPronto.nome} 😍
+    const mensagem =
+      encodeURIComponent(`Olá! Tenho interesse no perfume ${produtoPronto.nome} 😍
 
 Vi no site e fiquei interessado.
 Valor: ${formatarMoeda(produtoPronto.precoFinal)}
@@ -517,6 +803,12 @@ Pode me passar mais detalhes e as opções de pagamento?`;
 
   return (
     <main style={styles.page}>
+      {seoData ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(seoData.productJsonLd) }}
+        />
+      ) : null}
       <div
         style={{
           ...styles.container,
@@ -570,7 +862,7 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                     }}
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).src =
-                        "/produtos/hero-perfume.png";
+                        "/produtos/sem-imagem.png";
                     }}
                   />
 
@@ -588,35 +880,52 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                   )}
 
                   {!isMobile && (
-                    <div style={styles.zoomHint}>Passe o mouse para ampliar</div>
+                    <div style={styles.zoomHint}>
+                      Passe o mouse para ampliar
+                    </div>
                   )}
                 </div>
 
                 <div style={styles.gallerySupportBox}>
-                  <strong style={styles.gallerySupportTitle}>Experiência Maison Noor</strong>
-                  <span style={styles.gallerySupportText}>Imagem em destaque, curadoria premium e atendimento consultivo para escolher com segurança.</span>
+                  <strong style={styles.gallerySupportTitle}>
+                    Experiência Maison Noor
+                  </strong>
+                  <span style={styles.gallerySupportText}>
+                    Imagem em destaque, curadoria premium e atendimento
+                    consultivo para escolher com segurança.
+                  </span>
                 </div>
 
                 <div style={styles.leftDecisionStack}>
                   <div style={styles.leftDecisionCard}>
                     <span style={styles.leftDecisionIcon}>✦</span>
                     <div>
-                      <strong style={styles.leftDecisionTitle}>Por que escolher</strong>
-                      <p style={styles.leftDecisionText}>Fragrância com presença marcante, ideal para quem busca assinatura olfativa sofisticada.</p>
+                      <strong style={styles.leftDecisionTitle}>
+                        Por que escolher
+                      </strong>
+                      <p style={styles.leftDecisionText}>
+                        Fragrância com presença marcante, ideal para quem busca
+                        assinatura olfativa sofisticada.
+                      </p>
                     </div>
                   </div>
 
                   <div style={styles.leftDecisionCard}>
                     <span style={styles.leftDecisionIcon}>◈</span>
                     <div>
-                      <strong style={styles.leftDecisionTitle}>Compra assistida</strong>
-                      <p style={styles.leftDecisionText}>Tire dúvidas sobre fixação, ocasião de uso e perfil da fragrância antes de finalizar.</p>
+                      <strong style={styles.leftDecisionTitle}>
+                        Compra assistida
+                      </strong>
+                      <p style={styles.leftDecisionText}>
+                        Tire dúvidas sobre fixação, ocasião de uso e perfil da
+                        fragrância antes de finalizar.
+                      </p>
                     </div>
                   </div>
 
                   <a
                     href={`https://wa.me/5512982389658?text=${encodeURIComponent(
-                      `Olá! Tenho dúvidas sobre o perfume ${produtoPronto.nome}. Pode me ajudar a escolher?`
+                      `Olá! Tenho dúvidas sobre o perfume ${produtoPronto.nome}. Pode me ajudar a escolher?`,
                     )}`}
                     target="_blank"
                     rel="noreferrer"
@@ -626,45 +935,47 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                   </a>
                 </div>
 
-              {imagens.length > 1 && (
-                <div
-                  style={{
-                    ...styles.thumbsRow,
-                    justifyContent: isMobile ? "center" : "flex-start",
-                  }}
-                >
-                  {imagens.slice(0, 3).map((img, index) => (
-                    <button
-                      key={`${img}-${index}`}
-                      type="button"
-                      onClick={() => setImagemSelecionada(index)}
-                      style={{
-                        ...styles.thumbButton,
-                        borderColor:
-                          imagemSelecionada === index ? "#C9A46C" : "#E5D6C5",
-                        boxShadow:
-                          imagemSelecionada === index
-                            ? "0 0 0 2px rgba(201,164,108,0.16)"
-                            : "none",
-                        transform:
-                          imagemSelecionada === index ? "translateY(-2px)" : "none",
-                      }}
-                    >
-                      <img
-                        src={img}
-                        alt={`${produtoPronto.nome} ${index + 1}`}
-                        style={styles.thumbImage}
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src =
-                            "/produtos/hero-perfume.png";
+                {imagens.length > 1 && (
+                  <div
+                    style={{
+                      ...styles.thumbsRow,
+                      justifyContent: isMobile ? "center" : "flex-start",
+                    }}
+                  >
+                    {imagens.slice(0, 3).map((img, index) => (
+                      <button
+                        key={`${img}-${index}`}
+                        type="button"
+                        onClick={() => setImagemSelecionada(index)}
+                        style={{
+                          ...styles.thumbButton,
+                          borderColor:
+                            imagemSelecionada === index ? "#C9A46C" : "#E5D6C5",
+                          boxShadow:
+                            imagemSelecionada === index
+                              ? "0 0 0 2px rgba(201,164,108,0.16)"
+                              : "none",
+                          transform:
+                            imagemSelecionada === index
+                              ? "translateY(-2px)"
+                              : "none",
                         }}
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
+                      >
+                        <img
+                          src={img}
+                          alt={`${produtoPronto.nome} ${index + 1}`}
+                          style={styles.thumbImage}
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src =
+                              "/produtos/sem-imagem.png";
+                          }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
           </div>
 
           <div
@@ -687,7 +998,9 @@ Pode me passar mais detalhes e as opções de pagamento?`;
 
             <div style={styles.metaRow}>
               <span style={styles.metaBadge}>{produtoPronto.tamanho}</span>
-              <span style={styles.metaBadge}>{produtoPronto.categoriaFinal}</span>
+              <span style={styles.metaBadge}>
+                {produtoPronto.categoriaFinal}
+              </span>
               <span style={styles.metaBadge}>
                 {produtoPronto.marca || "Maison Noor"}
               </span>
@@ -704,15 +1017,25 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               </p>
 
               <div style={styles.purchaseInfoBox}>
-                <span style={styles.purchaseInfoLabel}>Compra assistida Maison Noor</span>
-                <strong style={styles.purchaseInfoTitle}>Condições de pagamento informadas no atendimento</strong>
-                <span style={styles.purchaseInfoText}>Finalize pela sacola ou fale conosco no WhatsApp para confirmar disponibilidade, frete e forma de pagamento.</span>
+                <span style={styles.purchaseInfoLabel}>
+                  Compra assistida Maison Noor
+                </span>
+                <strong style={styles.purchaseInfoTitle}>
+                  Condições de pagamento informadas no atendimento
+                </strong>
+                <span style={styles.purchaseInfoText}>
+                  Finalize pela sacola ou fale conosco no WhatsApp para
+                  confirmar disponibilidade, frete e forma de pagamento.
+                </span>
               </div>
 
               <p style={styles.productTrustLine}>
-                Seleção exclusiva Maison Noor • Original importado • Curadoria premium
+                Seleção exclusiva Maison Noor • Original importado • Curadoria
+                premium
               </p>
-              <p style={styles.productAnchorLine}>Perfume para quem quer ser lembrado.</p>
+              <p style={styles.productAnchorLine}>
+                Perfume para quem quer ser lembrado.
+              </p>
             </div>
 
             <div style={styles.benefitsGrid}>
@@ -730,11 +1053,123 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               </div>
 
               <div style={styles.convText}>
-                Fragrância escolhida para quem busca sofisticação, assinatura olfativa e uma presença que se destaca com elegância.
+                Fragrância escolhida para quem busca sofisticação, assinatura
+                olfativa e uma presença que se destaca com elegância.
               </div>
 
               <div style={styles.convTrust}>
-                Escolha frequente entre clientes que gostam de perfumes intensos, refinados e memoráveis.
+                Escolha frequente entre clientes que gostam de perfumes
+                intensos, refinados e memoráveis.
+              </div>
+            </div>
+
+            <div style={styles.luxuryMoodPanel}>
+              <div style={styles.luxuryMoodHeader}>
+                <span style={styles.luxuryMoodKicker}>Combina com</span>
+                <strong style={styles.luxuryMoodTitle}>Momentos em que essa fragrância brilha</strong>
+              </div>
+
+              <div style={styles.luxuryMoodTags}>
+                {produtoPronto.combinaComLista.map((item) => (
+                  <span key={item} style={styles.luxuryMoodTag}>{item}</span>
+                ))}
+              </div>
+            </div>
+
+            <div style={styles.socialProofPanel}>
+              <span style={styles.socialProofSeal}>⭐ Curadoria Maison Noor</span>
+              <strong style={styles.socialProofTitle}>Escolha segura para presente ou assinatura pessoal.</strong>
+              <p style={styles.socialProofText}>
+                Atendimento consultivo para confirmar perfil, ocasião de uso, intensidade e melhor forma de finalizar sua compra.
+              </p>
+            </div>
+
+            <div style={styles.premiumPerformancePanel}>
+              <div style={styles.performanceHeader}>
+                <div>
+                  <span style={styles.performanceKicker}>
+                    Raio-X da fragrância
+                  </span>
+                  <strong style={styles.performanceTitle}>
+                    Perfil premium do perfume
+                  </strong>
+                </div>
+                <span style={styles.performanceSeal}>Maison Noor</span>
+              </div>
+
+              <div
+                style={{
+                  ...styles.performanceBarsGrid,
+                  gridTemplateColumns: isMobile
+                    ? "1fr"
+                    : "repeat(2, minmax(0, 1fr))",
+                }}
+              >
+                {[
+                  {
+                    label: "Fixação",
+                    value: produtoPronto.fixacaoFinal,
+                    score: produtoPronto.fixacaoScore,
+                  },
+                  {
+                    label: "Projeção",
+                    value: produtoPronto.projecaoFinal,
+                    score: produtoPronto.projecaoScore,
+                  },
+                  {
+                    label: "Intensidade",
+                    value: produtoPronto.intensidadeFinal,
+                    score: produtoPronto.intensidadeScore,
+                  },
+                  {
+                    label: "Versatilidade",
+                    value: produtoPronto.climaIdealFinal,
+                    score: produtoPronto.versatilidadeScore,
+                  },
+                ].map((item) => (
+                  <div key={item.label} style={styles.performanceBarCard}>
+                    <div style={styles.performanceBarTop}>
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                    </div>
+                    <div style={styles.performanceTrack}>
+                      <span
+                        style={{
+                          ...styles.performanceFill,
+                          width: `${Math.min(100, Math.max(10, item.score))}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div
+                style={{
+                  ...styles.perfumeUseGrid,
+                  gridTemplateColumns: isMobile
+                    ? "1fr"
+                    : "repeat(3, minmax(0, 1fr))",
+                }}
+              >
+                <div style={styles.perfumeUseCard}>
+                  <span style={styles.perfumeUseIcon}>🌙</span>
+                  <strong>Ocasião ideal</strong>
+                  <small>{produtoPronto.ocasiacaoComercial}</small>
+                </div>
+                <div style={styles.perfumeUseCard}>
+                  <span style={styles.perfumeUseIcon}>🌡️</span>
+                  <strong>Clima recomendado</strong>
+                  <small>{produtoPronto.climaIdealFinal}</small>
+                </div>
+                <div style={styles.perfumeUseCard}>
+                  <span style={styles.perfumeUseIcon}>◈</span>
+                  <strong>Perfil olfativo</strong>
+                  <small>
+                    {produtoPronto.generoOlfativoFinal} •{" "}
+                    {produtoPronto.perfilComercial}
+                  </small>
+                </div>
               </div>
             </div>
 
@@ -742,8 +1177,12 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               <div style={styles.idealHeader}>
                 <span style={styles.idealIcon}>✦</span>
                 <div>
-                  <strong style={styles.idealTitle}>Ideal para quem busca</strong>
-                  <p style={styles.idealSubtitle}>Uma assinatura olfativa elegante, marcante e memorável.</p>
+                  <strong style={styles.idealTitle}>
+                    Ideal para quem busca
+                  </strong>
+                  <p style={styles.idealSubtitle}>
+                    Uma assinatura olfativa elegante, marcante e memorável.
+                  </p>
                 </div>
               </div>
 
@@ -793,7 +1232,9 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                 onMouseLeave={() => setHoverBuyNow(false)}
                 style={{
                   ...styles.buyNowButton,
-                  transform: hoverBuyNow ? "translateY(-2px) scale(1.01)" : "translateY(0) scale(1)",
+                  transform: hoverBuyNow
+                    ? "translateY(-2px) scale(1.01)"
+                    : "translateY(0) scale(1)",
                   boxShadow: hoverBuyNow
                     ? "0 18px 34px rgba(120, 87, 45, 0.24)"
                     : "0 16px 30px rgba(120, 87, 45, 0.16)",
@@ -817,7 +1258,9 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                 onMouseLeave={() => setHoverAddCart(false)}
                 style={{
                   ...styles.addButton,
-                  transform: hoverAddCart ? "translateY(-1px)" : "translateY(0)",
+                  transform: hoverAddCart
+                    ? "translateY(-1px)"
+                    : "translateY(0)",
                   boxShadow: hoverAddCart
                     ? "0 12px 24px rgba(120, 87, 45, 0.12), inset 0 1px 0 rgba(255,255,255,0.78)"
                     : "inset 0 1px 0 rgba(255,255,255,0.78)",
@@ -832,7 +1275,7 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                 href={`https://wa.me/5512982389658?text=${encodeURIComponent(
                   produtoPronto.disponivel <= 0
                     ? `Olá! Vi o perfume ${produtoPronto.nome} no site, mas apareceu como indisponível. Ele vai voltar ao estoque?`
-                    : mensagemWhatsapp
+                    : mensagemWhatsapp,
                 )}`}
                 target="_blank"
                 rel="noreferrer"
@@ -842,7 +1285,9 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                   ...styles.whatsappButton,
                   opacity: 1,
                   pointerEvents: "auto",
-                  transform: hoverWhatsapp ? "translateY(-1px)" : "translateY(0)",
+                  transform: hoverWhatsapp
+                    ? "translateY(-1px)"
+                    : "translateY(0)",
                   boxShadow: hoverWhatsapp
                     ? "0 14px 28px rgba(31, 26, 20, 0.18)"
                     : "0 12px 24px rgba(31, 26, 20, 0.12)",
@@ -853,7 +1298,9 @@ Pode me passar mais detalhes e as opções de pagamento?`;
             </div>
 
             {adicionado && (
-              <div style={styles.addedMessage}>Produto adicionado à sacola.</div>
+              <div style={styles.addedMessage}>
+                Produto adicionado à sacola.
+              </div>
             )}
 
             <div style={styles.urgency}>
@@ -878,35 +1325,32 @@ Pode me passar mais detalhes e as opções de pagamento?`;
             >
               <div style={styles.descriptionBox}>
                 <h2 style={styles.sectionTitle}>Descrição da fragrância</h2>
-                <p style={styles.descriptionText}>{produtoPronto.descricaoFinal}</p>
+                <p style={styles.descriptionText}>
+                  {produtoPronto.descricaoFinal}
+                </p>
               </div>
 
               <div style={styles.notesBox}>
                 <h2 style={styles.sectionTitle}>Pirâmide olfativa</h2>
 
-                <div style={styles.notePremiumItem}>
-                  <span style={styles.noteIcon}>✨</span>
-                  <div>
-                    <span style={styles.noteLabel}>Notas de saída</span>
-                    <span style={styles.noteText}>{produtoPronto.notasTopoFinal}</span>
+                {[
+                  { icon: "✨", label: "Notas de saída", text: produtoPronto.notasTopoFinal, list: produtoPronto.notasTopoLista },
+                  { icon: "🌹", label: "Notas de coração", text: produtoPronto.notasCoracaoFinal, list: produtoPronto.notasCoracaoLista },
+                  { icon: "🪵", label: "Notas de fundo", text: produtoPronto.notasFundoFinal, list: produtoPronto.notasFundoLista },
+                ].map((grupo) => (
+                  <div key={grupo.label} style={styles.notePremiumItem}>
+                    <span style={styles.noteIcon}>{grupo.icon}</span>
+                    <div>
+                      <span style={styles.noteLabel}>{grupo.label}</span>
+                      <span style={styles.noteText}>{grupo.text}</span>
+                      <div style={styles.noteTagsRow}>
+                        {grupo.list.map((nota) => (
+                          <span key={`${grupo.label}-${nota}`} style={styles.noteTag}>{nota}</span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
-
-                <div style={styles.notePremiumItem}>
-                  <span style={styles.noteIcon}>◆</span>
-                  <div>
-                    <span style={styles.noteLabel}>Notas de coração</span>
-                    <span style={styles.noteText}>{produtoPronto.notasCoracaoFinal}</span>
-                  </div>
-                </div>
-
-                <div style={styles.notePremiumItem}>
-                  <span style={styles.noteIcon}>◈</span>
-                  <div>
-                    <span style={styles.noteLabel}>Notas de fundo</span>
-                    <span style={styles.noteText}>{produtoPronto.notasFundoFinal}</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -925,17 +1369,23 @@ Pode me passar mais detalhes e as opções de pagamento?`;
 
               <div style={styles.detailCardHighlight}>
                 <span style={styles.detailLabel}>Perfil</span>
-                <strong style={styles.detailValue}>{produtoPronto.perfilComercial}</strong>
+                <strong style={styles.detailValue}>
+                  {produtoPronto.perfilComercial}
+                </strong>
               </div>
 
               <div style={styles.detailCardHighlight}>
                 <span style={styles.detailLabel}>Sensação</span>
-                <strong style={styles.detailValue}>{produtoPronto.sensacaoComercial}</strong>
+                <strong style={styles.detailValue}>
+                  {produtoPronto.sensacaoComercial}
+                </strong>
               </div>
 
               <div style={styles.detailCardHighlight}>
                 <span style={styles.detailLabel}>Melhor ocasião</span>
-                <strong style={styles.detailValue}>{produtoPronto.ocasiacaoComercial}</strong>
+                <strong style={styles.detailValue}>
+                  {produtoPronto.ocasiacaoComercial}
+                </strong>
               </div>
             </div>
 
@@ -947,17 +1397,23 @@ Pode me passar mais detalhes e as opções de pagamento?`;
             >
               <div style={styles.detailCard}>
                 <span style={styles.detailLabel}>Fixação</span>
-                <strong style={styles.detailValue}>{produtoPronto.fixacaoFinal}</strong>
+                <strong style={styles.detailValue}>
+                  {produtoPronto.fixacaoFinal}
+                </strong>
               </div>
 
               <div style={styles.detailCard}>
                 <span style={styles.detailLabel}>Projeção</span>
-                <strong style={styles.detailValue}>{produtoPronto.projecaoFinal}</strong>
+                <strong style={styles.detailValue}>
+                  {produtoPronto.projecaoFinal}
+                </strong>
               </div>
 
               <div style={styles.detailCard}>
                 <span style={styles.detailLabel}>Ocasião de uso</span>
-                <strong style={styles.detailValue}>{produtoPronto.ocasiaoFinal}</strong>
+                <strong style={styles.detailValue}>
+                  {produtoPronto.ocasiaoFinal}
+                </strong>
               </div>
 
               <div style={styles.detailCard}>
@@ -988,7 +1444,9 @@ Pode me passar mais detalhes e as opções de pagamento?`;
 
               <div style={styles.detailCard}>
                 <span style={styles.detailLabel}>Volume</span>
-                <strong style={styles.detailValue}>{produtoPronto.tamanho}</strong>
+                <strong style={styles.detailValue}>
+                  {produtoPronto.tamanho}
+                </strong>
               </div>
 
               <div style={styles.detailCard}>
@@ -1000,7 +1458,9 @@ Pode me passar mais detalhes e as opções de pagamento?`;
 
               <div style={styles.detailCard}>
                 <span style={styles.detailLabel}>Tipo</span>
-                <strong style={styles.detailValue}>{produtoPronto.tipoFinal}</strong>
+                <strong style={styles.detailValue}>
+                  {produtoPronto.tipoFinal}
+                </strong>
               </div>
             </div>
           </div>
@@ -1011,7 +1471,9 @@ Pode me passar mais detalhes e as opções de pagamento?`;
             <div style={styles.relatedHeader}>
               <div>
                 <p style={styles.relatedKicker}>Você também pode gostar</p>
-                <h2 style={styles.relatedTitle}>Mais fragrâncias no padrão Maison Noor</h2>
+                <h2 style={styles.relatedTitle}>
+                  Mais fragrâncias no padrão Maison Noor
+                </h2>
               </div>
             </div>
 
@@ -1021,12 +1483,16 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                 gridTemplateColumns: isMobile
                   ? "1fr 1fr"
                   : isTablet
-                  ? "repeat(3, 1fr)"
-                  : "repeat(4, 1fr)",
+                    ? "repeat(3, 1fr)"
+                    : "repeat(4, 1fr)",
               }}
             >
               {relacionados.map((item) => (
-                <Link key={item.id} href={`/produto/${item.id}`} style={styles.relatedCard}>
+                <Link
+                  key={item.id}
+                  href={`/produto/${item.id}`}
+                  style={styles.relatedCard}
+                >
                   <div style={styles.relatedImageWrap}>
                     <img
                       src={item.imagem}
@@ -1034,18 +1500,22 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                       style={styles.relatedImage}
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).src =
-                          "/produtos/hero-perfume.png";
+                          "/produtos/sem-imagem.png";
                       }}
                     />
                   </div>
 
                   <div style={styles.relatedContent}>
-                    <span style={styles.relatedMeta}>{item.marca || "Maison Noor"}</span>
+                    <span style={styles.relatedMeta}>
+                      {item.marca || "Maison Noor"}
+                    </span>
                     <strong style={styles.relatedName}>{item.nome}</strong>
                     <span style={styles.relatedMetaSoft}>
                       {item.tamanho} • {item.categoria}
                     </span>
-                    <span style={styles.relatedPrice}>{formatarMoeda(item.preco)}</span>
+                    <span style={styles.relatedPrice}>
+                      {formatarMoeda(item.preco)}
+                    </span>
                   </div>
                 </Link>
               ))}
@@ -1072,14 +1542,18 @@ Pode me passar mais detalhes e as opções de pagamento?`;
           </div>
 
           <div style={styles.mobileStickyActions}>
-            <button onClick={comprarAgora} type="button" style={styles.mobileStickyMainBtn}>
+            <button
+              onClick={comprarAgora}
+              type="button"
+              style={styles.mobileStickyMainBtn}
+            >
               Comprar agora
             </button>
             <a
               href={`https://wa.me/5512982389658?text=${encodeURIComponent(
                 produtoPronto.disponivel <= 0
                   ? `Olá! Vi o perfume ${produtoPronto.nome} no site, mas apareceu como indisponível. Ele vai voltar ao estoque?`
-                  : mensagemWhatsapp
+                  : mensagemWhatsapp,
               )}`}
               target="_blank"
               rel="noreferrer"
@@ -1095,6 +1569,209 @@ Pode me passar mais detalhes e as opções de pagamento?`;
 }
 
 const styles: Record<string, CSSProperties> = {
+
+  luxuryMoodPanel: {
+    marginTop: "12px",
+    marginBottom: "12px",
+    padding: "15px",
+    borderRadius: "20px",
+    border: "1px solid #E7D7C1",
+    background: "linear-gradient(135deg, #1F1A14, #3A2A1E 58%, #7C5A31)",
+    color: "#FFF7EE",
+    boxShadow: "0 18px 34px rgba(48,34,20,0.12)",
+  },
+  luxuryMoodHeader: {
+    display: "grid",
+    gap: "4px",
+    marginBottom: "12px",
+  },
+  luxuryMoodKicker: {
+    color: "#D8B178",
+    fontSize: "11px",
+    fontWeight: 900,
+    letterSpacing: "0.14em",
+    textTransform: "uppercase",
+  },
+  luxuryMoodTitle: {
+    color: "#FFF7EE",
+    fontSize: "17px",
+    lineHeight: 1.2,
+  },
+  luxuryMoodTags: {
+    display: "flex",
+    gap: "8px",
+    flexWrap: "wrap",
+  },
+  luxuryMoodTag: {
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: "999px",
+    padding: "8px 11px",
+    border: "1px solid rgba(216, 177, 120, 0.38)",
+    background: "rgba(255, 247, 238, 0.09)",
+    color: "#FFF7EE",
+    fontSize: "12px",
+    fontWeight: 800,
+  },
+  socialProofPanel: {
+    marginBottom: "12px",
+    padding: "14px 15px",
+    borderRadius: "18px",
+    border: "1px solid #E7D7C1",
+    background: "linear-gradient(180deg, #FFFDF9, #F7EBDD)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
+  },
+  socialProofSeal: {
+    display: "inline-flex",
+    width: "fit-content",
+    marginBottom: "8px",
+    borderRadius: "999px",
+    padding: "6px 10px",
+    background: "#F1E2CA",
+    color: "#805B2F",
+    fontSize: "11px",
+    fontWeight: 900,
+  },
+  socialProofTitle: {
+    display: "block",
+    color: "#2F2721",
+    fontSize: "15px",
+    lineHeight: 1.35,
+  },
+  socialProofText: {
+    margin: "6px 0 0",
+    color: "#6F6258",
+    fontSize: "13px",
+    lineHeight: 1.55,
+  },
+  noteTagsRow: {
+    display: "flex",
+    gap: "6px",
+    flexWrap: "wrap",
+    marginTop: "8px",
+  },
+  noteTag: {
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: "999px",
+    padding: "6px 9px",
+    border: "1px solid #E7D7C1",
+    background: "linear-gradient(180deg, #FFF9F1, #F5E7D4)",
+    color: "#6B523A",
+    fontSize: "11px",
+    fontWeight: 800,
+  },
+  premiumPerformancePanel: {
+    marginTop: "12px",
+    padding: "16px",
+    borderRadius: "24px",
+    border: "1px solid rgba(216, 193, 162, 0.74)",
+    background:
+      "radial-gradient(circle at top left, rgba(212,175,119,0.16), transparent 34%), linear-gradient(180deg, #FFF9F1, #F3E4D0)",
+    boxShadow: "0 16px 34px rgba(60, 42, 23, 0.08)",
+  },
+  performanceHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "14px",
+    marginBottom: "14px",
+  },
+  performanceKicker: {
+    display: "block",
+    color: "#A8844C",
+    fontSize: "11px",
+    fontWeight: 900,
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+    marginBottom: "5px",
+  },
+  performanceTitle: {
+    display: "block",
+    color: "#3A2F29",
+    fontSize: "20px",
+    lineHeight: 1.1,
+    fontFamily: "Georgia, 'Times New Roman', serif",
+  },
+  performanceSeal: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "32px",
+    padding: "0 12px",
+    borderRadius: "999px",
+    border: "1px solid rgba(190, 145, 85, 0.35)",
+    background: "linear-gradient(135deg, #1B1612, #2A211A)",
+    color: "#F6E9D6",
+    fontSize: "10px",
+    fontWeight: 900,
+    letterSpacing: "0.1em",
+    textTransform: "uppercase",
+    whiteSpace: "nowrap",
+  },
+  performanceBarsGrid: {
+    display: "grid",
+    gap: "10px",
+  },
+  performanceBarCard: {
+    padding: "12px",
+    borderRadius: "16px",
+    border: "1px solid #E7D7C1",
+    background: "rgba(255,255,255,0.72)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+  },
+  performanceBarTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "10px",
+    marginBottom: "9px",
+    color: "#6B5A4C",
+    fontSize: "12px",
+    fontWeight: 800,
+  },
+  performanceTrack: {
+    height: "8px",
+    borderRadius: "999px",
+    overflow: "hidden",
+    background: "rgba(216, 193, 162, 0.34)",
+    border: "1px solid rgba(216, 193, 162, 0.25)",
+  },
+  performanceFill: {
+    display: "block",
+    height: "100%",
+    borderRadius: "999px",
+    background: "linear-gradient(90deg, #D4AF77, #BE9155)",
+    boxShadow: "0 0 18px rgba(190, 145, 85, 0.28)",
+  },
+  perfumeUseGrid: {
+    display: "grid",
+    gap: "10px",
+    marginTop: "12px",
+  },
+  perfumeUseCard: {
+    minHeight: "112px",
+    borderRadius: "18px",
+    padding: "13px",
+    border: "1px solid #E7D7C1",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(250,242,231,0.78))",
+    display: "flex",
+    flexDirection: "column",
+    gap: "7px",
+  },
+  perfumeUseIcon: {
+    width: "34px",
+    height: "34px",
+    borderRadius: "999px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+    color: "#241A12",
+    fontSize: "16px",
+    boxShadow: "0 10px 18px rgba(120, 87, 45, 0.10)",
+  },
   page: {
     minHeight: "100vh",
     background:
@@ -1179,7 +1856,8 @@ const styles: Record<string, CSSProperties> = {
     position: "absolute",
     inset: "18px",
     borderRadius: "24px",
-    background: "radial-gradient(circle at top, rgba(255,255,255,0.55), transparent 65%)",
+    background:
+      "radial-gradient(circle at top, rgba(255,255,255,0.55), transparent 65%)",
     pointerEvents: "none",
   },
 
@@ -1291,7 +1969,8 @@ const styles: Record<string, CSSProperties> = {
     marginTop: "12px",
     borderRadius: "18px",
     border: "1px solid #EADBC8",
-    background: "linear-gradient(180deg, rgba(255,252,248,0.94), rgba(247,238,226,0.9))",
+    background:
+      "linear-gradient(180deg, rgba(255,252,248,0.94), rgba(247,238,226,0.9))",
     padding: "14px 15px",
     display: "grid",
     gap: "5px",
@@ -1322,7 +2001,8 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     borderRadius: "18px",
     border: "1px solid #EADBC8",
-    background: "linear-gradient(180deg, rgba(255,252,248,0.96), rgba(247,238,226,0.92))",
+    background:
+      "linear-gradient(180deg, rgba(255,252,248,0.96), rgba(247,238,226,0.92))",
     padding: "13px 14px",
     boxShadow: "0 10px 22px rgba(48,34,20,0.045)",
   },
@@ -1369,7 +2049,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     boxShadow: "0 12px 26px rgba(31, 26, 20, 0.16)",
   },
-
 
   thumbsRow: {
     display: "flex",
@@ -1705,6 +2384,7 @@ const styles: Record<string, CSSProperties> = {
 
   buyNowButton: {
     width: "100%",
+    transition: "transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease",
     border: "1px solid #C6975F",
     background: "linear-gradient(135deg, #D8B178, #BD9055)",
     color: "#2A2018",
@@ -1718,6 +2398,7 @@ const styles: Record<string, CSSProperties> = {
 
   addButton: {
     width: "100%",
+    transition: "transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease",
     border: "1px solid #D8C1A2",
     background: "linear-gradient(180deg, #FFF9F1, #F5E7D4)",
     color: "#6B523A",
@@ -1731,6 +2412,7 @@ const styles: Record<string, CSSProperties> = {
 
   whatsappButton: {
     display: "flex",
+    transition: "transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease",
     alignItems: "center",
     justifyContent: "center",
     textDecoration: "none",

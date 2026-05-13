@@ -60,6 +60,31 @@ type Pedido = {
   updatedAt?: any;
 };
 
+type CarrinhoAbandonado = {
+  id: string;
+  status?: "aberto" | "pedido_criado" | "contatado" | "recuperado" | "perdido";
+  clienteNome?: string;
+  clienteEmail?: string;
+  telefone?: string;
+  cpf?: string;
+  cep?: string;
+  origem?: string;
+  itens?: PedidoItem[];
+  items?: PedidoItem[];
+  subtotal?: number;
+  total?: number;
+  valor?: number;
+  valorTotal?: number;
+  itemCount?: number;
+  formaPagamentoSelecionada?: string;
+  pedidoId?: string;
+  numeroPedido?: string;
+  ultimaAtualizacao?: any;
+  createdAtIso?: string;
+  updatedAtIso?: string;
+  updatedAt?: any;
+};
+
 type Produto = {
   id: string;
   nome?: string;
@@ -406,6 +431,46 @@ function whatsappPedido(p: Pedido) {
   return `https://wa.me/?text=${mensagem}`;
 }
 
+
+function getCarrinhoItens(c: CarrinhoAbandonado) {
+  return Array.isArray(c.itens) && c.itens.length ? c.itens : c.items || [];
+}
+
+function calcularTotalCarrinho(c: CarrinhoAbandonado) {
+  const direto = Number(c.total || c.valorTotal || c.valor || 0);
+  if (direto > 0) return direto;
+
+  return getCarrinhoItens(c).reduce((acc, item) => {
+    const qtd = Number(item.qtd || item.quantidade || 1);
+    const preco = Number(item.preco || item.precoUnitario || 0);
+    return acc + qtd * preco;
+  }, 0);
+}
+
+function carrinhoUltimaData(c: CarrinhoAbandonado) {
+  return normalizarData(c.updatedAt || c.updatedAtIso || c.ultimaAtualizacao || c.createdAtIso);
+}
+
+function whatsappCarrinho(c: CarrinhoAbandonado) {
+  const telefone = limparTelefone(c.telefone);
+  const nome = c.clienteNome || "Cliente";
+  const itens = getCarrinhoItens(c)
+    .slice(0, 4)
+    .map((item) => `• ${item.nome || "Produto"}${Number(item.qtd || item.quantidade || 1) > 1 ? ` (${Number(item.qtd || item.quantidade || 1)}x)` : ""}`)
+    .join("\n");
+
+  const total = formatBRL(calcularTotalCarrinho(c));
+
+  const mensagem = encodeURIComponent(
+    `Olá, ${nome}! Tudo bem? Aqui é da Maison Noor Parfums. Vi que você deixou uma seleção no checkout:\n\n${itens || "Produtos Maison Noor"}\n\nTotal aproximado: ${total}\n\nPosso te ajudar a finalizar ou tirar alguma dúvida?`,
+  );
+
+  if (telefone.length >= 10) return `https://wa.me/55${telefone}?text=${mensagem}`;
+  return `https://wa.me/?text=${mensagem}`;
+}
+
+
+
 function classificarPrioridade(p: Pedido): Pedido["prioridade"] {
   if (p.prioridade) return p.prioridade;
   if (isPendenteParado(p) || isPagoParado(p)) return "urgente";
@@ -507,6 +572,8 @@ function pedidoDentroDoPeriodo(pedido: Pedido, periodo: DashboardPeriodRange) {
 
 export default function CrmPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [carrinhosAbandonados, setCarrinhosAbandonados] = useState<CarrinhoAbandonado[]>([]);
+  const [loadingCarrinhos, setLoadingCarrinhos] = useState(true);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsDashboard | null>(null);
   const [analyticsHistory, setAnalyticsHistory] = useState<
@@ -556,6 +623,33 @@ export default function CrmPage() {
 
     return () => unsubscribe();
   }, []);
+
+
+  useEffect(() => {
+    const ref = collection(db, "carrinhos_abandonados");
+    const q = query(ref, orderBy("updatedAt", "desc"), limit(20));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        const lista = snap.docs.map((docSnap) => ({
+          ...(docSnap.data() as CarrinhoAbandonado),
+          id: docSnap.id,
+        }));
+
+        setCarrinhosAbandonados(lista);
+        setLoadingCarrinhos(false);
+      },
+      (error) => {
+        console.error("Erro ao carregar carrinhos abandonados:", error);
+        setCarrinhosAbandonados([]);
+        setLoadingCarrinhos(false);
+      },
+    );
+
+    return () => unsubscribe();
+  }, []);
+
 
   useEffect(() => {
     const ref = doc(db, "analytics", "dashboard");
@@ -674,6 +768,54 @@ export default function CrmPage() {
         p.statusInterno === "novo_pedido" ? "visualizado" : p.statusInterno,
     });
   }
+
+  async function atualizarCarrinhoAbandonado(carrinhoId: string, dados: Partial<CarrinhoAbandonado>) {
+    try {
+      setSalvandoId(carrinhoId);
+      const ref = doc(db, "carrinhos_abandonados", carrinhoId);
+      await updateDoc(ref, {
+        ...dados,
+        updatedAt: serverTimestamp(),
+        updatedAtIso: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar carrinho abandonado:", error);
+      alert("Não foi possível atualizar o carrinho agora.");
+    } finally {
+      setSalvandoId(null);
+    }
+  }
+
+  async function marcarCarrinhoContatado(c: CarrinhoAbandonado) {
+    await atualizarCarrinhoAbandonado(c.id, {
+      status: "contatado",
+    });
+  }
+
+  const carrinhosRecuperacao = useMemo(() => {
+    return carrinhosAbandonados
+      .filter((c) => c.status !== "recuperado" && c.status !== "perdido")
+      .sort((a, b) => {
+        const da = carrinhoUltimaData(a)?.getTime() || 0;
+        const db = carrinhoUltimaData(b)?.getTime() || 0;
+        return db - da;
+      })
+      .slice(0, 6);
+  }, [carrinhosAbandonados]);
+
+  const resumoCarrinhos = useMemo(() => {
+    const abertos = carrinhosAbandonados.filter((c) => c.status === "aberto" || !c.status);
+    const pedidoCriado = carrinhosAbandonados.filter((c) => c.status === "pedido_criado");
+    const contatados = carrinhosAbandonados.filter((c) => c.status === "contatado");
+    const potencial = [...abertos, ...pedidoCriado].reduce((acc, c) => acc + calcularTotalCarrinho(c), 0);
+
+    return {
+      abertos: abertos.length,
+      pedidoCriado: pedidoCriado.length,
+      contatados: contatados.length,
+      potencial,
+    };
+  }, [carrinhosAbandonados]);
 
   const resumo = useMemo(() => {
     const agora = new Date();
@@ -1855,6 +1997,77 @@ export default function CrmPage() {
           />
         </section>
 
+        <section className="crmDashPanel crmAbandonedCartPanel">
+          <div className="crmDashPanelHead compact">
+            <div>
+              <div className="crmDashPanelKicker">Recuperação de carrinho</div>
+              <h2>Carrinhos abandonados e checkout pendente</h2>
+            </div>
+            <span className="crmAbandonedPotential">
+              Potencial: {formatBRL(resumoCarrinhos.potencial)}
+            </span>
+          </div>
+
+          <div className="crmAbandonedSummary">
+            <span><b>{loadingCarrinhos ? "..." : resumoCarrinhos.abertos}</b> abertos</span>
+            <span><b>{loadingCarrinhos ? "..." : resumoCarrinhos.pedidoCriado}</b> com pedido criado</span>
+            <span><b>{loadingCarrinhos ? "..." : resumoCarrinhos.contatados}</b> contatados</span>
+          </div>
+
+          <div className="crmAbandonedList">
+            {loadingCarrinhos ? (
+              <div className="crmAbandonedEmpty">Carregando carrinhos...</div>
+            ) : carrinhosRecuperacao.length === 0 ? (
+              <div className="crmAbandonedEmpty">Nenhum carrinho para recuperar agora.</div>
+            ) : (
+              carrinhosRecuperacao.map((c) => {
+                const itens = getCarrinhoItens(c);
+                const ultimaData = carrinhoUltimaData(c);
+
+                return (
+                  <div key={c.id} className={`crmAbandonedItem ${c.status || "aberto"}`}>
+                    <div className="crmAbandonedMain">
+                      <strong>{c.clienteNome || "Cliente do site"}</strong>
+                      <small>
+                        {itens.slice(0, 2).map((item) => item.nome || "Produto").join(" • ") || "Produtos Maison Noor"}
+                      </small>
+                      <em>
+                        {ultimaData ? ultimaData.toLocaleString("pt-BR") : "Sem data"} • {c.formaPagamentoSelecionada || "checkout"}
+                      </em>
+                    </div>
+
+                    <div className="crmAbandonedValue">
+                      <span>{formatBRL(calcularTotalCarrinho(c))}</span>
+                      <small>{c.status || "aberto"}</small>
+                    </div>
+
+                    <div className="crmAbandonedActions">
+                      <a
+                        href={whatsappCarrinho(c)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="crmAbandonedWhatsapp"
+                        onClick={() => void marcarCarrinhoContatado(c)}
+                      >
+                        WhatsApp
+                      </a>
+                      <button
+                        type="button"
+                        className="crmAbandonedSoft"
+                        disabled={salvandoId === c.id}
+                        onClick={() => marcarCarrinhoContatado(c)}
+                      >
+                        Contatado
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+
         {resumo.aPrazoPendentes > 0 ? (
           <section className="crmDashPanel crmReceivablePanel">
             <div className="crmDashPanelHead compact">
@@ -2854,6 +3067,169 @@ export default function CrmPage() {
           .crmDashLinkSoft {
             border: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(255, 255, 255, 0.05);
+          }
+
+
+          .crmAbandonedCartPanel {
+            margin-top: 10px;
+            border-color: rgba(255, 211, 120, 0.24);
+            background:
+              radial-gradient(circle at top left, rgba(200, 162, 106, 0.12), transparent 28%),
+              linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014));
+          }
+
+          .crmAbandonedPotential {
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0 12px;
+            color: #15120d;
+            background: linear-gradient(180deg, #f3d194, #c8a26a);
+            font-size: 12px;
+            font-weight: 950;
+            white-space: nowrap;
+          }
+
+          .crmAbandonedSummary {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+          }
+
+          .crmAbandonedSummary span {
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 0 11px;
+            border: 1px solid rgba(200, 162, 106, 0.18);
+            background: rgba(0, 0, 0, 0.16);
+            color: rgba(244, 241, 235, 0.68);
+            font-size: 11px;
+            font-weight: 850;
+          }
+
+          .crmAbandonedSummary b {
+            color: #d8ad68;
+            font-size: 13px;
+          }
+
+          .crmAbandonedList {
+            display: grid;
+            gap: 8px;
+          }
+
+          .crmAbandonedItem {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 150px 180px;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border-radius: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.085);
+            background: rgba(0, 0, 0, 0.20);
+          }
+
+          .crmAbandonedItem.pedido_criado {
+            border-color: rgba(255, 211, 120, 0.22);
+            background: rgba(255, 211, 120, 0.06);
+          }
+
+          .crmAbandonedItem.contatado {
+            border-color: rgba(115, 171, 255, 0.24);
+            background: rgba(115, 171, 255, 0.06);
+          }
+
+          .crmAbandonedMain {
+            min-width: 0;
+            display: grid;
+            gap: 4px;
+          }
+
+          .crmAbandonedMain strong {
+            color: #f4f1eb;
+            font-size: 13px;
+          }
+
+          .crmAbandonedMain small,
+          .crmAbandonedMain em {
+            min-width: 0;
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 11px;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-style: normal;
+          }
+
+          .crmAbandonedValue {
+            display: grid;
+            gap: 4px;
+            justify-items: end;
+          }
+
+          .crmAbandonedValue span {
+            color: #d8ad68;
+            font-weight: 950;
+            font-size: 14px;
+          }
+
+          .crmAbandonedValue small {
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 850;
+          }
+
+          .crmAbandonedActions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+          }
+
+          .crmAbandonedWhatsapp,
+          .crmAbandonedSoft {
+            min-height: 32px;
+            border-radius: 10px;
+            padding: 0 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 950;
+            cursor: pointer;
+          }
+
+          .crmAbandonedWhatsapp {
+            color: #102116;
+            border: 1px solid rgba(91, 255, 146, 0.32);
+            background: linear-gradient(180deg, #9dffbd, #63d889);
+          }
+
+          .crmAbandonedSoft {
+            color: #f4f1eb;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(255, 255, 255, 0.055);
+          }
+
+          .crmAbandonedSoft:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+          }
+
+          .crmAbandonedEmpty {
+            border-radius: 13px;
+            border: 1px dashed rgba(255, 255, 255, 0.14);
+            background: rgba(0, 0, 0, 0.15);
+            color: rgba(244, 241, 235, 0.64);
+            padding: 14px;
+            font-size: 12px;
           }
 
           .crmDashMetricsOneRow {
@@ -4107,7 +4483,170 @@ export default function CrmPage() {
           }
 
           @media (max-width: 1320px) {
-            .crmDashMetricsOneRow {
+  
+          .crmAbandonedCartPanel {
+            margin-top: 10px;
+            border-color: rgba(255, 211, 120, 0.24);
+            background:
+              radial-gradient(circle at top left, rgba(200, 162, 106, 0.12), transparent 28%),
+              linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014));
+          }
+
+          .crmAbandonedPotential {
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0 12px;
+            color: #15120d;
+            background: linear-gradient(180deg, #f3d194, #c8a26a);
+            font-size: 12px;
+            font-weight: 950;
+            white-space: nowrap;
+          }
+
+          .crmAbandonedSummary {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+          }
+
+          .crmAbandonedSummary span {
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 0 11px;
+            border: 1px solid rgba(200, 162, 106, 0.18);
+            background: rgba(0, 0, 0, 0.16);
+            color: rgba(244, 241, 235, 0.68);
+            font-size: 11px;
+            font-weight: 850;
+          }
+
+          .crmAbandonedSummary b {
+            color: #d8ad68;
+            font-size: 13px;
+          }
+
+          .crmAbandonedList {
+            display: grid;
+            gap: 8px;
+          }
+
+          .crmAbandonedItem {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 150px 180px;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border-radius: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.085);
+            background: rgba(0, 0, 0, 0.20);
+          }
+
+          .crmAbandonedItem.pedido_criado {
+            border-color: rgba(255, 211, 120, 0.22);
+            background: rgba(255, 211, 120, 0.06);
+          }
+
+          .crmAbandonedItem.contatado {
+            border-color: rgba(115, 171, 255, 0.24);
+            background: rgba(115, 171, 255, 0.06);
+          }
+
+          .crmAbandonedMain {
+            min-width: 0;
+            display: grid;
+            gap: 4px;
+          }
+
+          .crmAbandonedMain strong {
+            color: #f4f1eb;
+            font-size: 13px;
+          }
+
+          .crmAbandonedMain small,
+          .crmAbandonedMain em {
+            min-width: 0;
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 11px;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-style: normal;
+          }
+
+          .crmAbandonedValue {
+            display: grid;
+            gap: 4px;
+            justify-items: end;
+          }
+
+          .crmAbandonedValue span {
+            color: #d8ad68;
+            font-weight: 950;
+            font-size: 14px;
+          }
+
+          .crmAbandonedValue small {
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 850;
+          }
+
+          .crmAbandonedActions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+          }
+
+          .crmAbandonedWhatsapp,
+          .crmAbandonedSoft {
+            min-height: 32px;
+            border-radius: 10px;
+            padding: 0 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 950;
+            cursor: pointer;
+          }
+
+          .crmAbandonedWhatsapp {
+            color: #102116;
+            border: 1px solid rgba(91, 255, 146, 0.32);
+            background: linear-gradient(180deg, #9dffbd, #63d889);
+          }
+
+          .crmAbandonedSoft {
+            color: #f4f1eb;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(255, 255, 255, 0.055);
+          }
+
+          .crmAbandonedSoft:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+          }
+
+          .crmAbandonedEmpty {
+            border-radius: 13px;
+            border: 1px dashed rgba(255, 255, 255, 0.14);
+            background: rgba(0, 0, 0, 0.15);
+            color: rgba(244, 241, 235, 0.64);
+            padding: 14px;
+            font-size: 12px;
+          }
+
+          .crmDashMetricsOneRow {
               grid-template-columns: repeat(4, minmax(0, 1fr));
             }
 
@@ -4182,6 +4721,21 @@ export default function CrmPage() {
 
             .crmStockHealth {
               grid-template-columns: 1fr;
+            }
+
+
+            .crmAbandonedItem {
+              grid-template-columns: 1fr;
+              align-items: stretch;
+            }
+
+            .crmAbandonedValue {
+              justify-items: start;
+            }
+
+            .crmAbandonedActions {
+              justify-content: flex-start;
+              flex-wrap: wrap;
             }
 
             .crmStockCircle {
@@ -4762,6 +5316,169 @@ export default function CrmPage() {
             box-shadow: 0 10px 22px rgba(200, 162, 106, 0.08);
           }
 
+
+          .crmAbandonedCartPanel {
+            margin-top: 10px;
+            border-color: rgba(255, 211, 120, 0.24);
+            background:
+              radial-gradient(circle at top left, rgba(200, 162, 106, 0.12), transparent 28%),
+              linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014));
+          }
+
+          .crmAbandonedPotential {
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0 12px;
+            color: #15120d;
+            background: linear-gradient(180deg, #f3d194, #c8a26a);
+            font-size: 12px;
+            font-weight: 950;
+            white-space: nowrap;
+          }
+
+          .crmAbandonedSummary {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+          }
+
+          .crmAbandonedSummary span {
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 0 11px;
+            border: 1px solid rgba(200, 162, 106, 0.18);
+            background: rgba(0, 0, 0, 0.16);
+            color: rgba(244, 241, 235, 0.68);
+            font-size: 11px;
+            font-weight: 850;
+          }
+
+          .crmAbandonedSummary b {
+            color: #d8ad68;
+            font-size: 13px;
+          }
+
+          .crmAbandonedList {
+            display: grid;
+            gap: 8px;
+          }
+
+          .crmAbandonedItem {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 150px 180px;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border-radius: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.085);
+            background: rgba(0, 0, 0, 0.20);
+          }
+
+          .crmAbandonedItem.pedido_criado {
+            border-color: rgba(255, 211, 120, 0.22);
+            background: rgba(255, 211, 120, 0.06);
+          }
+
+          .crmAbandonedItem.contatado {
+            border-color: rgba(115, 171, 255, 0.24);
+            background: rgba(115, 171, 255, 0.06);
+          }
+
+          .crmAbandonedMain {
+            min-width: 0;
+            display: grid;
+            gap: 4px;
+          }
+
+          .crmAbandonedMain strong {
+            color: #f4f1eb;
+            font-size: 13px;
+          }
+
+          .crmAbandonedMain small,
+          .crmAbandonedMain em {
+            min-width: 0;
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 11px;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-style: normal;
+          }
+
+          .crmAbandonedValue {
+            display: grid;
+            gap: 4px;
+            justify-items: end;
+          }
+
+          .crmAbandonedValue span {
+            color: #d8ad68;
+            font-weight: 950;
+            font-size: 14px;
+          }
+
+          .crmAbandonedValue small {
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 850;
+          }
+
+          .crmAbandonedActions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+          }
+
+          .crmAbandonedWhatsapp,
+          .crmAbandonedSoft {
+            min-height: 32px;
+            border-radius: 10px;
+            padding: 0 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 950;
+            cursor: pointer;
+          }
+
+          .crmAbandonedWhatsapp {
+            color: #102116;
+            border: 1px solid rgba(91, 255, 146, 0.32);
+            background: linear-gradient(180deg, #9dffbd, #63d889);
+          }
+
+          .crmAbandonedSoft {
+            color: #f4f1eb;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(255, 255, 255, 0.055);
+          }
+
+          .crmAbandonedSoft:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+          }
+
+          .crmAbandonedEmpty {
+            border-radius: 13px;
+            border: 1px dashed rgba(255, 255, 255, 0.14);
+            background: rgba(0, 0, 0, 0.15);
+            color: rgba(244, 241, 235, 0.64);
+            padding: 14px;
+            font-size: 12px;
+          }
+
           .crmDashMetricsOneRow {
             grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
             gap: 10px !important;
@@ -5098,7 +5815,170 @@ export default function CrmPage() {
           }
 
           @media (min-width: 1500px) {
-            .crmDashMetricsOneRow {
+  
+          .crmAbandonedCartPanel {
+            margin-top: 10px;
+            border-color: rgba(255, 211, 120, 0.24);
+            background:
+              radial-gradient(circle at top left, rgba(200, 162, 106, 0.12), transparent 28%),
+              linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014));
+          }
+
+          .crmAbandonedPotential {
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0 12px;
+            color: #15120d;
+            background: linear-gradient(180deg, #f3d194, #c8a26a);
+            font-size: 12px;
+            font-weight: 950;
+            white-space: nowrap;
+          }
+
+          .crmAbandonedSummary {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+          }
+
+          .crmAbandonedSummary span {
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 0 11px;
+            border: 1px solid rgba(200, 162, 106, 0.18);
+            background: rgba(0, 0, 0, 0.16);
+            color: rgba(244, 241, 235, 0.68);
+            font-size: 11px;
+            font-weight: 850;
+          }
+
+          .crmAbandonedSummary b {
+            color: #d8ad68;
+            font-size: 13px;
+          }
+
+          .crmAbandonedList {
+            display: grid;
+            gap: 8px;
+          }
+
+          .crmAbandonedItem {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 150px 180px;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border-radius: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.085);
+            background: rgba(0, 0, 0, 0.20);
+          }
+
+          .crmAbandonedItem.pedido_criado {
+            border-color: rgba(255, 211, 120, 0.22);
+            background: rgba(255, 211, 120, 0.06);
+          }
+
+          .crmAbandonedItem.contatado {
+            border-color: rgba(115, 171, 255, 0.24);
+            background: rgba(115, 171, 255, 0.06);
+          }
+
+          .crmAbandonedMain {
+            min-width: 0;
+            display: grid;
+            gap: 4px;
+          }
+
+          .crmAbandonedMain strong {
+            color: #f4f1eb;
+            font-size: 13px;
+          }
+
+          .crmAbandonedMain small,
+          .crmAbandonedMain em {
+            min-width: 0;
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 11px;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-style: normal;
+          }
+
+          .crmAbandonedValue {
+            display: grid;
+            gap: 4px;
+            justify-items: end;
+          }
+
+          .crmAbandonedValue span {
+            color: #d8ad68;
+            font-weight: 950;
+            font-size: 14px;
+          }
+
+          .crmAbandonedValue small {
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 850;
+          }
+
+          .crmAbandonedActions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+          }
+
+          .crmAbandonedWhatsapp,
+          .crmAbandonedSoft {
+            min-height: 32px;
+            border-radius: 10px;
+            padding: 0 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 950;
+            cursor: pointer;
+          }
+
+          .crmAbandonedWhatsapp {
+            color: #102116;
+            border: 1px solid rgba(91, 255, 146, 0.32);
+            background: linear-gradient(180deg, #9dffbd, #63d889);
+          }
+
+          .crmAbandonedSoft {
+            color: #f4f1eb;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(255, 255, 255, 0.055);
+          }
+
+          .crmAbandonedSoft:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+          }
+
+          .crmAbandonedEmpty {
+            border-radius: 13px;
+            border: 1px dashed rgba(255, 255, 255, 0.14);
+            background: rgba(0, 0, 0, 0.15);
+            color: rgba(244, 241, 235, 0.64);
+            padding: 14px;
+            font-size: 12px;
+          }
+
+          .crmDashMetricsOneRow {
               grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
             }
 
@@ -5108,13 +5988,339 @@ export default function CrmPage() {
           }
 
           @media (max-width: 1320px) {
-            .crmDashMetricsOneRow {
+  
+          .crmAbandonedCartPanel {
+            margin-top: 10px;
+            border-color: rgba(255, 211, 120, 0.24);
+            background:
+              radial-gradient(circle at top left, rgba(200, 162, 106, 0.12), transparent 28%),
+              linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014));
+          }
+
+          .crmAbandonedPotential {
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0 12px;
+            color: #15120d;
+            background: linear-gradient(180deg, #f3d194, #c8a26a);
+            font-size: 12px;
+            font-weight: 950;
+            white-space: nowrap;
+          }
+
+          .crmAbandonedSummary {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+          }
+
+          .crmAbandonedSummary span {
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 0 11px;
+            border: 1px solid rgba(200, 162, 106, 0.18);
+            background: rgba(0, 0, 0, 0.16);
+            color: rgba(244, 241, 235, 0.68);
+            font-size: 11px;
+            font-weight: 850;
+          }
+
+          .crmAbandonedSummary b {
+            color: #d8ad68;
+            font-size: 13px;
+          }
+
+          .crmAbandonedList {
+            display: grid;
+            gap: 8px;
+          }
+
+          .crmAbandonedItem {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 150px 180px;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border-radius: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.085);
+            background: rgba(0, 0, 0, 0.20);
+          }
+
+          .crmAbandonedItem.pedido_criado {
+            border-color: rgba(255, 211, 120, 0.22);
+            background: rgba(255, 211, 120, 0.06);
+          }
+
+          .crmAbandonedItem.contatado {
+            border-color: rgba(115, 171, 255, 0.24);
+            background: rgba(115, 171, 255, 0.06);
+          }
+
+          .crmAbandonedMain {
+            min-width: 0;
+            display: grid;
+            gap: 4px;
+          }
+
+          .crmAbandonedMain strong {
+            color: #f4f1eb;
+            font-size: 13px;
+          }
+
+          .crmAbandonedMain small,
+          .crmAbandonedMain em {
+            min-width: 0;
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 11px;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-style: normal;
+          }
+
+          .crmAbandonedValue {
+            display: grid;
+            gap: 4px;
+            justify-items: end;
+          }
+
+          .crmAbandonedValue span {
+            color: #d8ad68;
+            font-weight: 950;
+            font-size: 14px;
+          }
+
+          .crmAbandonedValue small {
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 850;
+          }
+
+          .crmAbandonedActions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+          }
+
+          .crmAbandonedWhatsapp,
+          .crmAbandonedSoft {
+            min-height: 32px;
+            border-radius: 10px;
+            padding: 0 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 950;
+            cursor: pointer;
+          }
+
+          .crmAbandonedWhatsapp {
+            color: #102116;
+            border: 1px solid rgba(91, 255, 146, 0.32);
+            background: linear-gradient(180deg, #9dffbd, #63d889);
+          }
+
+          .crmAbandonedSoft {
+            color: #f4f1eb;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(255, 255, 255, 0.055);
+          }
+
+          .crmAbandonedSoft:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+          }
+
+          .crmAbandonedEmpty {
+            border-radius: 13px;
+            border: 1px dashed rgba(255, 255, 255, 0.14);
+            background: rgba(0, 0, 0, 0.15);
+            color: rgba(244, 241, 235, 0.64);
+            padding: 14px;
+            font-size: 12px;
+          }
+
+          .crmDashMetricsOneRow {
               grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
             }
           }
 
           @media (max-width: 1180px) {
-            .crmDashMetricsOneRow {
+  
+          .crmAbandonedCartPanel {
+            margin-top: 10px;
+            border-color: rgba(255, 211, 120, 0.24);
+            background:
+              radial-gradient(circle at top left, rgba(200, 162, 106, 0.12), transparent 28%),
+              linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014));
+          }
+
+          .crmAbandonedPotential {
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0 12px;
+            color: #15120d;
+            background: linear-gradient(180deg, #f3d194, #c8a26a);
+            font-size: 12px;
+            font-weight: 950;
+            white-space: nowrap;
+          }
+
+          .crmAbandonedSummary {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+          }
+
+          .crmAbandonedSummary span {
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 0 11px;
+            border: 1px solid rgba(200, 162, 106, 0.18);
+            background: rgba(0, 0, 0, 0.16);
+            color: rgba(244, 241, 235, 0.68);
+            font-size: 11px;
+            font-weight: 850;
+          }
+
+          .crmAbandonedSummary b {
+            color: #d8ad68;
+            font-size: 13px;
+          }
+
+          .crmAbandonedList {
+            display: grid;
+            gap: 8px;
+          }
+
+          .crmAbandonedItem {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 150px 180px;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border-radius: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.085);
+            background: rgba(0, 0, 0, 0.20);
+          }
+
+          .crmAbandonedItem.pedido_criado {
+            border-color: rgba(255, 211, 120, 0.22);
+            background: rgba(255, 211, 120, 0.06);
+          }
+
+          .crmAbandonedItem.contatado {
+            border-color: rgba(115, 171, 255, 0.24);
+            background: rgba(115, 171, 255, 0.06);
+          }
+
+          .crmAbandonedMain {
+            min-width: 0;
+            display: grid;
+            gap: 4px;
+          }
+
+          .crmAbandonedMain strong {
+            color: #f4f1eb;
+            font-size: 13px;
+          }
+
+          .crmAbandonedMain small,
+          .crmAbandonedMain em {
+            min-width: 0;
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 11px;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-style: normal;
+          }
+
+          .crmAbandonedValue {
+            display: grid;
+            gap: 4px;
+            justify-items: end;
+          }
+
+          .crmAbandonedValue span {
+            color: #d8ad68;
+            font-weight: 950;
+            font-size: 14px;
+          }
+
+          .crmAbandonedValue small {
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 850;
+          }
+
+          .crmAbandonedActions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+          }
+
+          .crmAbandonedWhatsapp,
+          .crmAbandonedSoft {
+            min-height: 32px;
+            border-radius: 10px;
+            padding: 0 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 950;
+            cursor: pointer;
+          }
+
+          .crmAbandonedWhatsapp {
+            color: #102116;
+            border: 1px solid rgba(91, 255, 146, 0.32);
+            background: linear-gradient(180deg, #9dffbd, #63d889);
+          }
+
+          .crmAbandonedSoft {
+            color: #f4f1eb;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(255, 255, 255, 0.055);
+          }
+
+          .crmAbandonedSoft:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+          }
+
+          .crmAbandonedEmpty {
+            border-radius: 13px;
+            border: 1px dashed rgba(255, 255, 255, 0.14);
+            background: rgba(0, 0, 0, 0.15);
+            color: rgba(244, 241, 235, 0.64);
+            padding: 14px;
+            font-size: 12px;
+          }
+
+          .crmDashMetricsOneRow {
               grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
             }
 
@@ -5142,7 +6348,170 @@ export default function CrmPage() {
               padding: 12px !important;
             }
 
-            .crmDashMetricsOneRow {
+  
+          .crmAbandonedCartPanel {
+            margin-top: 10px;
+            border-color: rgba(255, 211, 120, 0.24);
+            background:
+              radial-gradient(circle at top left, rgba(200, 162, 106, 0.12), transparent 28%),
+              linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014));
+          }
+
+          .crmAbandonedPotential {
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0 12px;
+            color: #15120d;
+            background: linear-gradient(180deg, #f3d194, #c8a26a);
+            font-size: 12px;
+            font-weight: 950;
+            white-space: nowrap;
+          }
+
+          .crmAbandonedSummary {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+          }
+
+          .crmAbandonedSummary span {
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 0 11px;
+            border: 1px solid rgba(200, 162, 106, 0.18);
+            background: rgba(0, 0, 0, 0.16);
+            color: rgba(244, 241, 235, 0.68);
+            font-size: 11px;
+            font-weight: 850;
+          }
+
+          .crmAbandonedSummary b {
+            color: #d8ad68;
+            font-size: 13px;
+          }
+
+          .crmAbandonedList {
+            display: grid;
+            gap: 8px;
+          }
+
+          .crmAbandonedItem {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 150px 180px;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border-radius: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.085);
+            background: rgba(0, 0, 0, 0.20);
+          }
+
+          .crmAbandonedItem.pedido_criado {
+            border-color: rgba(255, 211, 120, 0.22);
+            background: rgba(255, 211, 120, 0.06);
+          }
+
+          .crmAbandonedItem.contatado {
+            border-color: rgba(115, 171, 255, 0.24);
+            background: rgba(115, 171, 255, 0.06);
+          }
+
+          .crmAbandonedMain {
+            min-width: 0;
+            display: grid;
+            gap: 4px;
+          }
+
+          .crmAbandonedMain strong {
+            color: #f4f1eb;
+            font-size: 13px;
+          }
+
+          .crmAbandonedMain small,
+          .crmAbandonedMain em {
+            min-width: 0;
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 11px;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-style: normal;
+          }
+
+          .crmAbandonedValue {
+            display: grid;
+            gap: 4px;
+            justify-items: end;
+          }
+
+          .crmAbandonedValue span {
+            color: #d8ad68;
+            font-weight: 950;
+            font-size: 14px;
+          }
+
+          .crmAbandonedValue small {
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 850;
+          }
+
+          .crmAbandonedActions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+          }
+
+          .crmAbandonedWhatsapp,
+          .crmAbandonedSoft {
+            min-height: 32px;
+            border-radius: 10px;
+            padding: 0 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 950;
+            cursor: pointer;
+          }
+
+          .crmAbandonedWhatsapp {
+            color: #102116;
+            border: 1px solid rgba(91, 255, 146, 0.32);
+            background: linear-gradient(180deg, #9dffbd, #63d889);
+          }
+
+          .crmAbandonedSoft {
+            color: #f4f1eb;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(255, 255, 255, 0.055);
+          }
+
+          .crmAbandonedSoft:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+          }
+
+          .crmAbandonedEmpty {
+            border-radius: 13px;
+            border: 1px dashed rgba(255, 255, 255, 0.14);
+            background: rgba(0, 0, 0, 0.15);
+            color: rgba(244, 241, 235, 0.64);
+            padding: 14px;
+            font-size: 12px;
+          }
+
+          .crmDashMetricsOneRow {
               grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
             }
 
@@ -5169,7 +6538,170 @@ export default function CrmPage() {
           }
 
           @media (max-width: 520px) {
-            .crmDashMetricsOneRow {
+  
+          .crmAbandonedCartPanel {
+            margin-top: 10px;
+            border-color: rgba(255, 211, 120, 0.24);
+            background:
+              radial-gradient(circle at top left, rgba(200, 162, 106, 0.12), transparent 28%),
+              linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014));
+          }
+
+          .crmAbandonedPotential {
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0 12px;
+            color: #15120d;
+            background: linear-gradient(180deg, #f3d194, #c8a26a);
+            font-size: 12px;
+            font-weight: 950;
+            white-space: nowrap;
+          }
+
+          .crmAbandonedSummary {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+          }
+
+          .crmAbandonedSummary span {
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 0 11px;
+            border: 1px solid rgba(200, 162, 106, 0.18);
+            background: rgba(0, 0, 0, 0.16);
+            color: rgba(244, 241, 235, 0.68);
+            font-size: 11px;
+            font-weight: 850;
+          }
+
+          .crmAbandonedSummary b {
+            color: #d8ad68;
+            font-size: 13px;
+          }
+
+          .crmAbandonedList {
+            display: grid;
+            gap: 8px;
+          }
+
+          .crmAbandonedItem {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 150px 180px;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border-radius: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.085);
+            background: rgba(0, 0, 0, 0.20);
+          }
+
+          .crmAbandonedItem.pedido_criado {
+            border-color: rgba(255, 211, 120, 0.22);
+            background: rgba(255, 211, 120, 0.06);
+          }
+
+          .crmAbandonedItem.contatado {
+            border-color: rgba(115, 171, 255, 0.24);
+            background: rgba(115, 171, 255, 0.06);
+          }
+
+          .crmAbandonedMain {
+            min-width: 0;
+            display: grid;
+            gap: 4px;
+          }
+
+          .crmAbandonedMain strong {
+            color: #f4f1eb;
+            font-size: 13px;
+          }
+
+          .crmAbandonedMain small,
+          .crmAbandonedMain em {
+            min-width: 0;
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 11px;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-style: normal;
+          }
+
+          .crmAbandonedValue {
+            display: grid;
+            gap: 4px;
+            justify-items: end;
+          }
+
+          .crmAbandonedValue span {
+            color: #d8ad68;
+            font-weight: 950;
+            font-size: 14px;
+          }
+
+          .crmAbandonedValue small {
+            color: rgba(244, 241, 235, 0.58);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 850;
+          }
+
+          .crmAbandonedActions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+          }
+
+          .crmAbandonedWhatsapp,
+          .crmAbandonedSoft {
+            min-height: 32px;
+            border-radius: 10px;
+            padding: 0 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 950;
+            cursor: pointer;
+          }
+
+          .crmAbandonedWhatsapp {
+            color: #102116;
+            border: 1px solid rgba(91, 255, 146, 0.32);
+            background: linear-gradient(180deg, #9dffbd, #63d889);
+          }
+
+          .crmAbandonedSoft {
+            color: #f4f1eb;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(255, 255, 255, 0.055);
+          }
+
+          .crmAbandonedSoft:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+          }
+
+          .crmAbandonedEmpty {
+            border-radius: 13px;
+            border: 1px dashed rgba(255, 255, 255, 0.14);
+            background: rgba(0, 0, 0, 0.15);
+            color: rgba(244, 241, 235, 0.64);
+            padding: 14px;
+            font-size: 12px;
+          }
+
+          .crmDashMetricsOneRow {
               grid-template-columns: 1fr !important;
             }
 

@@ -258,6 +258,61 @@ function getExpiracaoPedidoIso(hours = 24) {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 }
 
+const ABANDONED_CART_STORAGE_ID = "maison_noor_abandoned_cart_id";
+const ABANDONED_CART_CREATED_AT = "maison_noor_abandoned_cart_created_at";
+
+function getOrCreateAbandonedCartId() {
+  if (typeof window === "undefined") return "";
+
+  const atual = window.localStorage.getItem(ABANDONED_CART_STORAGE_ID);
+  if (atual) return atual;
+
+  const novo = `cart_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  window.localStorage.setItem(ABANDONED_CART_STORAGE_ID, novo);
+  window.localStorage.setItem(ABANDONED_CART_CREATED_AT, new Date().toISOString());
+  return novo;
+}
+
+function getAbandonedCartCreatedAt() {
+  if (typeof window === "undefined") return new Date().toISOString();
+
+  const atual = window.localStorage.getItem(ABANDONED_CART_CREATED_AT);
+  if (atual) return atual;
+
+  const agora = new Date().toISOString();
+  window.localStorage.setItem(ABANDONED_CART_CREATED_AT, agora);
+  return agora;
+}
+
+function limparCarrinhoAbandonadoLocal() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(ABANDONED_CART_STORAGE_ID);
+  window.localStorage.removeItem(ABANDONED_CART_CREATED_AT);
+}
+
+async function marcarCarrinhoAbandonadoComoPedido(pedidoId: string, numeroPedido: string) {
+  if (typeof window === "undefined") return;
+
+  const carrinhoId = window.localStorage.getItem(ABANDONED_CART_STORAGE_ID);
+  if (!carrinhoId) return;
+
+  try {
+    await setDoc(
+      doc(db, "carrinhos_abandonados", carrinhoId),
+      {
+        status: "pedido_criado",
+        pedidoId,
+        numeroPedido,
+        convertidoEm: new Date().toISOString(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.error("Erro ao atualizar carrinho abandonado:", error);
+  }
+}
+
 
 async function notificarPedidoPorEmail(payload: any) {
   try {
@@ -455,6 +510,79 @@ export default function CheckoutPage() {
   const cepDigits = cep.replace(/\D/g, "");
   const cepValido = cepDigits.length === 8;
 
+  useEffect(() => {
+    if (!mounted || !carrinho.length) return;
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const carrinhoId = getOrCreateAbandonedCartId();
+        if (!carrinhoId) return;
+
+        const user = auth.currentUser;
+        const itens = mapOrderItems(carrinho);
+        const telefoneDigits = cardTelefone.replace(/\D/g, "");
+        const cpfDigits = (pixCpf || cardCpf).replace(/\D/g, "");
+        const freteAtualInterno = freightOptions.find((opt) => opt.id === selectedFreight);
+
+        await setDoc(
+          doc(db, "carrinhos_abandonados", carrinhoId),
+          {
+            id: carrinhoId,
+            status: "aberto",
+            origem: "checkout",
+            clienteNome: user?.displayName || "Cliente do site",
+            clienteEmail: user?.email || "",
+            clienteUid: user?.uid || "",
+            telefone: telefoneDigits,
+            cpf: cpfDigits,
+            cep: cep || "",
+            cepDigits,
+            frete: freteSelecionado,
+            freteValor: freteSelecionado,
+            freteId: selectedFreight || "",
+            freteNome: freteAtualInterno?.nome || "",
+            fretePrazo: freteAtualInterno?.prazo || "",
+            subtotal,
+            total,
+            valor: total,
+            valorTotal: total,
+            itemCount: itens.reduce<number>(
+              (acc, item) => acc + Number(item.quantidade || item.qtd || 0),
+              0
+            ),
+            itens,
+            items: itens,
+            formaPagamentoSelecionada,
+            ultimaAtualizacao: new Date().toISOString(),
+            createdAtIso: getAbandonedCartCreatedAt(),
+            updatedAtIso: new Date().toISOString(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        console.error("Erro ao salvar carrinho abandonado:", error);
+      }
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    mounted,
+    carrinho,
+    subtotal,
+    total,
+    cep,
+    cepDigits,
+    selectedFreight,
+    freteSelecionado,
+    cardTelefone,
+    cardCpf,
+    pixCpf,
+    formaPagamentoSelecionada,
+    freightOptions,
+  ]);
+
+
   function removerItemCarrinho(index: number) {
     setCarrinho((prev) => {
       const next = prev.filter((_, itemIndex) => itemIndex !== index);
@@ -540,7 +668,10 @@ export default function CheckoutPage() {
 
       itens: itensPedido,
       items: itensPedido,
-      itemCount: itensPedido.reduce((acc, item) => acc + item.quantidade, 0),
+      itemCount: itensPedido.reduce<number>(
+        (acc, item) => acc + Number(item.quantidade || item.qtd || 0),
+        0
+      ),
 
       pagamentos: [
         {
@@ -598,6 +729,8 @@ export default function CheckoutPage() {
       { merge: true }
     );
 
+    await marcarCarrinhoAbandonadoComoPedido(ref.id, numeroPedido);
+
     // ✅ Envia alerta por e-mail sem travar o pedido caso o e-mail falhe
     void notificarPedidoPorEmail({
       ...payload,
@@ -611,6 +744,7 @@ export default function CheckoutPage() {
 
   async function limparSacolaAposPedido() {
     clearCartStorage();
+    limparCarrinhoAbandonadoLocal();
     setCarrinho([]);
 
     if (auth.currentUser) {
