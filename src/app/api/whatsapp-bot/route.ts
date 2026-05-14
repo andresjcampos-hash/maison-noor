@@ -33,7 +33,9 @@ function formatarMoeda(valor: number) {
 
 function extrairMensagem(body: any) {
   return String(
-    body?.message ||
+    body?.text?.message ||
+      body?.message?.text ||
+      body?.message ||
       body?.mensagem ||
       body?.text ||
       body?.body ||
@@ -42,6 +44,25 @@ function extrairMensagem(body: any) {
       body?.data?.body ||
       ""
   ).trim();
+}
+
+function extrairTelefoneZapi(body: any) {
+  return String(
+    body?.phone ||
+      body?.senderPhone ||
+      body?.from ||
+      body?.data?.phone ||
+      ""
+  ).trim();
+}
+
+function isWebhookZapi(body: any) {
+  return Boolean(
+    body?.phone ||
+      body?.senderPhone ||
+      body?.text?.message ||
+      body?.fromMe !== undefined
+  );
 }
 
 function categoriaLabel(categoria?: string) {
@@ -145,7 +166,6 @@ function montarListaCategoria(produtos: ProdutoBot[], categoria: string) {
   const lista = filtrados
     .map((p, index) => {
       const disponivel = Math.max(0, Number(p.estoque || 0) - Number(p.reservado || 0));
-
       return `${index + 1}. *${p.nome}* — ${formatarMoeda(Number(p.precoVenda || 0))} — estoque: ${disponivel}`;
     })
     .join("\n");
@@ -227,29 +247,13 @@ function encontrarProdutoPorMensagem(produtos: ProdutoBot[], mensagem: string) {
 
       let score = 0;
 
-      if (!nome) {
-        return { produto, score: 0 };
-      }
+      if (!nome) return { produto, score: 0 };
 
-      if (msg.includes(nome)) {
-        score += 1000;
-      }
-
-      if (nome === fraseBusca) {
-        score += 900;
-      }
-
-      if (nome.includes(fraseBusca)) {
-        score += 750;
-      }
-
-      if (fraseBusca.includes(nome)) {
-        score += 650;
-      }
-
-      if (marca && msg.includes(marca)) {
-        score += 80;
-      }
+      if (msg.includes(nome)) score += 1000;
+      if (nome === fraseBusca) score += 900;
+      if (nome.includes(fraseBusca)) score += 750;
+      if (fraseBusca.includes(nome)) score += 650;
+      if (marca && msg.includes(marca)) score += 80;
 
       const acertosExatos = tokensBusca.filter((token) => tokensNome.includes(token));
       const acertosParciais = tokensBusca.filter((token) =>
@@ -265,22 +269,11 @@ function encontrarProdutoPorMensagem(produtos: ProdutoBot[], mensagem: string) {
 
       score -= faltantes.length * 220;
 
-      if (tokensBusca.length >= 2 && acertosExatos.length >= 2) {
-        score += 260;
-      }
+      if (tokensBusca.length >= 2 && acertosExatos.length >= 2) score += 260;
+      if (tokensBusca.length >= 2 && acertosExatos.length < 2) score -= 260;
 
-      if (tokensBusca.length >= 2 && acertosExatos.length < 2) {
-        score -= 260;
-      }
-
-      const disponivel = Math.max(
-        0,
-        Number(produto.estoque || 0) - Number(produto.reservado || 0)
-      );
-
-      if (disponivel > 0) {
-        score += 15;
-      }
+      const disponivel = Math.max(0, Number(produto.estoque || 0) - Number(produto.reservado || 0));
+      if (disponivel > 0) score += 15;
 
       return { produto, score };
     })
@@ -289,9 +282,7 @@ function encontrarProdutoPorMensagem(produtos: ProdutoBot[], mensagem: string) {
 
   const melhor = candidatos[0];
 
-  if (!melhor || melhor.score < 120) {
-    return undefined;
-  }
+  if (!melhor || melhor.score < 120) return undefined;
 
   return melhor.produto;
 }
@@ -338,16 +329,104 @@ Você pode me mandar o nome completo ou escolher uma categoria:
 Também posso chamar o atendimento humano da Maison Noor para te ajudar ✨`;
 }
 
+async function enviarMensagemZapi(telefoneCliente: string, texto: string) {
+  const instanceId = process.env.ZAPI_INSTANCE_ID;
+  const instanceToken = process.env.ZAPI_INSTANCE_TOKEN;
+  const clientToken = process.env.ZAPI_CLIENT_TOKEN;
+
+  if (!instanceId || !instanceToken || !clientToken) {
+    console.error("Z-API não configurada corretamente.");
+    return false;
+  }
+
+  const response = await fetch(
+    `https://api.z-api.io/instances/${instanceId}/token/${instanceToken}/send-text`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Client-Token": clientToken,
+      },
+      body: JSON.stringify({
+        phone: telefoneCliente,
+        message: texto,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Erro ao enviar mensagem pela Z-API:", errorText);
+    return false;
+  }
+
+  return true;
+}
+
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    message: "API whatsapp-bot Maison Noor ativa com Firebase Admin e Z-API.",
+    exemploPost: {
+      message: "Tem Yara Candy?",
+    },
+  });
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const mensagem = extrairMensagem(body);
 
+    if (isWebhookZapi(body)) {
+      if (body?.fromMe === true) {
+        return NextResponse.json({
+          ok: true,
+          origem: "z-api",
+          ignorado: true,
+          motivo: "Mensagem enviada pelo próprio número.",
+        });
+      }
+
+      if (body?.isGroup === true || body?.chatName?.includes?.("grupo")) {
+        return NextResponse.json({
+          ok: true,
+          origem: "z-api",
+          ignorado: true,
+          motivo: "Mensagem de grupo ignorada.",
+        });
+      }
+    }
+
+    const mensagem = extrairMensagem(body);
     const produtos = await buscarProdutos();
     const resposta = gerarResposta(produtos, mensagem);
 
+    if (isWebhookZapi(body)) {
+      const telefoneCliente = extrairTelefoneZapi(body);
+
+      if (telefoneCliente && resposta) {
+        const enviado = await enviarMensagemZapi(telefoneCliente, resposta);
+
+        return NextResponse.json({
+          ok: true,
+          origem: "z-api",
+          totalProdutosLidos: produtos.length,
+          mensagemRecebida: mensagem,
+          telefoneCliente,
+          respostaEnviada: enviado,
+        });
+      }
+
+      return NextResponse.json({
+        ok: false,
+        origem: "z-api",
+        error: "Telefone do cliente não encontrado no webhook.",
+      });
+    }
+
     return NextResponse.json({
       ok: true,
+      origem: "site-ou-teste-local",
       totalProdutosLidos: produtos.length,
       mensagemRecebida: mensagem,
       resposta,
@@ -363,14 +442,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
-
-export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    message: "API whatsapp-bot Maison Noor ativa com Firebase Admin.",
-    exemploPost: {
-      message: "Tem Yara Candy?",
-    },
-  });
 }
