@@ -32,9 +32,11 @@ function formatarMoeda(valor: number) {
 }
 
 function extrairMensagem(body: any) {
+  const mensagemWhatsApp =
+    body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
+
   return String(
-    body?.text?.message ||
-      body?.message?.text ||
+    mensagemWhatsApp ||
       body?.message ||
       body?.mensagem ||
       body?.text ||
@@ -46,23 +48,14 @@ function extrairMensagem(body: any) {
   ).trim();
 }
 
-function extrairTelefoneZapi(body: any) {
+function extrairTelefoneWhatsApp(body: any) {
   return String(
-    body?.phone ||
-      body?.senderPhone ||
-      body?.from ||
-      body?.data?.phone ||
-      ""
+    body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from || ""
   ).trim();
 }
 
-function isWebhookZapi(body: any) {
-  return Boolean(
-    body?.phone ||
-      body?.senderPhone ||
-      body?.text?.message ||
-      body?.fromMe !== undefined
-  );
+function isWebhookWhatsApp(body: any) {
+  return Boolean(body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]);
 }
 
 function categoriaLabel(categoria?: string) {
@@ -136,7 +129,7 @@ Posso te indicar uma fragrância parecida ou avisar quando chegar reposição?`;
 *${produto.nome}*
 Categoria: ${categoriaLabel(produto.categoria)}
 Valor: *${formatarMoeda(preco)}*
-Disponibilidade: *disponível para compra*
+Estoque disponível: *${disponivel} unidade${disponivel > 1 ? "s" : ""}*
 
 Link do produto:
 ${link}
@@ -165,7 +158,9 @@ function montarListaCategoria(produtos: ProdutoBot[], categoria: string) {
 
   const lista = filtrados
     .map((p, index) => {
-      return `${index + 1}. *${p.nome}* — ${formatarMoeda(Number(p.precoVenda || 0))} — disponível`;
+      const disponivel = Math.max(0, Number(p.estoque || 0) - Number(p.reservado || 0));
+
+      return `${index + 1}. *${p.nome}* — ${formatarMoeda(Number(p.precoVenda || 0))} — estoque: ${disponivel}`;
     })
     .join("\n");
 
@@ -181,7 +176,7 @@ function montarRespostaGenerica() {
 
 Posso te ajudar com:
 1. Consultar preço de um perfume
-2. Ver disponibilidade
+2. Ver se tem estoque
 3. Listar perfumes femininos
 4. Listar perfumes masculinos
 5. Listar perfumes unissex
@@ -271,7 +266,11 @@ function encontrarProdutoPorMensagem(produtos: ProdutoBot[], mensagem: string) {
       if (tokensBusca.length >= 2 && acertosExatos.length >= 2) score += 260;
       if (tokensBusca.length >= 2 && acertosExatos.length < 2) score -= 260;
 
-      const disponivel = Math.max(0, Number(produto.estoque || 0) - Number(produto.reservado || 0));
+      const disponivel = Math.max(
+        0,
+        Number(produto.estoque || 0) - Number(produto.reservado || 0)
+      );
+
       if (disponivel > 0) score += 15;
 
       return { produto, score };
@@ -286,10 +285,220 @@ function encontrarProdutoPorMensagem(produtos: ProdutoBot[], mensagem: string) {
   return melhor.produto;
 }
 
+function contemAlgum(texto: string, termos: string[]) {
+  return termos.some((termo) => texto.includes(normalizarTexto(termo)));
+}
+
+function pegarProdutosDisponiveis(produtos: ProdutoBot[]) {
+  return produtos.filter((p) => {
+    const disponivel = Math.max(0, Number(p.estoque || 0) - Number(p.reservado || 0));
+    return disponivel > 0;
+  });
+}
+
+function montarListaRecomendados(produtos: ProdutoBot[], titulo: string, filtro: (p: ProdutoBot) => boolean) {
+  const filtrados = pegarProdutosDisponiveis(produtos)
+    .filter(filtro)
+    .slice(0, 5);
+
+  if (!filtrados.length) {
+    return `${titulo}\n\nNo momento não encontrei uma opção exata no catálogo, mas posso chamar o atendimento humano da Maison Noor para te indicar a melhor fragrância ✨`;
+  }
+
+  const lista = filtrados
+    .map((p, index) => {
+      return `${index + 1}. *${p.nome}* — ${formatarMoeda(Number(p.precoVenda || 0))}\nhttps://www.maisonnoor.com.br/produto/${p.id}`;
+    })
+    .join("\n\n");
+
+  return `${titulo}\n\n${lista}\n\nQuer que eu te ajude a escolher entre essas opções?`;
+}
+
+function responderEncomenda() {
+  return `✨ Sim, trabalhamos com encomendas e pedidos sob consulta.
+
+Me envie o nome do perfume que você procura ou uma referência de fragrância. A Maison Noor verifica disponibilidade, prazo e valor para você.
+
+Se preferir, posso chamar o atendimento humano para seguir com sua encomenda.`;
+}
+
+function responderEntregaFrete() {
+  return `🚚 Fazemos entrega/envio conforme a região e disponibilidade.
+
+Para calcular corretamente, precisamos do seu CEP ou cidade.
+
+Você pode enviar assim:
+*Meu CEP é 12200-000*
+
+Também é possível finalizar pelo site e seguir para o checkout.`;
+}
+
+function responderPagamento() {
+  return `💳 Aceitamos formas de pagamento conforme disponibilidade no checkout e atendimento:
+
+• Pix
+• Cartão
+• Condições combinadas no atendimento
+
+Se quiser, me diga qual perfume você deseja que eu envio o link direto para compra.`;
+}
+
+function responderAtendimentoHumano() {
+  return `✨ Claro. Vou te direcionar para o atendimento humano da Maison Noor.
+
+Pode enviar sua dúvida por aqui ou chamar diretamente:
+https://wa.me/5512982389658
+
+Um especialista poderá te ajudar com escolha, pagamento, encomenda e finalização do pedido.`;
+}
+
+function responderReserva() {
+  return `✨ Posso te ajudar com a reserva.
+
+Para reservar, me envie:
+• Nome do perfume
+• Seu nome
+• Forma de pagamento desejada
+
+Um atendimento humano da Maison Noor confirma a disponibilidade e finaliza com você.`;
+}
+
+function responderSaudacao() {
+  return `Olá! Eu sou o assistente virtual da Maison Noor ✨
+
+Posso te ajudar com:
+• Consultar valor de perfume
+• Ver disponibilidade
+• Indicar fragrâncias
+• Falar sobre encomendas
+• Informar entrega e pagamento
+• Chamar atendimento humano
+
+Me diga o nome do perfume ou o estilo que você procura.`;
+}
+
+function responderParecidoCom(produtos: ProdutoBot[], mensagem: string) {
+  const msg = normalizarTexto(mensagem);
+
+  if (contemAlgum(msg, ["good girl", "god girl", "212", "scandal", "la vie", "olympea", "olimpia"])) {
+    return montarListaRecomendados(
+      produtos,
+      "✨ Para uma proposta feminina, marcante, doce e sofisticada, eu indicaria estas opções da Maison Noor:",
+      (p) => {
+        const texto = normalizarTexto(`${p.nome} ${p.marca} ${p.categoria}`);
+        return texto.includes("yara") || texto.includes("fakhar") || texto.includes("shagaf") || texto.includes("rose") || texto.includes("candy");
+      }
+    );
+  }
+
+  if (contemAlgum(msg, ["sauvage", "invictus", "one million", "malbec", "bad boy", "eros"] )) {
+    return montarListaRecomendados(
+      produtos,
+      "✨ Para uma proposta masculina marcante, elegante e de presença, eu indicaria estas opções:",
+      (p) => {
+        const texto = normalizarTexto(`${p.nome} ${p.marca} ${p.categoria}`);
+        return texto.includes("asad") || texto.includes("fakhar") || texto.includes("ramz") || texto.includes("khamrah") || p.categoria === "masculino";
+      }
+    );
+  }
+
+  return `✨ Consigo te ajudar a encontrar uma fragrância parecida.
+
+Me diga o nome do perfume de referência ou o estilo que você gosta, por exemplo:
+• doce feminino
+• masculino forte
+• fresco para o dia
+• amadeirado elegante
+• baunilha ou gourmand`;
+}
+
+function responderPorPerfil(produtos: ProdutoBot[], mensagem: string) {
+  const msg = normalizarTexto(mensagem);
+
+  if (contemAlgum(msg, ["doce", "adocicado", "baunilha", "gourmand", "chocolate", "candy"])) {
+    return montarListaRecomendados(
+      produtos,
+      "🍓 Para quem gosta de perfume doce/gourmand, eu separaria estas opções:",
+      (p) => {
+        const texto = normalizarTexto(`${p.nome} ${p.marca} ${p.categoria}`);
+        return texto.includes("yara") || texto.includes("candy") || texto.includes("khamrah") || texto.includes("shagaf") || texto.includes("vanilla");
+      }
+    );
+  }
+
+  if (contemAlgum(msg, ["fresco", "fresh", "citrico", "cítrico", "leve", "calor", "dia a dia"])) {
+    return montarListaRecomendados(
+      produtos,
+      "🌿 Para uma proposta fresca, leve e boa para o dia a dia, eu indicaria:",
+      (p) => {
+        const texto = normalizarTexto(`${p.nome} ${p.marca} ${p.categoria}`);
+        return texto.includes("fresh") || texto.includes("sabah") || texto.includes("ward") || texto.includes("haya") || texto.includes("fakhar");
+      }
+    );
+  }
+
+  if (contemAlgum(msg, ["amadeirado", "madeira", "oud", "intenso", "forte", "marcante", "projecao", "projeção"])) {
+    return montarListaRecomendados(
+      produtos,
+      "🖤 Para uma fragrância mais marcante, intensa e sofisticada, eu indicaria:",
+      (p) => {
+        const texto = normalizarTexto(`${p.nome} ${p.marca} ${p.categoria}`);
+        return texto.includes("oud") || texto.includes("asad") || texto.includes("khamrah") || texto.includes("intense") || texto.includes("black") || p.categoria === "masculino";
+      }
+    );
+  }
+
+  if (contemAlgum(msg, ["presente", "namorada", "namorado", "mae", "mãe", "esposa", "marido", "aniversario", "aniversário"])) {
+    return montarListaRecomendados(
+      produtos,
+      "🎁 Para presente, eu recomendo opções mais seguras, elegantes e com ótima aceitação:",
+      (p) => {
+        const texto = normalizarTexto(`${p.nome} ${p.marca} ${p.categoria}`);
+        return texto.includes("yara") || texto.includes("fakhar") || texto.includes("sabah") || texto.includes("shagaf") || texto.includes("asad");
+      }
+    );
+  }
+
+  return null;
+}
+
 function gerarResposta(produtos: ProdutoBot[], mensagem: string) {
   const msg = normalizarTexto(mensagem);
 
   if (!msg) return montarRespostaGenerica();
+
+  if (contemAlgum(msg, ["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite", "menu", "ajuda"])) {
+    return responderSaudacao();
+  }
+
+  if (contemAlgum(msg, ["atendente", "humano", "pessoa", "vendedor", "vendedora", "especialista", "falar com", "comprar", "finalizar"])) {
+    return responderAtendimentoHumano();
+  }
+
+  if (contemAlgum(msg, ["encomenda", "encomendar", "sob encomenda", "pedido especial", "consegue trazer", "trazer perfume", "importar"])) {
+    return responderEncomenda();
+  }
+
+  if (contemAlgum(msg, ["entrega", "frete", "envio", "cep", "cidade", "retirada", "delivery", "prazo", "chega quando"])) {
+    return responderEntregaFrete();
+  }
+
+  if (contemAlgum(msg, ["pagamento", "pagar", "pix", "cartao", "cartão", "credito", "crédito", "debito", "débito", "parcel", "parcelamento"])) {
+    return responderPagamento();
+  }
+
+  if (contemAlgum(msg, ["reservar", "reserva", "separar", "guarda", "guardar"])) {
+    return responderReserva();
+  }
+
+  if (contemAlgum(msg, ["parecido", "similar", "lembra", "contratipo", "inspirado", "tipo good", "good girl", "sauvage", "invictus", "one million", "scandal", "olympea", "olimpia"])) {
+    return responderParecidoCom(produtos, mensagem);
+  }
+
+  const respostaPerfil = responderPorPerfil(produtos, mensagem);
+  if (respostaPerfil) {
+    return respostaPerfil;
+  }
 
   if (msg.includes("feminino") || msg.includes("feminina") || msg.includes("mulher")) {
     return montarListaCategoria(produtos, "feminino");
@@ -304,7 +513,7 @@ function gerarResposta(produtos: ProdutoBot[], mensagem: string) {
   }
 
   if (msg.includes("presente") || msg.includes("kit") || msg.includes("namorada") || msg.includes("namorado")) {
-    return montarListaCategoria(produtos, "kits-presente");
+    return responderPorPerfil(produtos, mensagem) || montarListaCategoria(produtos, "kits-presente");
   }
 
   const produtoEncontrado = encontrarProdutoPorMensagem(produtos, mensagem);
@@ -313,59 +522,80 @@ function gerarResposta(produtos: ProdutoBot[], mensagem: string) {
     return montarRespostaProduto(produtoEncontrado);
   }
 
-  if (msg.includes("oi") || msg.includes("ola") || msg.includes("bom dia") || msg.includes("boa tarde") || msg.includes("boa noite")) {
-    return montarRespostaGenerica();
-  }
+  return `Ainda não encontrei essa informação no catálogo automático da Maison Noor.
 
-  return `Não encontrei esse perfume no catálogo agora.
+Posso te ajudar com:
+• Nome de um perfume específico
+• Perfume feminino, masculino ou unissex
+• Perfume doce, fresco, amadeirado ou marcante
+• Encomendas
+• Entrega/frete
+• Pagamento
+• Atendimento humano
 
-Você pode me mandar o nome completo ou escolher uma categoria:
-- Feminino
-- Masculino
-- Unissex
-- Presentes
-
-Também posso chamar o atendimento humano da Maison Noor para te ajudar ✨`;
+Me envie uma dessas opções ou o nome completo do perfume ✨`;
 }
 
-async function enviarMensagemZapi(telefoneCliente: string, texto: string) {
-  const instanceId = process.env.ZAPI_INSTANCE_ID;
-  const instanceToken = process.env.ZAPI_INSTANCE_TOKEN;
-  const clientToken = process.env.ZAPI_CLIENT_TOKEN;
+async function enviarMensagemWhatsApp(telefoneCliente: string, texto: string) {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
-  if (!instanceId || !instanceToken || !clientToken) {
-    console.error("Z-API não configurada corretamente.");
+  if (!token || !phoneNumberId) {
+    console.error("WhatsApp Cloud API não configurada.");
     return false;
   }
 
   const response = await fetch(
-    `https://api.z-api.io/instances/${instanceId}/token/${instanceToken}/send-text`,
+    `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
     {
       method: "POST",
       headers: {
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
-        "Client-Token": clientToken,
       },
       body: JSON.stringify({
-        phone: telefoneCliente,
-        message: texto,
+        messaging_product: "whatsapp",
+        to: telefoneCliente,
+        type: "text",
+        text: {
+          preview_url: true,
+          body: texto,
+        },
       }),
     }
   );
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("Erro ao enviar mensagem pela Z-API:", errorText);
+    console.error("Erro ao enviar WhatsApp:", errorText);
     return false;
   }
 
   return true;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+
+  const mode = searchParams.get("hub.mode");
+  const token = searchParams.get("hub.verify_token");
+  const challenge = searchParams.get("hub.challenge");
+
+  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
+
+  if (mode === "subscribe" && token && token === verifyToken) {
+    return new Response(challenge || "", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain",
+      },
+    });
+  }
+
   return NextResponse.json({
     ok: true,
-    message: "API whatsapp-bot Maison Noor ativa com Firebase Admin e Z-API.",
+    message: "API whatsapp-bot Maison Noor ativa com Firebase Admin e WhatsApp Cloud API.",
+    webhook: "Use esta URL no painel da Meta para configurar o Webhook.",
     exemploPost: {
       message: "Tem Yara Candy?",
     },
@@ -375,51 +605,24 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-
-    if (isWebhookZapi(body)) {
-      if (body?.fromMe === true) {
-        return NextResponse.json({
-          ok: true,
-          origem: "z-api",
-          ignorado: true,
-          motivo: "Mensagem enviada pelo próprio número.",
-        });
-      }
-
-      if (body?.isGroup === true || body?.chatName?.includes?.("grupo")) {
-        return NextResponse.json({
-          ok: true,
-          origem: "z-api",
-          ignorado: true,
-          motivo: "Mensagem de grupo ignorada.",
-        });
-      }
-    }
-
     const mensagem = extrairMensagem(body);
+
     const produtos = await buscarProdutos();
     const resposta = gerarResposta(produtos, mensagem);
 
-    if (isWebhookZapi(body)) {
-      const telefoneCliente = extrairTelefoneZapi(body);
+    if (isWebhookWhatsApp(body)) {
+      const telefoneCliente = extrairTelefoneWhatsApp(body);
 
       if (telefoneCliente && resposta) {
-        const enviado = await enviarMensagemZapi(telefoneCliente, resposta);
-
-        return NextResponse.json({
-          ok: true,
-          origem: "z-api",
-          totalProdutosLidos: produtos.length,
-          mensagemRecebida: mensagem,
-          telefoneCliente,
-          respostaEnviada: enviado,
-        });
+        await enviarMensagemWhatsApp(telefoneCliente, resposta);
       }
 
       return NextResponse.json({
-        ok: false,
-        origem: "z-api",
-        error: "Telefone do cliente não encontrado no webhook.",
+        ok: true,
+        origem: "whatsapp",
+        totalProdutosLidos: produtos.length,
+        mensagemRecebida: mensagem,
+        respostaEnviada: Boolean(telefoneCliente),
       });
     }
 
