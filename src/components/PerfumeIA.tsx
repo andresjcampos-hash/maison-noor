@@ -1343,7 +1343,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#F8EBD8",
     fontFamily: "Inter, Arial, sans-serif",
     boxSizing: "border-box",
-    maxWidth: "100%",
   },
   bgGlowOne: {
     position: "absolute",
