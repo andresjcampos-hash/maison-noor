@@ -136,7 +136,7 @@ Posso te indicar uma fragrância parecida ou avisar quando chegar reposição?`;
 *${produto.nome}*
 Categoria: ${categoriaLabel(produto.categoria)}
 Valor: *${formatarMoeda(preco)}*
-Estoque disponível: *${disponivel} unidade${disponivel > 1 ? "s" : ""}*
+Disponibilidade: *disponível para compra*
 
 Link do produto:
 ${link}
@@ -165,8 +165,7 @@ function montarListaCategoria(produtos: ProdutoBot[], categoria: string) {
 
   const lista = filtrados
     .map((p, index) => {
-      const disponivel = Math.max(0, Number(p.estoque || 0) - Number(p.reservado || 0));
-      return `${index + 1}. *${p.nome}* — ${formatarMoeda(Number(p.precoVenda || 0))} — estoque: ${disponivel}`;
+      return `${index + 1}. *${p.nome}* — ${formatarMoeda(Number(p.precoVenda || 0))} — disponível`;
     })
     .join("\n");
 
@@ -182,7 +181,7 @@ function montarRespostaGenerica() {
 
 Posso te ajudar com:
 1. Consultar preço de um perfume
-2. Ver se tem estoque
+2. Ver disponibilidade
 3. Listar perfumes femininos
 4. Listar perfumes masculinos
 5. Listar perfumes unissex
