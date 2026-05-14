@@ -19,6 +19,8 @@ function normalizarTexto(texto: unknown) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[?!.,"'()]/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -169,38 +171,129 @@ Posso te ajudar com:
 Me diga o nome do perfume ou o tipo que você procura.`;
 }
 
-function encontrarProdutoPorMensagem(produtos: ProdutoBot[], mensagem: string) {
-  const msg = normalizarTexto(mensagem);
+function tokenizarBusca(mensagem: string) {
+  const palavrasIgnoradas = new Set([
+    "tem",
+    "voce",
+    "voces",
+    "preco",
+    "valor",
+    "perfume",
+    "perfum",
+    "produto",
+    "quero",
+    "saber",
+    "sobre",
+    "qual",
+    "quanto",
+    "custa",
+    "disponivel",
+    "estoque",
+    "do",
+    "da",
+    "de",
+    "o",
+    "a",
+    "os",
+    "as",
+    "um",
+    "uma",
+    "no",
+    "na",
+    "para",
+    "pra",
+  ]);
 
-  const palavrasMensagem = msg
-    .replace(/[?!.,"']/g, " ")
+  return normalizarTexto(mensagem)
     .split(" ")
     .map((p) => p.trim())
     .filter((p) => p.length >= 3)
-    .filter((p) => !["tem", "voce", "voces", "preco", "valor", "perfume"].includes(p));
+    .filter((p) => !palavrasIgnoradas.has(p));
+}
 
-  const produtosOrdenados = [...produtos].sort((a, b) => {
-    return String(b.nome || "").length - String(a.nome || "").length;
-  });
+function encontrarProdutoPorMensagem(produtos: ProdutoBot[], mensagem: string) {
+  const msg = normalizarTexto(mensagem);
+  const tokensBusca = tokenizarBusca(mensagem);
 
-  return produtosOrdenados.find((produto) => {
-    const nome = normalizarTexto(produto.nome || "");
-    const marca = normalizarTexto(produto.marca || "");
+  if (!tokensBusca.length) return undefined;
 
-    if (!nome) return false;
+  const fraseBusca = tokensBusca.join(" ");
 
-    if (msg.includes(nome)) return true;
-    if (nome.includes(msg)) return true;
-    if (marca && msg.includes(marca)) return true;
+  const candidatos = produtos
+    .map((produto) => {
+      const nome = normalizarTexto(produto.nome || "");
+      const marca = normalizarTexto(produto.marca || "");
+      const tokensNome = nome.split(" ").filter((p) => p.length >= 3);
 
-    const palavrasNome = nome.split(" ").filter((p) => p.length >= 3);
+      let score = 0;
 
-    const acertos = palavrasMensagem.filter((palavra) =>
-      palavrasNome.some((n) => n.includes(palavra) || palavra.includes(n))
-    );
+      if (!nome) {
+        return { produto, score: 0 };
+      }
 
-    return acertos.length >= 1;
-  });
+      if (msg.includes(nome)) {
+        score += 1000;
+      }
+
+      if (nome === fraseBusca) {
+        score += 900;
+      }
+
+      if (nome.includes(fraseBusca)) {
+        score += 750;
+      }
+
+      if (fraseBusca.includes(nome)) {
+        score += 650;
+      }
+
+      if (marca && msg.includes(marca)) {
+        score += 80;
+      }
+
+      const acertosExatos = tokensBusca.filter((token) => tokensNome.includes(token));
+      const acertosParciais = tokensBusca.filter((token) =>
+        tokensNome.some((n) => n.includes(token) || token.includes(n))
+      );
+
+      score += acertosExatos.length * 180;
+      score += acertosParciais.length * 70;
+
+      const faltantes = tokensBusca.filter(
+        (token) => !tokensNome.some((n) => n.includes(token) || token.includes(n))
+      );
+
+      score -= faltantes.length * 220;
+
+      if (tokensBusca.length >= 2 && acertosExatos.length >= 2) {
+        score += 260;
+      }
+
+      if (tokensBusca.length >= 2 && acertosExatos.length < 2) {
+        score -= 260;
+      }
+
+      const disponivel = Math.max(
+        0,
+        Number(produto.estoque || 0) - Number(produto.reservado || 0)
+      );
+
+      if (disponivel > 0) {
+        score += 15;
+      }
+
+      return { produto, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const melhor = candidatos[0];
+
+  if (!melhor || melhor.score < 120) {
+    return undefined;
+  }
+
+  return melhor.produto;
 }
 
 function gerarResposta(produtos: ProdutoBot[], mensagem: string) {
