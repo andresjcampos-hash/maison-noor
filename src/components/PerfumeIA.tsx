@@ -142,10 +142,16 @@ function getImagemProduto(data: any, nome: string) {
 }
 
 function getTextoProduto(produto: ProdutoIA) {
-  return normalizarTexto(`${produto.nome} ${produto.marca || ""} ${produto.tipo || ""} ${produto.categoria || ""} ${produto.observacoes || ""}`);
+  return normalizarTexto(
+    `${produto.nome} ${produto.marca || ""} ${produto.tipo || ""} ${produto.categoria || ""} ${produto.observacoes || ""}`,
+  );
 }
 
-function produtoCombinaComGenero(produto: ProdutoIA, generoEscolhido: string, modoFlexivel = false) {
+function produtoCombinaComGenero(
+  produto: ProdutoIA,
+  generoEscolhido: string,
+  modoFlexivel = false,
+) {
   const genero = normalizarTexto(generoEscolhido);
   if (!genero) return true;
 
@@ -156,19 +162,60 @@ function produtoCombinaComGenero(produto: ProdutoIA, generoEscolhido: string, mo
     categoria === "feminino" ||
     texto.includes("feminino") ||
     texto.includes("fem") ||
-    ["yara", "rose", "ward", "sabah", "lay", "layan", "laya", "maya", "mayar", "haya", "candy", "moi", "tous", "hiyam", "sama", "shagaf", "durrat", "hayaati", "ameerat"].some((palavra) => texto.includes(palavra));
+    [
+      "yara",
+      "rose",
+      "ward",
+      "sabah",
+      "lay",
+      "layan",
+      "laya",
+      "maya",
+      "mayar",
+      "haya",
+      "candy",
+      "moi",
+      "tous",
+      "hiyam",
+      "sama",
+      "shagaf",
+      "durrat",
+      "hayaati",
+      "ameerat",
+    ].some((palavra) => texto.includes(palavra));
 
   const masculino =
     categoria === "masculino" ||
     texto.includes("masculino") ||
     texto.includes("masc") ||
-    ["asad", "hawas", "club", "fakhar", "zanzibar", "black", "watani", "bourbon", "homme", "men", "man"].some((palavra) => texto.includes(palavra));
+    [
+      "asad",
+      "hawas",
+      "club",
+      "fakhar",
+      "zanzibar",
+      "black",
+      "watani",
+      "bourbon",
+      "homme",
+      "men",
+      "man",
+    ].some((palavra) => texto.includes(palavra));
 
   const unissex =
     categoria === "unissex" ||
     texto.includes("unissex") ||
     texto.includes("unisex") ||
-    ["oud", "bade", "badee", "khamrah", "amber", "ambar", "oriental", "intense"].some((palavra) => texto.includes(palavra));
+    [
+      "oud",
+      "bade",
+      "badee",
+      "khamrah",
+      "amber",
+      "ambar",
+      "oriental",
+      "intense",
+    ].some((palavra) => texto.includes(palavra));
 
   if (genero === "feminino") {
     if (feminino) return true;
@@ -202,43 +249,96 @@ function hashTexto(valor: string) {
 
 function getPerfilChave(form: FormState, perfil?: ResultadoIA["perfil"]) {
   return normalizarTexto(
-    `${form.genero}|${form.intensidade}|${form.ocasiao}|${form.clima}|${form.preferencia}|${form.estilo}|${perfil?.familia || ""}`
+    `${form.genero}|${form.intensidade}|${form.ocasiao}|${form.clima}|${form.preferencia}|${form.estilo}|${perfil?.familia || ""}`,
   );
 }
 
-function getDesempatePorPerfil(produto: ProdutoIA, form: FormState, perfil?: ResultadoIA["perfil"]) {
-  return hashTexto(`${getPerfilChave(form, perfil)}|${produto.id}|${produto.nome}`) % 97;
+function getDesempatePorPerfil(
+  produto: ProdutoIA,
+  form: FormState,
+  perfil?: ResultadoIA["perfil"],
+) {
+  return (
+    hashTexto(`${getPerfilChave(form, perfil)}|${produto.id}|${produto.nome}`) %
+    97
+  );
 }
 
-function getMotivoRecomendacao(produto: ProdutoIA, form: FormState, perfil?: ResultadoIA["perfil"]) {
+function getMotivoRecomendacao(
+  produto: ProdutoIA,
+  form: FormState,
+  perfil?: ResultadoIA["perfil"],
+) {
   const texto = getTextoProduto(produto);
 
-  if (normalizarTexto(form.preferencia).includes("doce") || texto.includes("yara") || texto.includes("candy") || texto.includes("baunilha") || texto.includes("vanilla")) {
-    if (texto.includes("yara") || texto.includes("candy") || texto.includes("baunilha") || texto.includes("vanilla") || texto.includes("doce")) {
+  if (
+    normalizarTexto(form.preferencia).includes("doce") ||
+    texto.includes("yara") ||
+    texto.includes("candy") ||
+    texto.includes("baunilha") ||
+    texto.includes("vanilla")
+  ) {
+    if (
+      texto.includes("yara") ||
+      texto.includes("candy") ||
+      texto.includes("baunilha") ||
+      texto.includes("vanilla") ||
+      texto.includes("doce")
+    ) {
       return "Combina com perfil doce, envolvente e memorável.";
     }
   }
 
-  if (normalizarTexto(form.preferencia).includes("amadeirado") || normalizarTexto(form.preferencia).includes("oud") || normalizarTexto(form.intensidade).includes("intenso")) {
-    if (texto.includes("oud") || texto.includes("wood") || texto.includes("amadeir") || texto.includes("ambar") || texto.includes("âmbar") || texto.includes("asad") || texto.includes("club")) {
+  if (
+    normalizarTexto(form.preferencia).includes("amadeirado") ||
+    normalizarTexto(form.preferencia).includes("oud") ||
+    normalizarTexto(form.intensidade).includes("intenso")
+  ) {
+    if (
+      texto.includes("oud") ||
+      texto.includes("wood") ||
+      texto.includes("amadeir") ||
+      texto.includes("ambar") ||
+      texto.includes("âmbar") ||
+      texto.includes("asad") ||
+      texto.includes("club")
+    ) {
       return "Combina com presença intensa, amadeirada e sofisticada.";
     }
   }
 
-  if (normalizarTexto(form.preferencia).includes("fresco") || normalizarTexto(form.clima).includes("calor") || normalizarTexto(form.ocasiao).includes("dia")) {
-    if (texto.includes("fresh") || texto.includes("fresco") || texto.includes("aqua") || texto.includes("hawas") || texto.includes("citr")) {
+  if (
+    normalizarTexto(form.preferencia).includes("fresco") ||
+    normalizarTexto(form.clima).includes("calor") ||
+    normalizarTexto(form.ocasiao).includes("dia")
+  ) {
+    if (
+      texto.includes("fresh") ||
+      texto.includes("fresco") ||
+      texto.includes("aqua") ||
+      texto.includes("hawas") ||
+      texto.includes("citr")
+    ) {
       return "Combina com uso versátil, fresco e elegante.";
     }
   }
 
-  if (normalizarTexto(form.ocasiao).includes("noite") || normalizarTexto(form.ocasiao).includes("encontro") || normalizarTexto(form.estilo).includes("sedutor")) {
+  if (
+    normalizarTexto(form.ocasiao).includes("noite") ||
+    normalizarTexto(form.ocasiao).includes("encontro") ||
+    normalizarTexto(form.estilo).includes("sedutor")
+  ) {
     return "Boa escolha para noite, encontros e momentos especiais.";
   }
 
   return `Selecionado para o perfil ${perfil?.familia || "Maison Noor"}.`;
 }
 
-function calcularScoreProduto(produto: ProdutoIA, form: FormState, perfil?: ResultadoIA["perfil"]) {
+function calcularScoreProduto(
+  produto: ProdutoIA,
+  form: FormState,
+  perfil?: ResultadoIA["perfil"],
+) {
   const texto = getTextoProduto(produto);
   const preferencia = normalizarTexto(form.preferencia);
   const genero = normalizarTexto(form.genero);
@@ -250,36 +350,171 @@ function calcularScoreProduto(produto: ProdutoIA, form: FormState, perfil?: Resu
 
   let score = 0;
 
-  const palavrasDoces = ["yara", "candy", "baunilha", "vanilla", "sweet", "doce", "gourmand", "caramel", "choco", "rose", "ward", "sabah", "lay", "laya", "moi", "tous"];
-  const palavrasAmadeiradas = ["oud", "wood", "amadeir", "ambar", "amber", "oriental", "bade", "asad", "club", "fakhar", "black", "elixir", "watani", "ameer", "arab", "intense"];
-  const palavrasFrescas = ["fresh", "fresco", "aqua", "hawas", "citr", "blue", "zanzibar", "sport", "cool", "ocean", "lavanda", "bergamota"];
-  const palavrasEspeciadas = ["spice", "espec", "pimenta", "canela", "cardamomo", "oriental", "asad", "oud", "fakhar", "musamam", "khamrah"];
-  const palavrasNoturnas = ["intense", "intenso", "oud", "asad", "club", "elixir", "black", "night", "noir", "khamrah", "bade", "amber"];
-  const palavrasElegantes = ["royal", "ameer", "arab", "fakhar", "club", "noor", "lattafa", "armaf", "al", "gold", "prestige", "signature"];
+  const palavrasDoces = [
+    "yara",
+    "candy",
+    "baunilha",
+    "vanilla",
+    "sweet",
+    "doce",
+    "gourmand",
+    "caramel",
+    "choco",
+    "rose",
+    "ward",
+    "sabah",
+    "lay",
+    "laya",
+    "moi",
+    "tous",
+  ];
+  const palavrasAmadeiradas = [
+    "oud",
+    "wood",
+    "amadeir",
+    "ambar",
+    "amber",
+    "oriental",
+    "bade",
+    "asad",
+    "club",
+    "fakhar",
+    "black",
+    "elixir",
+    "watani",
+    "ameer",
+    "arab",
+    "intense",
+  ];
+  const palavrasFrescas = [
+    "fresh",
+    "fresco",
+    "aqua",
+    "hawas",
+    "citr",
+    "blue",
+    "zanzibar",
+    "sport",
+    "cool",
+    "ocean",
+    "lavanda",
+    "bergamota",
+  ];
+  const palavrasEspeciadas = [
+    "spice",
+    "espec",
+    "pimenta",
+    "canela",
+    "cardamomo",
+    "oriental",
+    "asad",
+    "oud",
+    "fakhar",
+    "musamam",
+    "khamrah",
+  ];
+  const palavrasNoturnas = [
+    "intense",
+    "intenso",
+    "oud",
+    "asad",
+    "club",
+    "elixir",
+    "black",
+    "night",
+    "noir",
+    "khamrah",
+    "bade",
+    "amber",
+  ];
+  const palavrasElegantes = [
+    "royal",
+    "ameer",
+    "arab",
+    "fakhar",
+    "club",
+    "noor",
+    "lattafa",
+    "armaf",
+    "al",
+    "gold",
+    "prestige",
+    "signature",
+  ];
 
-  const possui = (lista: string[]) => lista.some((palavra) => texto.includes(palavra));
+  const possui = (lista: string[]) =>
+    lista.some((palavra) => texto.includes(palavra));
 
   if (produto.disponivel > 0) score += 16;
   if (produto.precoFinal > 0) score += 6;
 
   // Gênero/perfil do cliente
   if (genero && texto.includes(genero)) score += 34;
-  if (genero === "feminino" && (texto.includes("fem") || possui(["yara", "rose", "ward", "sabah", "lay", "maya", "haya", "candy", "moi", "tous"]))) score += 26;
-  if (genero === "masculino" && (texto.includes("masc") || possui(["asad", "hawas", "club", "fakhar", "zanzibar", "black", "watani"]))) score += 26;
-  if (genero === "unissex" && (texto.includes("unissex") || possui(["oud", "bade", "oriental", "khamrah", "amber", "intense"]))) score += 24;
+  if (
+    genero === "feminino" &&
+    (texto.includes("fem") ||
+      possui([
+        "yara",
+        "rose",
+        "ward",
+        "sabah",
+        "lay",
+        "maya",
+        "haya",
+        "candy",
+        "moi",
+        "tous",
+      ]))
+  )
+    score += 26;
+  if (
+    genero === "masculino" &&
+    (texto.includes("masc") ||
+      possui([
+        "asad",
+        "hawas",
+        "club",
+        "fakhar",
+        "zanzibar",
+        "black",
+        "watani",
+      ]))
+  )
+    score += 26;
+  if (
+    genero === "unissex" &&
+    (texto.includes("unissex") ||
+      possui(["oud", "bade", "oriental", "khamrah", "amber", "intense"]))
+  )
+    score += 24;
 
   // Família olfativa escolhida
-  if (preferencia.includes("doce") || familia.includes("doce") || familia.includes("gourmand")) {
+  if (
+    preferencia.includes("doce") ||
+    familia.includes("doce") ||
+    familia.includes("gourmand")
+  ) {
     if (possui(palavrasDoces)) score += 70;
     if (possui(palavrasAmadeiradas)) score -= 10;
   }
 
-  if (preferencia.includes("amadeirado") || preferencia.includes("oud") || familia.includes("amadeir") || familia.includes("intenso")) {
+  if (
+    preferencia.includes("amadeirado") ||
+    preferencia.includes("oud") ||
+    familia.includes("amadeir") ||
+    familia.includes("intenso")
+  ) {
     if (possui(palavrasAmadeiradas)) score += 74;
-    if (possui(palavrasDoces) && !possui(["oud", "amber", "ambar", "oriental"])) score -= 8;
+    if (possui(palavrasDoces) && !possui(["oud", "amber", "ambar", "oriental"]))
+      score -= 8;
   }
 
-  if (preferencia.includes("fresco") || familia.includes("fresco") || clima.includes("calor") || ocasiao.includes("dia")) {
+  if (
+    preferencia.includes("fresco") ||
+    familia.includes("fresco") ||
+    clima.includes("calor") ||
+    ocasiao.includes("dia")
+  ) {
     if (possui(palavrasFrescas)) score += 72;
     if (possui(palavrasNoturnas) && clima.includes("calor")) score -= 12;
   }
@@ -296,10 +531,17 @@ function calcularScoreProduto(produto: ProdutoIA, form: FormState, perfil?: Resu
   }
 
   if (intensidade.includes("moderado")) {
-    if (possui([...palavrasFrescas, ...palavrasDoces, ...palavrasElegantes])) score += 18;
+    if (possui([...palavrasFrescas, ...palavrasDoces, ...palavrasElegantes]))
+      score += 18;
   }
 
-  if (intensidade.includes("intenso") || ocasiao.includes("noite") || ocasiao.includes("encontro") || estilo.includes("sedutor") || familia.includes("noturno")) {
+  if (
+    intensidade.includes("intenso") ||
+    ocasiao.includes("noite") ||
+    ocasiao.includes("encontro") ||
+    estilo.includes("sedutor") ||
+    familia.includes("noturno")
+  ) {
     if (possui(palavrasNoturnas)) score += 46;
     if (possui(palavrasDoces) && ocasiao.includes("encontro")) score += 16;
   }
@@ -310,7 +552,8 @@ function calcularScoreProduto(produto: ProdutoIA, form: FormState, perfil?: Resu
   }
 
   if (estilo.includes("moderno")) {
-    if (possui(["hawas", "club", "yara", "candy", "blue", "zanzibar", "fresh"])) score += 24;
+    if (possui(["hawas", "club", "yara", "candy", "blue", "zanzibar", "fresh"]))
+      score += 24;
   }
 
   // Pequeno desempate determinístico por perfil, para evitar sempre os mesmos produtos quando há empate.
@@ -421,7 +664,7 @@ Minhas escolhas:
 ${descricao}
 ${sugestao ? `\nDireção sugerida: ${sugestao}` : ""}
 
-Pode me indicar perfumes disponíveis que combinam comigo?`
+Pode me indicar perfumes disponíveis que combinam comigo?`,
   );
 }
 
@@ -432,6 +675,20 @@ export default function PerfumeIA() {
   const [form, setForm] = useState<FormState>(initialForm);
   const [produtos, setProdutos] = useState<ProdutoIA[]>([]);
   const [loadingProdutos, setLoadingProdutos] = useState(true);
+  const [windowWidth, setWindowWidth] = useState(1280);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const isMobile = windowWidth < 768;
+  const isSmallMobile = windowWidth < 420;
 
   useEffect(() => {
     let cancelled = false;
@@ -446,7 +703,9 @@ export default function PerfumeIA() {
         snapshot.forEach((docSnap) => {
           const data = docSnap.data() as any;
           const nome = String(data.nome ?? data.name ?? "").trim();
-          const precoFinal = Number(data.precoVenda ?? data.preco ?? data.price ?? 0);
+          const precoFinal = Number(
+            data.precoVenda ?? data.preco ?? data.price ?? 0,
+          );
           const estoque = Number(data.estoque ?? 0);
           const reservado = Number(data.reservado ?? 0);
           const disponivel = Math.max(0, estoque - reservado);
@@ -470,7 +729,9 @@ export default function PerfumeIA() {
           });
         });
 
-        lista.sort((a, b) => b.disponivel - a.disponivel || a.nome.localeCompare(b.nome));
+        lista.sort(
+          (a, b) => b.disponivel - a.disponivel || a.nome.localeCompare(b.nome),
+        );
         setProdutos(lista);
       } catch (error) {
         console.error("Erro ao carregar produtos para Perfume IA:", error);
@@ -499,11 +760,15 @@ export default function PerfumeIA() {
     const disponiveis = produtos.filter((produto) => produto.disponivel > 0);
 
     const generoRestrito = generoEscolhido
-      ? disponiveis.filter((produto) => produtoCombinaComGenero(produto, generoEscolhido, false))
+      ? disponiveis.filter((produto) =>
+          produtoCombinaComGenero(produto, generoEscolhido, false),
+        )
       : disponiveis;
 
     const generoFlexivel = generoEscolhido
-      ? disponiveis.filter((produto) => produtoCombinaComGenero(produto, generoEscolhido, true))
+      ? disponiveis.filter((produto) =>
+          produtoCombinaComGenero(produto, generoEscolhido, true),
+        )
       : disponiveis;
 
     const poolProdutos =
@@ -529,10 +794,15 @@ export default function PerfumeIA() {
       .sort((a, b) => {
         const diferencaScore = Number(b.score || 0) - Number(a.score || 0);
         if (Math.abs(diferencaScore) > 0.01) return diferencaScore;
-        return getDesempatePorPerfil(a, form, resultado.perfil) - getDesempatePorPerfil(b, form, resultado.perfil);
+        return (
+          getDesempatePorPerfil(a, form, resultado.perfil) -
+          getDesempatePorPerfil(b, form, resultado.perfil)
+        );
       });
 
-    const fortes = avaliados.filter((produto) => Number(produto.score || 0) >= 55);
+    const fortes = avaliados.filter(
+      (produto) => Number(produto.score || 0) >= 55,
+    );
     const base = fortes.length >= 3 ? fortes : avaliados;
 
     const escolhidos: typeof avaliados = [];
@@ -541,10 +811,14 @@ export default function PerfumeIA() {
 
     for (const produto of base) {
       const marca = normalizarTexto(produto.marca || produto.tipo || "maison");
-      const nomeChave = normalizarTexto(produto.nome).split(" ").slice(0, 2).join(" ");
+      const nomeChave = normalizarTexto(produto.nome)
+        .split(" ")
+        .slice(0, 2)
+        .join(" ");
 
       if (nomesUsados.has(nomeChave)) continue;
-      if (marcasUsadas.has(marca) && escolhidos.length < 2 && base.length > 3) continue;
+      if (marcasUsadas.has(marca) && escolhidos.length < 2 && base.length > 3)
+        continue;
 
       escolhidos.push(produto);
       marcasUsadas.add(marca);
@@ -606,12 +880,16 @@ export default function PerfumeIA() {
 
       const fallback = analisarPerfilLocal(form);
       setResultado(fallback);
-      setAviso("A análise foi feita em modo consultivo local para manter a experiência ativa.");
+      setAviso(
+        "A análise foi feita em modo consultivo local para manter a experiência ativa.",
+      );
     } catch (error) {
       console.error("Perfume IA fallback:", error);
       const fallback = analisarPerfilLocal(form);
       setResultado(fallback);
-      setAviso("A análise foi feita em modo consultivo local para manter a experiência ativa.");
+      setAviso(
+        "A análise foi feita em modo consultivo local para manter a experiência ativa.",
+      );
     } finally {
       setLoading(false);
     }
@@ -624,30 +902,83 @@ export default function PerfumeIA() {
   }
 
   return (
-    <section style={styles.shell}>
+    <section
+      style={{
+        ...styles.shell,
+        overflow: isMobile ? "visible" : "hidden",
+        borderRadius: isMobile ? "18px" : "22px",
+        padding: isMobile ? "14px" : "clamp(12px, 1.55vw, 18px)",
+      }}
+    >
       <div style={styles.bgGlowOne} />
       <div style={styles.bgGlowTwo} />
 
       <div style={styles.header}>
-        <div style={styles.topBar}>
-          <div style={styles.logoRow}>
+        <div
+          style={{
+            ...styles.topBar,
+            alignItems: isMobile ? "flex-start" : "center",
+            flexDirection: isMobile ? "column" : "row",
+            gap: isMobile ? "10px" : "12px",
+          }}
+        >
+          <div
+            style={{
+              ...styles.logoRow,
+              width: isMobile ? "100%" : undefined,
+              gap: isMobile ? "8px" : "8px",
+            }}
+          >
             <span style={styles.seal}>Maison Noor IA</span>
             <span style={styles.liveBadge}>Consultoria digital</span>
           </div>
 
-          <Link href="/" style={styles.homeLink}>
+          <Link
+            href="/"
+            style={{
+              ...styles.homeLink,
+              width: isMobile ? "100%" : undefined,
+              minHeight: isMobile ? "38px" : "31px",
+              fontSize: isMobile ? "12px" : "11px",
+            }}
+          >
             ← Voltar à Maison Noor
           </Link>
         </div>
 
-        <h1 style={styles.title}>Descubra seu perfil olfativo</h1>
+        <h1
+          style={{
+            ...styles.title,
+            fontSize: isSmallMobile
+              ? "31px"
+              : isMobile
+                ? "34px"
+                : "clamp(26px, 3vw, 36px)",
+            lineHeight: isMobile ? 1.06 : 1.01,
+          }}
+        >
+          Descubra seu perfil olfativo
+        </h1>
 
-        <p style={styles.subtitle}>
+        <p
+          style={{
+            ...styles.subtitle,
+            fontSize: isMobile ? "15px" : "clamp(12px, 1.2vw, 14px)",
+            lineHeight: isMobile ? 1.55 : 1.45,
+          }}
+        >
           Responda perguntas rápidas e receba uma leitura olfativa com o estilo
           de fragrância que mais combina com você.
         </p>
 
-        <div style={styles.progressCard}>
+        <div
+          style={{
+            ...styles.progressCard,
+            maxWidth: isMobile ? "100%" : "520px",
+            padding: isMobile ? "14px" : "9px 10px",
+            borderRadius: isMobile ? "18px" : "14px",
+          }}
+        >
           <div style={styles.progressTop}>
             <span style={styles.progressLabel}>Diagnóstico olfativo</span>
             <strong style={styles.progressValue}>{progresso}%</strong>
@@ -661,28 +992,79 @@ export default function PerfumeIA() {
         </div>
       </div>
 
-      <div style={styles.contentGrid}>
-        <div style={styles.formPanel}>
+      <div
+        style={{
+          ...styles.contentGrid,
+          gridTemplateColumns: isMobile
+            ? "1fr"
+            : "minmax(0, 1.05fr) minmax(300px, 0.95fr)",
+          gap: isMobile ? "14px" : "14px",
+          overflow: "visible",
+        }}
+      >
+        <div
+          style={{
+            ...styles.formPanel,
+            padding: isMobile ? "14px" : "clamp(12px, 1.35vw, 16px)",
+            borderRadius: isMobile ? "20px" : "20px",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
           <div style={styles.formHeader}>
             <span style={styles.formKicker}>Preferências</span>
             <strong style={styles.formTitle}>Conte para a Maison Noor</strong>
           </div>
 
-          <div style={styles.fieldsGrid}>
+          <div
+            style={{
+              ...styles.fieldsGrid,
+              gridTemplateColumns: isMobile
+                ? "1fr"
+                : "repeat(auto-fit, minmax(165px, 1fr))",
+              gap: isMobile ? "12px" : "10px",
+            }}
+          >
             {fields.map((field) => (
-              <label key={field.key} style={styles.fieldCard}>
+              <label
+                key={field.key}
+                style={{
+                  ...styles.fieldCard,
+                  padding: isMobile ? "14px" : "9px",
+                  borderRadius: isMobile ? "18px" : "14px",
+                }}
+              >
                 <span style={styles.fieldTop}>
                   <span style={styles.fieldIcon}>{field.icon}</span>
                   <span>
-                    <strong style={styles.fieldLabel}>{field.label}</strong>
-                    <small style={styles.fieldHelp}>{field.placeholder}</small>
+                    <strong
+                      style={{
+                        ...styles.fieldLabel,
+                        fontSize: isMobile ? "16px" : "13px",
+                      }}
+                    >
+                      {field.label}
+                    </strong>
+                    <small
+                      style={{
+                        ...styles.fieldHelp,
+                        fontSize: isMobile ? "13px" : "11px",
+                      }}
+                    >
+                      {field.placeholder}
+                    </small>
                   </span>
                 </span>
 
                 <select
                   value={form[field.key]}
                   onChange={(e) => updateField(field.key, e.target.value)}
-                  style={styles.select}
+                  style={{
+                    ...styles.select,
+                    minHeight: isMobile ? "46px" : "40px",
+                    fontSize: isMobile ? "16px" : "13px",
+                    maxWidth: "100%",
+                  }}
                 >
                   <option value="">{field.placeholder}</option>
                   {field.options.map((option) => (
@@ -697,13 +1079,20 @@ export default function PerfumeIA() {
 
           {aviso && <div style={styles.noticeBox}>{aviso}</div>}
 
-          <div style={styles.actionRow}>
+          <div
+            style={{
+              ...styles.actionRow,
+              flexDirection: isMobile ? "column" : "row",
+            }}
+          >
             <button
               type="button"
               onClick={analisarPerfil}
               disabled={loading}
               style={{
                 ...styles.primaryButton,
+                width: isMobile ? "100%" : undefined,
+                minHeight: isMobile ? "54px" : "44px",
                 opacity: loading ? 0.72 : 1,
                 cursor: loading ? "wait" : "pointer",
               }}
@@ -711,13 +1100,29 @@ export default function PerfumeIA() {
               {loading ? "Analisando..." : "Analisar meu perfil"}
             </button>
 
-            <button type="button" onClick={limparPerfil} style={styles.secondaryButton}>
+            <button
+              type="button"
+              onClick={limparPerfil}
+              style={{
+                ...styles.secondaryButton,
+                width: isMobile ? "100%" : undefined,
+                minHeight: isMobile ? "50px" : "44px",
+              }}
+            >
               Limpar
             </button>
           </div>
         </div>
 
-        <aside style={styles.asidePanel}>
+        <aside
+          style={{
+            ...styles.asidePanel,
+            padding: isMobile ? "16px" : "16px",
+            borderRadius: isMobile ? "20px" : "24px",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
           <span style={styles.asideIcon}>✦</span>
           <strong style={styles.asideTitle}>Como a Perfume IA ajuda?</strong>
           <p style={styles.asideText}>
@@ -734,7 +1139,13 @@ export default function PerfumeIA() {
       </div>
 
       {resultado?.perfil && (
-        <div style={styles.resultPanel}>
+        <div
+          style={{
+            ...styles.resultPanel,
+            padding: isMobile ? "16px" : "clamp(14px, 1.8vw, 20px)",
+            borderRadius: isMobile ? "20px" : "22px",
+          }}
+        >
           <div style={styles.resultHeader}>
             <div>
               <span style={styles.resultKicker}>Perfil identificado</span>
@@ -756,14 +1167,17 @@ export default function PerfumeIA() {
           <div style={styles.resultDetailsGrid}>
             <div style={styles.resultDetailCard}>
               <span>Intensidade sugerida</span>
-              <strong>{resultado.perfil.intensidadeSugerida || "Equilibrada"}</strong>
+              <strong>
+                {resultado.perfil.intensidadeSugerida || "Equilibrada"}
+              </strong>
             </div>
             <div style={styles.resultDetailCard}>
               <span>Melhor ocasião</span>
-              <strong>{resultado.perfil.ocasiaoSugerida || "Uso especial"}</strong>
+              <strong>
+                {resultado.perfil.ocasiaoSugerida || "Uso especial"}
+              </strong>
             </div>
           </div>
-
 
           {loadingProdutos && (
             <div style={styles.recommendLoading}>
@@ -778,10 +1192,42 @@ export default function PerfumeIA() {
                 <strong>Perfumes que mais combinam com seu perfil</strong>
               </div>
 
-              <div style={styles.productRecommendGrid}>
+              <div
+                style={{
+                  ...styles.productRecommendGrid,
+                  gridTemplateColumns: isMobile
+                    ? "1fr"
+                    : "repeat(auto-fit, minmax(270px, 1fr))",
+                }}
+              >
                 {recomendados.map((produto) => (
-                  <article key={produto.id} style={styles.productCard}>
-                    <Link href={`/produto/${produto.id}`} style={styles.productImageLink}>
+                  <article
+                    key={produto.id}
+                    style={{
+                      ...styles.productCard,
+                      gridTemplateColumns: isSmallMobile
+                        ? "1fr"
+                        : isMobile
+                          ? "92px 1fr"
+                          : "82px 1fr",
+                    }}
+                  >
+                    <Link
+                      href={`/produto/${produto.id}`}
+                      style={{
+                        ...styles.productImageLink,
+                        width: isSmallMobile
+                          ? "100%"
+                          : isMobile
+                            ? "92px"
+                            : "82px",
+                        height: isSmallMobile
+                          ? "150px"
+                          : isMobile
+                            ? "108px"
+                            : "96px",
+                      }}
+                    >
                       <img
                         src={produto.imagem}
                         alt={produto.nome}
@@ -789,28 +1235,48 @@ export default function PerfumeIA() {
                         decoding="async"
                         style={styles.productImage}
                         onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = "/produtos/sem-imagem.png";
+                          (e.currentTarget as HTMLImageElement).src =
+                            "/produtos/sem-imagem.png";
                         }}
                       />
                     </Link>
 
                     <div style={styles.productInfo}>
                       <span style={styles.productMeta}>
-                        {produto.volumeMl ? `${produto.volumeMl}ml` : produto.tipo || produto.marca || "Maison Noor"}
+                        {produto.volumeMl
+                          ? `${produto.volumeMl}ml`
+                          : produto.tipo || produto.marca || "Maison Noor"}
                       </span>
-                      <Link href={`/produto/${produto.id}`} style={styles.productNameLink}>
+                      <Link
+                        href={`/produto/${produto.id}`}
+                        style={styles.productNameLink}
+                      >
                         {produto.nome}
                       </Link>
-                      <span style={styles.productReason}>Por que recomendamos: {produto.motivo}</span>
-                      <strong style={styles.productPrice}>{formatarMoeda(produto.precoFinal)}</strong>
+                      <span style={styles.productReason}>
+                        Por que recomendamos: {produto.motivo}
+                      </span>
+                      <strong style={styles.productPrice}>
+                        {formatarMoeda(produto.precoFinal)}
+                      </strong>
 
-                      <div style={styles.productActions}>
-                        <Link href={`/produto/${produto.id}`} style={styles.viewProductButton}>
+                      <div
+                        style={{
+                          ...styles.productActions,
+                          gridTemplateColumns: isSmallMobile
+                            ? "1fr"
+                            : "1fr 1fr",
+                        }}
+                      >
+                        <Link
+                          href={`/produto/${produto.id}`}
+                          style={styles.viewProductButton}
+                        >
                           Ver fragrância
                         </Link>
                         <a
                           href={`https://wa.me/5512982627108?text=${encodeURIComponent(
-                            `Olá! Fiz a Perfume IA e ela indicou o perfume ${produto.nome}. Gostaria de atendimento para comprar ou confirmar se combina comigo.`
+                            `Olá! Fiz a Perfume IA e ela indicou o perfume ${produto.nome}. Gostaria de atendimento para comprar ou confirmar se combina comigo.`,
                           )}`}
                           target="_blank"
                           rel="noreferrer"
@@ -826,7 +1292,13 @@ export default function PerfumeIA() {
             </div>
           )}
 
-          <div style={styles.resultBottom}>
+          <div
+            style={{
+              ...styles.resultBottom,
+              flexDirection: isMobile ? "column" : "row",
+              alignItems: isMobile ? "stretch" : "center",
+            }}
+          >
             <div style={styles.recommendBox}>
               <strong>Próximo passo</strong>
               <span>
@@ -840,7 +1312,11 @@ export default function PerfumeIA() {
               href={`https://wa.me/5512982627108?text=${gerarMensagemWhatsapp(form, resultado)}`}
               target="_blank"
               rel="noreferrer"
-              style={styles.whatsappButton}
+              style={{
+                ...styles.whatsappButton,
+                width: isMobile ? "100%" : undefined,
+                boxSizing: "border-box",
+              }}
             >
               Receber indicação no WhatsApp
             </a>
@@ -855,7 +1331,8 @@ const styles: Record<string, CSSProperties> = {
   shell: {
     position: "relative",
     overflow: "hidden",
-    width: "min(100%, 1180px)",
+    width: "100%",
+    maxWidth: "1180px",
     margin: "0 auto",
     borderRadius: "22px",
     border: "1px solid rgba(216, 193, 162, 0.22)",
@@ -866,6 +1343,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#F8EBD8",
     fontFamily: "Inter, Arial, sans-serif",
     boxSizing: "border-box",
+    maxWidth: "100%",
   },
   bgGlowOne: {
     position: "absolute",
@@ -929,7 +1407,8 @@ const styles: Record<string, CSSProperties> = {
     padding: "0 13px",
     borderRadius: "999px",
     border: "1px solid rgba(216, 193, 162, 0.32)",
-    background: "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(212,175,119,0.10))",
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(212,175,119,0.10))",
     color: "#F1D7A8",
     fontSize: "11px",
     fontWeight: 900,
@@ -1056,6 +1535,8 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(216,193,162,0.16)",
     background: "rgba(0,0,0,0.22)",
     padding: "9px",
+    boxSizing: "border-box",
+    minWidth: 0,
   },
   fieldTop: {
     display: "flex",
@@ -1098,6 +1579,8 @@ const styles: Record<string, CSSProperties> = {
     outline: "none",
     cursor: "pointer",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.85)",
+    boxSizing: "border-box",
+    minWidth: 0,
   },
   noticeBox: {
     marginTop: "14px",
@@ -1146,6 +1629,7 @@ const styles: Record<string, CSSProperties> = {
       "linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))",
     padding: "16px",
     alignSelf: "start",
+    minWidth: 0,
   },
   asideIcon: {
     width: "38px",
@@ -1322,12 +1806,15 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.07)",
     padding: "10px",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+    boxSizing: "border-box",
+    minWidth: 0,
   },
   productImageLink: {
     width: "82px",
     height: "96px",
     borderRadius: "16px",
-    background: "linear-gradient(180deg, rgba(255,248,239,0.98), rgba(235,219,198,0.84))",
+    background:
+      "linear-gradient(180deg, rgba(255,248,239,0.98), rgba(235,219,198,0.84))",
     border: "1px solid rgba(216,193,162,0.22)",
     display: "flex",
     alignItems: "center",
@@ -1408,7 +1895,8 @@ const styles: Record<string, CSSProperties> = {
     minHeight: "44px",
     borderRadius: "16px",
     border: "1px solid rgba(34,197,94,0.34)",
-    background: "linear-gradient(135deg, rgba(34,197,94,0.18), rgba(22,163,74,0.12))",
+    background:
+      "linear-gradient(135deg, rgba(34,197,94,0.18), rgba(22,163,74,0.12))",
     color: "#BBF7D0",
     textDecoration: "none",
     padding: "0 18px",
