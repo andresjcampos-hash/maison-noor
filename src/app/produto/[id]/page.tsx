@@ -725,19 +725,12 @@ export default function ProdutoPage() {
 
   function comprarAgora() {
     if (!produtoPronto || produtoPronto.disponivel <= 0) return;
+
     adicionarSacola();
-
-    const mensagem =
-      encodeURIComponent(`Olá! Tenho interesse no perfume ${produtoPronto.nome} 😍
-
-Vi no site e fiquei interessado.
-Valor: ${formatarMoeda(produtoPronto.precoFinal)}
-
-Pode me passar mais detalhes e as opções de pagamento?`);
 
     if (typeof window !== "undefined") {
       window.setTimeout(() => {
-        window.open(`https://wa.me/5512982389658?text=${mensagem}`, "_blank");
+        window.location.href = "/checkout";
       }, 180);
     }
   }
