@@ -625,6 +625,60 @@ async function consultarUltimoPedido(telefone: string) {
   return pedidos[0];
 }
 
+function pedidoEstaAbertoParaAtendimento(pedido: any) {
+  if (!pedido) return false;
+
+  const status = normalizarTexto(pedido.status || pedido.statusPedido || "");
+  const statusPagamento = normalizarTexto(pedido.statusPagamento || "");
+
+  if (["cancelado", "cancelada", "finalizado", "finalizada", "pago", "entregue", "concluido", "concluida"].some((item) => status.includes(item))) {
+    return false;
+  }
+
+  return (
+    status.includes("aguardando") ||
+    status.includes("pendente") ||
+    status.includes("dados") ||
+    status.includes("aberto") ||
+    statusPagamento.includes("pendente") ||
+    statusPagamento.includes("aguardando")
+  );
+}
+
+async function consultarPedidoAbertoParaTelefone(telefone: string) {
+  const ultimoPedido = await consultarUltimoPedido(telefone);
+  if (pedidoEstaAbertoParaAtendimento(ultimoPedido)) return ultimoPedido;
+  return null;
+}
+
+function respostaPedidoAguardandoDados(pedido: any) {
+  const faltantes = resumoDadosFaltantes(pedido);
+
+  return `✨ Já existe um pedido em andamento para você:
+
+Pedido: *${pedido?.id || "em andamento"}*
+Produto: *${pedido?.itens?.[0]?.nome || "Produto Maison Noor"}*
+
+Para finalizar e gerar o Pix, ainda preciso destas informações:
+${faltantes.length ? faltantes.map((item) => `- ${item}`).join("\n") : "- Confirmação dos dados"}
+
+Pode enviar tudo assim:
+Nome: Seu nome completo
+CPF: 00000000000
+CEP: 00000000
+Pagamento: Pix`;
+}
+
+function respostaStatusAguardandoPagamento(pedido: any) {
+  return `✨ Seu pedido já está em andamento e aguardando pagamento.
+
+Pedido: *${pedido?.id || "em andamento"}*
+Produto: *${pedido?.itens?.[0]?.nome || "Produto Maison Noor"}*
+Total: *${formatarMoeda(Number(pedido?.total || pedido?.valorTotal || 0))}*
+
+Se quiser, posso chamar nossa equipe humana para reenviar ou confirmar o Pix.`;
+}
+
 function respostaStatusPedido(pedido: any) {
   if (!pedido) {
     return `Não encontrei um pedido recente vinculado a este WhatsApp.
@@ -848,16 +902,7 @@ CPF: 12345678909`,
 
   if (faltantes.length) {
     return {
-      texto: `Perfeito, estou finalizando seu pedido ✨
-
-Ainda preciso destas informações:
-${faltantes.map((item) => `- ${item}`).join("\n")}
-
-Pode enviar tudo assim:
-Nome: Seu nome completo
-CPF: 00000000000
-CEP: 00000000
-Pagamento: Pix`,
+      texto: respostaPedidoAguardandoDados(pedido),
       intencao: "pedido_em_andamento",
     };
   }
@@ -945,14 +990,39 @@ async function gerarResposta(
     return { texto: montarRespostaGenerica(), produto: undefined as ProdutoBot | undefined, intencao: "saudacao" };
   }
 
-  if (telefone && contexto?.pedidoEmAndamentoId) {
-    const respostaPedido = await tratarPedidoEmAndamento({ telefone, mensagem, contexto });
-    if (respostaPedido) {
-      return {
-        texto: respostaPedido.texto,
-        produto: produtoPorId(produtos, contexto.ultimoProdutoId),
-        intencao: respostaPedido.intencao,
-      };
+  if (telefone) {
+    let contextoPedido = contexto;
+
+    if (!contextoPedido?.pedidoEmAndamentoId) {
+      const pedidoAberto = await consultarPedidoAbertoParaTelefone(telefone);
+
+      if (pedidoAberto?.id) {
+        contextoPedido = {
+          ...(contexto || {}),
+          pedidoEmAndamentoId: pedidoAberto.id,
+          pedidoEmAndamentoStatus: pedidoAberto.status || pedidoAberto.statusPedido || "aguardando_dados",
+          ultimoPedidoId: pedidoAberto.id,
+          ultimoPedidoStatus: pedidoAberto.status || pedidoAberto.statusPedido || "aguardando_dados",
+        };
+
+        await salvarContexto(telefone, {
+          pedidoEmAndamentoId: pedidoAberto.id,
+          pedidoEmAndamentoStatus: pedidoAberto.status || pedidoAberto.statusPedido || "aguardando_dados",
+          ultimoPedidoId: pedidoAberto.id,
+          ultimoPedidoStatus: pedidoAberto.status || pedidoAberto.statusPedido || "aguardando_dados",
+        });
+      }
+    }
+
+    if (contextoPedido?.pedidoEmAndamentoId) {
+      const respostaPedido = await tratarPedidoEmAndamento({ telefone, mensagem, contexto: contextoPedido });
+      if (respostaPedido) {
+        return {
+          texto: respostaPedido.texto,
+          produto: produtoPorId(produtos, contextoPedido.ultimoProdutoId),
+          intencao: respostaPedido.intencao,
+        };
+      }
     }
   }
 
