@@ -1168,7 +1168,6 @@ export default function HomePage() {
   const navItems: NavItem[] = [
     { label: "Início", targetId: "inicio", action: () => scrollToSection("inicio") },
     { label: "Produtos", targetId: "produtos", action: () => scrollToSection("produtos") },
-    { label: "Perfume IA", href: "/perfume-ia" },
     { label: "Novidades", href: "/novidades" },
     { label: "Maison Noor", targetId: "maison-noor", action: () => scrollToSection("maison-noor") },
   ];
@@ -1214,15 +1213,15 @@ export default function HomePage() {
           <div
             style={{
               ...styles.headerTopRow,
-              gridTemplateColumns: isMobile ? "1fr auto" : "auto 1fr auto",
-              gap: isMobile ? "12px" : "18px",
+              gridTemplateColumns: isMobile ? "1fr auto" : "minmax(240px, 0.78fr) minmax(0, 1fr) auto",
+              gap: isMobile ? "12px" : isTablet ? "14px" : "16px",
             }}
           >
             <div
               style={{
                 ...styles.brandBlock,
                 justifyContent: isMobile ? "flex-start" : "flex-start",
-                minWidth: isMobile ? undefined : "270px",
+                minWidth: isMobile ? undefined : "240px",
               }}
             >
               <Image
@@ -1767,9 +1766,21 @@ export default function HomePage() {
               <p style={styles.perfumeIaMiniText}>
                 Doce, intenso, fresco, elegante ou marcante: encontre uma fragrância para seu momento.
               </p>
-              <Link href="/perfume-ia" style={styles.perfumeIaButton}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    window.location.href = "/perfume-ia";
+                  }
+                }}
+                style={{
+                  ...styles.perfumeIaButton,
+                  width: "100%",
+                  cursor: "pointer",
+                }}
+              >
                 Encontrar meu perfume
-              </Link>
+              </button>
             </div>
           </div>
         </div>
@@ -3481,20 +3492,28 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "10px",
+    gap: "8px",
     position: "relative",
+    flexWrap: "nowrap",
+    minWidth: 0,
   },
   desktopNavLink: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     minHeight: "44px",
-    padding: "0 18px",
+    height: "44px",
+    padding: "0 14px",
     borderRadius: "999px",
     textDecoration: "none",
     color: "#6E5844",
     fontSize: "14px",
     fontWeight: 700,
+    lineHeight: 1,
+    whiteSpace: "nowrap",
+    textAlign: "center",
+    flexShrink: 0,
+    boxSizing: "border-box",
     border: "1px solid rgba(216, 193, 162, 0.78)",
     background: "linear-gradient(135deg, rgba(255,255,255,0.54), rgba(245,235,222,0.72))",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
@@ -3505,13 +3524,19 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: "44px",
-    padding: "0 18px",
+    height: "44px",
+    padding: "0 14px",
     borderRadius: "999px",
     background: "linear-gradient(135deg, rgba(255,255,255,0.54), rgba(245,235,222,0.72))",
     border: "1px solid rgba(216, 193, 162, 0.78)",
     color: "#6E5844",
     fontSize: "14px",
     fontWeight: 700,
+    lineHeight: 1,
+    whiteSpace: "nowrap",
+    textAlign: "center",
+    flexShrink: 0,
+    boxSizing: "border-box",
     cursor: "pointer",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
     transition: "all 0.22s ease",
@@ -3527,15 +3552,22 @@ const styles: Record<string, CSSProperties> = {
   },
   dropdownTrigger: {
     minHeight: "44px",
+    height: "44px",
     borderRadius: "999px",
     border: "1px solid #D8C1A2",
-    padding: "0 20px",
+    padding: "0 14px",
     background: "linear-gradient(135deg, rgba(255,255,255,0.7), rgba(243,228,207,0.88))",
     color: "#6E5844",
     fontWeight: 700,
+    lineHeight: 1,
+    whiteSpace: "nowrap",
+    textAlign: "center",
+    flexShrink: 0,
+    boxSizing: "border-box",
     cursor: "pointer",
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: "8px",
     boxShadow: "0 10px 22px rgba(99, 72, 41, 0.08)",
   },
@@ -3582,12 +3614,14 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "flex-end",
-    gap: "10px",
+    gap: "8px",
+    flexShrink: 0,
   },
   headerSocials: {
     display: "flex",
     alignItems: "center",
-    gap: "10px",
+    gap: "8px",
+    flexShrink: 0,
   },
   mobileMenuButton: {
     width: "44px",
@@ -3778,7 +3812,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 8px 18px rgba(99, 72, 41, 0.06)",
   },
   cartBadge: {
-    minWidth: "66px",
+    minWidth: "58px",
     height: "42px",
     borderRadius: "999px",
     border: "1px solid #DFCDB7",
@@ -3789,7 +3823,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#6E5844",
     backgroundColor: "rgba(255,249,241,0.92)",
     fontWeight: 700,
-    padding: "0 12px",
+    padding: "0 10px",
     boxShadow: "0 8px 18px rgba(99, 72, 41, 0.06)",
   },
   cartIcon: {
@@ -3813,7 +3847,7 @@ const styles: Record<string, CSSProperties> = {
     minHeight: "44px",
     borderRadius: "999px",
     border: "1px solid #D8C1A2",
-    padding: "0 18px",
+    padding: "0 14px",
     background: "linear-gradient(135deg, rgba(255,255,255,0.75), rgba(243,228,207,0.92))",
     color: "#6E5844",
     fontWeight: 700,
@@ -3893,7 +3927,7 @@ const styles: Record<string, CSSProperties> = {
   },
   loginLink: {
     border: "1px solid #D8C1A2",
-    padding: "11px 18px",
+    padding: "11px 14px",
     borderRadius: "999px",
     textDecoration: "none",
     color: "#A8844C",
