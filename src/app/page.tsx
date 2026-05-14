@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import AssistenteMaisonNoor from "@/components/AssistenteMaisonNoor";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { CSSProperties } from "react";
@@ -2996,6 +2997,8 @@ A boutique digital de perfumes árabes
           </div>
         </div>
       )}
+
+      <AssistenteMaisonNoor />
 
       <a
         href="https://wa.me/5512982389658?text=Olá! Vim pelo site da Maison Noor e gostaria de atendimento."
