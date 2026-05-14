@@ -7,7 +7,6 @@ export const dynamic = "force-dynamic";
 const SITE_URL = "https://www.maisonnoor.com.br";
 const PEDIDOS_COLLECTION = "pedidos";
 const CONTEXTOS_COLLECTION = "whatsapp_contextos";
-
 const ASAAS_API_URL =
   process.env.ASAAS_ENV === "production"
     ? "https://api.asaas.com/v3"
@@ -50,12 +49,20 @@ type ContextoConversa = {
   criadoEm?: unknown;
 };
 
+type DadosPedidoMensagem = {
+  nome?: string;
+  cpf?: string;
+  cep?: string;
+  cidadeOuBairro?: string;
+  formaPagamento?: "pix" | "cartao" | "cartão";
+};
+
 function normalizarTexto(texto: unknown) {
   return String(texto || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[?!.,"'()]/g, " ")
+    .replace(/[?!.,”“\"'()]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -67,13 +74,30 @@ function formatarMoeda(valor: number) {
   });
 }
 
-
 function hojeISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
 function limparCpf(cpf: unknown) {
   return String(cpf || "").replace(/\D/g, "");
+}
+
+function cpfValido(cpf: unknown) {
+  const clean = limparCpf(cpf);
+  if (clean.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(clean)) return false;
+
+  let soma = 0;
+  for (let i = 0; i < 9; i++) soma += Number(clean[i]) * (10 - i);
+  let digito = (soma * 10) % 11;
+  if (digito === 10) digito = 0;
+  if (digito !== Number(clean[9])) return false;
+
+  soma = 0;
+  for (let i = 0; i < 10; i++) soma += Number(clean[i]) * (11 - i);
+  digito = (soma * 10) % 11;
+  if (digito === 10) digito = 0;
+  return digito === Number(clean[10]);
 }
 
 function getAsaasToken() {
@@ -125,7 +149,6 @@ function extrairTelefoneZapi(body: any) {
       body?.senderPhone ||
       body?.from ||
       body?.data?.phone ||
-      body?.data?.senderPhone ||
       ""
   )
     .replace(/\D/g, "")
@@ -156,24 +179,20 @@ function isWebhookWhatsAppMeta(body: any) {
 
 function categoriaLabel(categoria?: string) {
   const cat = normalizarTexto(categoria);
-
   if (cat.includes("fem")) return "Feminino";
   if (cat.includes("masc")) return "Masculino";
   if (cat.includes("unissex") || cat.includes("unisex")) return "Unissex";
   if (cat.includes("kit") || cat.includes("presente")) return "Kit presente";
-
   return "Maison Noor";
 }
 
 function categoriaBate(categoriaProduto: string | undefined, categoriaBusca: string) {
   const produto = normalizarTexto(categoriaProduto);
   const busca = normalizarTexto(categoriaBusca);
-
   if (busca === "feminino") return produto.includes("fem");
   if (busca === "masculino") return produto.includes("masc");
   if (busca === "unissex") return produto.includes("unissex") || produto.includes("unisex");
   if (busca === "kits-presente") return produto.includes("kit") || produto.includes("presente");
-
   return produto === busca;
 }
 
@@ -189,12 +208,10 @@ function linkProduto(produto: ProdutoBot) {
 
 async function buscarProdutos() {
   const snapshot = await adminDb.collection("products").get();
-
   const produtos: ProdutoBot[] = [];
 
   snapshot.forEach((docSnap) => {
     const data = docSnap.data() as any;
-
     produtos.push({
       id: docSnap.id,
       nome: String(data.nome || data.name || data.title || ""),
@@ -224,13 +241,10 @@ async function buscarProdutos() {
 
 async function lerContexto(telefone?: string): Promise<ContextoConversa | null> {
   if (!telefone) return null;
-
   try {
     const ref = adminDb.collection(CONTEXTOS_COLLECTION).doc(telefone);
     const snap = await ref.get();
-
     if (!snap.exists) return null;
-
     return snap.data() as ContextoConversa;
   } catch (error) {
     console.error("Erro ao ler contexto do WhatsApp:", error);
@@ -240,11 +254,9 @@ async function lerContexto(telefone?: string): Promise<ContextoConversa | null> 
 
 async function salvarContexto(telefone: string | undefined, dados: Partial<ContextoConversa>) {
   if (!telefone) return;
-
   try {
     const ref = adminDb.collection(CONTEXTOS_COLLECTION).doc(telefone);
     const snap = await ref.get();
-
     await ref.set(
       {
         telefone,
@@ -330,38 +342,10 @@ Me diga o nome do perfume ou o tipo que você procura.`;
 
 function tokenizarBusca(mensagem: string) {
   const palavrasIgnoradas = new Set([
-    "tem",
-    "voce",
-    "voces",
-    "preco",
-    "valor",
-    "perfume",
-    "perfum",
-    "produto",
-    "quero",
-    "saber",
-    "sobre",
-    "qual",
-    "quanto",
-    "custa",
-    "disponivel",
-    "estoque",
-    "do",
-    "da",
-    "de",
-    "o",
-    "a",
-    "os",
-    "as",
-    "um",
-    "uma",
-    "no",
-    "na",
-    "para",
-    "pra",
-    "comprar",
-    "pedido",
-    "finalizar",
+    "tem", "voce", "voces", "preco", "valor", "perfume", "perfum", "produto",
+    "quero", "saber", "sobre", "qual", "quanto", "custa", "disponivel", "estoque",
+    "do", "da", "de", "o", "a", "os", "as", "um", "uma", "no", "na", "para", "pra",
+    "comprar", "pedido", "finalizar",
   ]);
 
   return normalizarTexto(mensagem)
@@ -374,19 +358,15 @@ function tokenizarBusca(mensagem: string) {
 function encontrarProdutoPorMensagem(produtos: ProdutoBot[], mensagem: string) {
   const msg = normalizarTexto(mensagem);
   const tokensBusca = tokenizarBusca(mensagem);
-
   if (!tokensBusca.length) return undefined;
 
   const fraseBusca = tokensBusca.join(" ");
-
   const candidatos = produtos
     .map((produto) => {
       const nome = normalizarTexto(produto.nome || "");
       const marca = normalizarTexto(produto.marca || "");
       const tokensNome = nome.split(" ").filter((p) => p.length >= 3);
-
       let score = 0;
-
       if (!nome) return { produto, score: 0 };
 
       if (msg.includes(nome)) score += 1000;
@@ -399,84 +379,41 @@ function encontrarProdutoPorMensagem(produtos: ProdutoBot[], mensagem: string) {
       const acertosParciais = tokensBusca.filter((token) =>
         tokensNome.some((n) => n.includes(token) || token.includes(n))
       );
-
       score += acertosExatos.length * 180;
       score += acertosParciais.length * 70;
 
       const faltantes = tokensBusca.filter(
         (token) => !tokensNome.some((n) => n.includes(token) || token.includes(n))
       );
-
       score -= faltantes.length * 220;
-
       if (tokensBusca.length >= 2 && acertosExatos.length >= 2) score += 260;
       if (tokensBusca.length >= 2 && acertosExatos.length < 2) score -= 260;
-
       if (produtoDisponivel(produto) > 0) score += 15;
-
       return { produto, score };
     })
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score);
 
   const melhor = candidatos[0];
-
   if (!melhor || melhor.score < 120) return undefined;
-
   return melhor.produto;
 }
 
 function detectarIntencao(mensagem: string) {
   const msg = normalizarTexto(mensagem);
 
-  if (/\b(comprar|compra|quero comprar|finalizar|fechar pedido|pode reservar|reserva|reservar|vou querer|quero esse|quero essa)\b/.test(msg)) {
-    return "comprar";
-  }
-
-  if (/\b(status|pedido|meu pedido|acompanhar|rastreio|rastreamento|cadastro do pedido|andamento)\b/.test(msg)) {
-    return "status_pedido";
-  }
-
-  if (/\b(atendente|humano|pessoa|falar com alguem|falar com atendente|vendedor|consultor|consultora)\b/.test(msg)) {
-    return "humano";
-  }
-
-  if (/\b(encomenda|encomendar|traz por encomenda|sob encomenda|fornecedor|consegue trazer)\b/.test(msg)) {
-    return "encomenda";
-  }
-
-  if (/\b(entrega|frete|envio|cep|chega|prazo|retirar|retirada)\b/.test(msg)) {
-    return "entrega";
-  }
-
-  if (/\b(pix|cartao|cartão|credito|crédito|debito|débito|parcel|pagamento|pagar)\b/.test(msg)) {
-    return "pagamento";
-  }
-
-  if (/\b(troca|devolver|devolucao|devolução|reclama|problema|errado|urgente)\b/.test(msg)) {
-    return "humano";
-  }
-
-  if (/\b(presente|esposa|namorada|mae|mãe|aniversario|aniversário|namorado|marido)\b/.test(msg)) {
-    return "presente";
-  }
-
-  if (/\b(doce|adocicado|baunilha|vanilla|gourmand|candy)\b/.test(msg)) {
-    return "perfil_doce";
-  }
-
-  if (/\b(fresco|fresh|citrico|cítrico|limpo|leve|verao|verão|dia a dia)\b/.test(msg)) {
-    return "perfil_fresco";
-  }
-
-  if (/\b(amadeirado|madeira|oud|intenso|forte|marcante|noturno|noite)\b/.test(msg)) {
-    return "perfil_intenso";
-  }
-
-  if (/\b(parecido|similar|lembra|contratipo|inspirado)\b/.test(msg)) {
-    return "similar";
-  }
-
+  if (/\b(comprar|compra|quero comprar|finalizar|fechar pedido|pode reservar|reserva|reservar|vou querer|quero esse|quero essa)\b/.test(msg)) return "comprar";
+  if (/\b(status|pedido|meu pedido|acompanhar|rastreio|rastreamento|cadastro do pedido|andamento)\b/.test(msg)) return "status_pedido";
+  if (/\b(atendente|humano|pessoa|falar com alguem|falar com atendente|vendedor|consultor|consultora)\b/.test(msg)) return "humano";
+  if (/\b(encomenda|encomendar|traz por encomenda|sob encomenda|fornecedor|consegue trazer)\b/.test(msg)) return "encomenda";
+  if (/\b(entrega|frete|envio|cep|chega|prazo|retirar|retirada)\b/.test(msg)) return "entrega";
+  if (/\b(pix|cartao|cartão|credito|crédito|debito|débito|parcel|pagamento|pagar)\b/.test(msg)) return "pagamento";
+  if (/\b(troca|devolver|devolucao|devolução|reclama|problema|errado|urgente)\b/.test(msg)) return "humano";
+  if (/\b(presente|esposa|namorada|mae|mãe|aniversario|aniversário|namorado|marido)\b/.test(msg)) return "presente";
+  if (/\b(doce|adocicado|baunilha|vanilla|gourmand|candy)\b/.test(msg)) return "perfil_doce";
+  if (/\b(fresco|fresh|citrico|cítrico|limpo|leve|verao|verão|dia a dia)\b/.test(msg)) return "perfil_fresco";
+  if (/\b(amadeirado|madeira|oud|intenso|forte|marcante|noturno|noite)\b/.test(msg)) return "perfil_intenso";
+  if (/\b(parecido|similar|lembra|contratipo|inspirado)\b/.test(msg)) return "similar";
   return "catalogo";
 }
 
@@ -493,7 +430,6 @@ function textoProdutoBusca(produto: ProdutoBot) {
 
 function recomendarPorPerfil(produtos: ProdutoBot[], perfil: "doce" | "fresco" | "intenso" | "presente" | "similar", mensagem = "") {
   const msg = normalizarTexto(mensagem);
-
   const filtrados = produtos
     .filter((p) => produtoDisponivel(p) > 0)
     .map((produto) => {
@@ -504,28 +440,23 @@ function recomendarPorPerfil(produtos: ProdutoBot[], perfil: "doce" | "fresco" |
         if (texto.includes("doce") || texto.includes("gourmand") || texto.includes("baunilha") || texto.includes("vanilla") || texto.includes("candy") || texto.includes("yara")) score += 8;
         if (categoriaBate(produto.categoria, "feminino")) score += 2;
       }
-
       if (perfil === "fresco") {
         if (texto.includes("fresh") || texto.includes("fresco") || texto.includes("citr") || texto.includes("limpo") || texto.includes("aquatico") || texto.includes("leve")) score += 8;
         if (categoriaBate(produto.categoria, "unissex")) score += 2;
       }
-
       if (perfil === "intenso") {
         if (texto.includes("oud") || texto.includes("amadeir") || texto.includes("oriental") || texto.includes("ambar") || texto.includes("âmbar") || texto.includes("intenso") || texto.includes("forte")) score += 8;
         if (categoriaBate(produto.categoria, "masculino") || categoriaBate(produto.categoria, "unissex")) score += 2;
       }
-
       if (perfil === "presente") {
         if (categoriaBate(produto.categoria, "feminino")) score += 4;
         if (texto.includes("yara") || texto.includes("rose") || texto.includes("floral") || texto.includes("presente") || texto.includes("doce")) score += 4;
       }
-
       if (perfil === "similar") {
         const tokens = tokenizarBusca(msg);
         score += tokens.filter((token) => texto.includes(token)).length * 4;
         if (texto.includes("sofisticado") || texto.includes("doce") || texto.includes("floral") || texto.includes("intenso")) score += 2;
       }
-
       return { produto, score };
     })
     .filter((item) => item.score > 0)
@@ -535,7 +466,6 @@ function recomendarPorPerfil(produtos: ProdutoBot[], perfil: "doce" | "fresco" |
 
   const fallback = produtos.filter((p) => produtoDisponivel(p) > 0).slice(0, 5);
   const lista = filtrados.length ? filtrados : fallback;
-
   const titulo =
     perfil === "doce"
       ? "opções doces e envolventes"
@@ -550,24 +480,79 @@ function recomendarPorPerfil(produtos: ProdutoBot[], perfil: "doce" | "fresco" |
   return `✨ Separei algumas ${titulo} da Maison Noor:
 
 ${lista
-  .map((p, index) => `${index + 1}. *${p.nome}* — ${formatarMoeda(Number(p.precoVenda || 0))}`)
-  .join("\n")}
+    .map((p, index) => `${index + 1}. *${p.nome}* — ${formatarMoeda(Number(p.precoVenda || 0))}`)
+    .join("\n")}
 
 Me diga o nome de uma delas que eu te envio o link e os detalhes.`;
 }
 
+function extrairDadosPedidoDaMensagem(mensagem: string): DadosPedidoMensagem {
+  const linhas = mensagem.split(/\n|\r|;/g).map((l) => l.trim()).filter(Boolean);
+  const msg = normalizarTexto(mensagem);
+  const dados: DadosPedidoMensagem = {};
+
+  for (const linha of linhas) {
+    const normalizada = normalizarTexto(linha);
+    const valor = linha.split(":").slice(1).join(":").trim();
+    if (!valor) continue;
+
+    if (normalizada.startsWith("nome")) dados.nome = valor;
+    if (normalizada.startsWith("cpf") || normalizada.startsWith("documento")) dados.cpf = limparCpf(valor);
+    if (normalizada.startsWith("cep")) dados.cep = valor.replace(/\D/g, "").slice(0, 8);
+    if (normalizada.startsWith("cidade") || normalizada.startsWith("bairro") || normalizada.startsWith("endereco") || normalizada.startsWith("endereço")) dados.cidadeOuBairro = valor;
+    if (normalizada.startsWith("pagamento") || normalizada.startsWith("forma")) {
+      const forma = normalizarTexto(valor);
+      if (forma.includes("pix")) dados.formaPagamento = "pix";
+      if (forma.includes("cart")) dados.formaPagamento = "cartao";
+    }
+  }
+
+  if (!dados.cpf) {
+    const cpfMatch = mensagem.match(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/);
+    if (cpfMatch) dados.cpf = limparCpf(cpfMatch[0]);
+  }
+
+  if (!dados.cep) {
+    const cepMatch = mensagem.match(/\b\d{5}-?\d{3}\b/);
+    if (cepMatch) dados.cep = cepMatch[0].replace(/\D/g, "");
+  }
+
+  if (!dados.formaPagamento) {
+    if (msg.includes("pix")) dados.formaPagamento = "pix";
+    if (msg.includes("cartao") || msg.includes("cartao") || msg.includes("credito") || msg.includes("debito")) dados.formaPagamento = "cartao";
+  }
+
+  if (!dados.nome) {
+    const nomeMatch = mensagem.match(/nome\s*[:\-]\s*([^\n\r]+)/i);
+    if (nomeMatch?.[1]) dados.nome = nomeMatch[1].trim();
+  }
+
+  return dados;
+}
+
+function resumoDadosFaltantes(dados: any) {
+  const faltantes: string[] = [];
+  if (!String(dados?.clienteNome || "").trim()) faltantes.push("Nome completo");
+  if (!cpfValido(dados?.clienteCpf || dados?.cpf)) faltantes.push("CPF");
+  if (!String(dados?.clienteCep || dados?.cep || dados?.clienteEndereco || "").trim()) faltantes.push("CEP ou cidade/bairro");
+  if (!String(dados?.formaPagamento || "").trim()) faltantes.push("Forma de pagamento: Pix ou cartão");
+  return faltantes;
+}
+
 async function criarPedidoWhatsapp(telefone: string, produto: ProdutoBot) {
   const preco = Number(produto.precoVenda || 0);
-
   const pedido = {
     origem: "whatsapp-bot",
     canal: "whatsapp",
-    status: "pendente",
+    status: "aguardando_dados",
     statusPagamento: "pendente",
-    etapaAtendimento: "aguardando_dados_cliente",
     clienteWhatsapp: telefone,
     clienteTelefone: telefone,
     clienteNome: "",
+    clienteCpf: "",
+    clienteCep: "",
+    clienteEndereco: "",
+    formaPagamento: "",
     itens: [
       {
         produtoId: produto.id,
@@ -591,310 +576,30 @@ async function criarPedidoWhatsapp(telefone: string, produto: ProdutoBot) {
   };
 
   const ref = await adminDb.collection(PEDIDOS_COLLECTION).add(pedido);
-
-  return {
-    id: ref.id,
-    ...pedido,
-  };
+  return { id: ref.id, ...pedido };
 }
 
-
-async function consultarPedidoPorId(pedidoId?: string) {
-  if (!pedidoId) return null;
-
-  try {
-    const ref = adminDb.collection(PEDIDOS_COLLECTION).doc(pedidoId);
-    const snap = await ref.get();
-
-    if (!snap.exists) return null;
-
-    return {
-      id: snap.id,
-      ...snap.data(),
-    } as any;
-  } catch (error) {
-    console.error("Erro ao consultar pedido por ID:", error);
-    return null;
-  }
+async function lerPedidoPorId(id?: string) {
+  if (!id) return null;
+  const snap = await adminDb.collection(PEDIDOS_COLLECTION).doc(id).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...snap.data() } as any;
 }
 
-function pedidoEstaEmAndamento(pedido: any) {
-  if (!pedido) return false;
-
-  const status = normalizarTexto(pedido.status || pedido.statusPedido || "");
-  const etapa = normalizarTexto(pedido.etapaAtendimento || "");
-
-  if (["cancelado", "cancelada", "finalizado", "finalizada", "pago", "entregue", "concluido", "concluida"].some((item) => status.includes(item))) {
-    return false;
-  }
-
-  return (
-    status.includes("pendente") ||
-    status.includes("aberto") ||
-    status.includes("aguardando") ||
-    etapa.includes("aguardando") ||
-    etapa.includes("dados") ||
-    etapa.includes("atendimento")
-  );
-}
-
-function mensagemTemDadosDePedido(mensagem: string) {
-  const msg = normalizarTexto(mensagem);
-
-  const temPagamento = /\b(pix|cartao|cartão|credito|crédito|debito|débito|dinheiro)\b/.test(msg);
-  const temCep = /\b\d{5}-?\d{3}\b/.test(mensagem) || /\b\d{8}\b/.test(mensagem);
-  const temCpf = /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.test(mensagem);
-  const temEndereco = /\b(rua|avenida|av|bairro|cidade|cep|numero|número|complemento|entrega|retirada)\b/.test(msg);
-  const linhasUteis = mensagem
-    .split(/\n+/g)
-    .map((linha) => linha.trim())
-    .filter(Boolean);
-
-  return temPagamento || temCep || temCpf || temEndereco || linhasUteis.length >= 2;
-}
-
-function extrairDadosFinalizacaoPedido(mensagem: string) {
-  const linhas = mensagem
-    .split(/\n+/g)
-    .map((linha) => linha.trim())
-    .filter(Boolean);
-
-  const texto = mensagem.trim();
-  const msg = normalizarTexto(texto);
-  const cepMatch = texto.match(/\b\d{5}-?\d{3}\b/) || texto.match(/\b\d{8}\b/);
-  const cep = cepMatch ? cepMatch[0].replace(/\D/g, "") : "";
-
-  const cpfMatch = texto.match(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/);
-  const cpf = cpfMatch ? limparCpf(cpfMatch[0]) : "";
-
-  let formaPagamento = "";
-  if (/\bpix\b/.test(msg)) formaPagamento = "Pix";
-  else if (/\b(cartao|cartão|credito|crédito|debito|débito)\b/.test(msg)) formaPagamento = "Cartão";
-  else if (/\bdinheiro\b/.test(msg)) formaPagamento = "Dinheiro";
-
-  const linhasSemPagamento = linhas.filter((linha) => {
-    const normalizada = normalizarTexto(linha);
-    if (/\b(pix|cartao|cartão|credito|crédito|debito|débito|dinheiro)\b/.test(normalizada)) return false;
-    if (/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/.test(linha)) return false;
-    if (/^\d{5}-?\d{3}$/.test(linha) || /^\d{8}$/.test(linha)) return false;
-    return true;
-  });
-
-  const clienteNome = linhasSemPagamento[0] || "";
-  const localEntrega = linhasSemPagamento.slice(1).join(" - ") || (cep ? `CEP ${cep}` : "");
-
-  return {
-    clienteNome,
-    cep,
-    cpf,
-    localEntrega,
-    formaPagamento,
-    observacaoCliente: texto,
-  };
-}
-
-async function atualizarPedidoComDadosCliente(pedidoId: string, mensagem: string) {
-  const dados = extrairDadosFinalizacaoPedido(mensagem);
-
-  const updateData: any = {
-    etapaAtendimento: "dados_cliente_recebidos",
-    status: "pendente_atendimento",
-    statusPedido: "pendente_atendimento",
-    dadosClienteRecebidos: true,
-    dadosClienteMensagem: dados.observacaoCliente,
+async function atualizarPedidoComDados(pedidoId: string, dados: DadosPedidoMensagem) {
+  const update: Record<string, unknown> = {
     updatedAt: FieldValue.serverTimestamp(),
     atualizadoEm: FieldValue.serverTimestamp(),
   };
 
-  if (dados.clienteNome) updateData.clienteNome = dados.clienteNome;
-  if (dados.cep) updateData.clienteCep = dados.cep;
-  if (dados.cpf) updateData.clienteCpf = dados.cpf;
-  if (dados.localEntrega) updateData.clienteEnderecoResumo = dados.localEntrega;
-  if (dados.formaPagamento) updateData.formaPagamento = dados.formaPagamento;
+  if (dados.nome) update.clienteNome = dados.nome;
+  if (dados.cpf) update.clienteCpf = limparCpf(dados.cpf);
+  if (dados.cep) update.clienteCep = dados.cep;
+  if (dados.cidadeOuBairro) update.clienteEndereco = dados.cidadeOuBairro;
+  if (dados.formaPagamento) update.formaPagamento = dados.formaPagamento === "cartão" ? "cartao" : dados.formaPagamento;
 
-  await adminDb.collection(PEDIDOS_COLLECTION).doc(pedidoId).set(updateData, { merge: true });
-
-  const pedidoAtualizado = await consultarPedidoPorId(pedidoId);
-
-  return {
-    pedido: pedidoAtualizado,
-    dados,
-  };
-}
-
-
-async function gerarPixAsaasParaPedido(pedido: any, dados: ReturnType<typeof extrairDadosFinalizacaoPedido>) {
-  const token = getAsaasToken();
-
-  if (!token) {
-    return {
-      ok: false,
-      mensagem: "Chave Asaas não configurada no servidor.",
-    };
-  }
-
-  const cpf = limparCpf(dados.cpf || pedido?.clienteCpf || pedido?.cpf || pedido?.cpfCnpj);
-  const valor = Number(pedido?.total || pedido?.valorTotal || pedido?.subtotal || 0);
-  const itemNome = pedido?.itens?.[0]?.nome || "Pedido Maison Noor";
-  const telefone = String(pedido?.clienteWhatsapp || pedido?.clienteTelefone || "").replace(/\D/g, "");
-  const nome = String(dados.clienteNome || pedido?.clienteNome || "Cliente Maison Noor").trim();
-  const email = String(pedido?.clienteEmail || pedido?.email || "cliente@maisonnoor.com.br").trim();
-
-  if (!valor || valor <= 0) {
-    return {
-      ok: false,
-      mensagem: "Valor inválido para gerar Pix.",
-    };
-  }
-
-  if (!cpf || cpf.length !== 11) {
-    return {
-      ok: false,
-      precisaCpf: true,
-      mensagem: "Para gerar o Pix com segurança, preciso do CPF do titular da compra com 11 dígitos.",
-    };
-  }
-
-  try {
-    const customerRes = await fetch(`${ASAAS_API_URL}/customers`, {
-      method: "POST",
-      headers: {
-        access_token: token,
-        accept: "application/json",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        name: nome || "Cliente Maison Noor",
-        email: email || "cliente@maisonnoor.com.br",
-        cpfCnpj: cpf,
-        mobilePhone: telefone || undefined,
-      }),
-    });
-
-    const customerData = await customerRes.json().catch(() => null);
-
-    if (!customerRes.ok) {
-      return {
-        ok: false,
-        mensagem: extrairMensagemErroAsaas(customerData),
-        detalhes: customerData,
-      };
-    }
-
-    const externalReference = pedido?.id || `whatsapp-${Date.now()}`;
-
-    const paymentRes = await fetch(`${ASAAS_API_URL}/payments`, {
-      method: "POST",
-      headers: {
-        access_token: token,
-        accept: "application/json",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        customer: customerData.id,
-        billingType: "PIX",
-        value: valor,
-        dueDate: hojeISO(),
-        description: `${itemNome} - Maison Noor`,
-        externalReference,
-        fine: { value: 0 },
-        interest: { value: 0 },
-      }),
-    });
-
-    const paymentData = await paymentRes.json().catch(() => null);
-
-    if (!paymentRes.ok) {
-      return {
-        ok: false,
-        mensagem: extrairMensagemErroAsaas(paymentData),
-        detalhes: paymentData,
-      };
-    }
-
-    const qrRes = await fetch(`${ASAAS_API_URL}/payments/${paymentData.id}/pixQrCode`, {
-      method: "GET",
-      headers: {
-        access_token: token,
-        accept: "application/json",
-      },
-    });
-
-    const qrData = await qrRes.json().catch(() => null);
-
-    if (!qrRes.ok) {
-      return {
-        ok: false,
-        mensagem: extrairMensagemErroAsaas(qrData),
-        detalhes: qrData,
-      };
-    }
-
-    await adminDb.collection(PEDIDOS_COLLECTION).doc(String(pedido.id)).set(
-      {
-        status: "aguardando_pagamento",
-        statusPedido: "aguardando_pagamento",
-        statusPagamento: "aguardando_pagamento",
-        etapaAtendimento: "pix_gerado",
-        formaPagamento: "Pix",
-        clienteCpf: cpf,
-        asaasCustomerId: customerData.id,
-        asaasPaymentId: paymentData.id,
-        asaasInvoiceUrl: paymentData.invoiceUrl || paymentData.bankSlipUrl || "",
-        pixCopiaECola: qrData.payload || "",
-        pixQrCodeBase64: qrData.encodedImage || "",
-        pixGeradoEm: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        atualizadoEm: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    return {
-      ok: true,
-      paymentId: paymentData.id,
-      invoiceUrl: paymentData.invoiceUrl || paymentData.bankSlipUrl || "",
-      copiaECola: qrData.payload || "",
-      qrBase64: qrData.encodedImage || "",
-      valor,
-    };
-  } catch (error) {
-    console.error("Erro ao gerar Pix Asaas pelo WhatsApp:", error);
-    return {
-      ok: false,
-      mensagem: "Erro interno ao gerar Pix no Asaas.",
-    };
-  }
-}
-
-function respostaPixGerado(pedido: any, pix: any) {
-  const itemNome = pedido?.itens?.[0]?.nome || "produto Maison Noor";
-  const total = Number(pix?.valor || pedido?.total || pedido?.valorTotal || pedido?.subtotal || 0);
-
-  return `✨ Pedido recebido e Pix gerado com sucesso!
-
-Pedido: *${pedido?.id || "em andamento"}*
-Produto: *${itemNome}*
-Valor: *${formatarMoeda(total)}*
-Pagamento: *Pix*
-
-${pix?.invoiceUrl ? `Link para pagar com QR Code:\n${pix.invoiceUrl}\n\n` : ""}Pix copia e cola:
-${pix?.copiaECola || "Código Pix indisponível no momento."}
-
-Assim que o pagamento for confirmado, seguimos com a separação do seu pedido. ✨`;
-}
-
-function respostaPedidoDadosRecebidos(pedido: any, dados: ReturnType<typeof extrairDadosFinalizacaoPedido>) {
-  const itemNome = pedido?.itens?.[0]?.nome || "produto Maison Noor";
-  const total = Number(pedido?.total || pedido?.valorTotal || pedido?.subtotal || 0);
-
-  return `✨ Perfeito! Recebi seus dados para o pedido:
-
-Pedido: *${pedido?.id || "em andamento"}*
-Produto: *${itemNome}*
-Valor: *${formatarMoeda(total)}*
-${dados.clienteNome ? `Nome: *${dados.clienteNome}*\n` : ""}${dados.cep ? `CEP: *${dados.cep}*\n` : ""}${dados.cpf ? `CPF: *${dados.cpf}*\n` : ""}${dados.formaPagamento ? `Pagamento: *${dados.formaPagamento}*\n` : ""}
-Nossa equipe humana vai continuar o atendimento por aqui para confirmar entrega, pagamento e finalização. ✨`;
+  await adminDb.collection(PEDIDOS_COLLECTION).doc(pedidoId).set(update, { merge: true });
+  return lerPedidoPorId(pedidoId);
 }
 
 async function consultarUltimoPedido(telefone: string) {
@@ -903,36 +608,20 @@ async function consultarUltimoPedido(telefone: string) {
     adminDb.collection(PEDIDOS_COLLECTION).where("clienteWhatsapp", "==", clean).limit(10).get(),
     adminDb.collection(PEDIDOS_COLLECTION).where("clienteTelefone", "==", clean).limit(10).get(),
   ];
-
   const snaps = await Promise.allSettled(consultas);
   const pedidos: any[] = [];
 
   for (const resultado of snaps) {
     if (resultado.status !== "fulfilled") continue;
-
-    resultado.value.forEach((docSnap) => {
-      pedidos.push({
-        id: docSnap.id,
-        ...docSnap.data(),
-      });
-    });
+    resultado.value.forEach((docSnap) => pedidos.push({ id: docSnap.id, ...docSnap.data() }));
   }
 
   if (!pedidos.length) return null;
-
   pedidos.sort((a, b) => {
-    const dataA =
-      typeof a.createdAt?.toDate === "function"
-        ? a.createdAt.toDate().getTime()
-        : 0;
-    const dataB =
-      typeof b.createdAt?.toDate === "function"
-        ? b.createdAt.toDate().getTime()
-        : 0;
-
+    const dataA = typeof a.createdAt?.toDate === "function" ? a.createdAt.toDate().getTime() : 0;
+    const dataB = typeof b.createdAt?.toDate === "function" ? b.createdAt.toDate().getTime() : 0;
     return dataB - dataA;
   });
-
   return pedidos[0];
 }
 
@@ -1005,6 +694,244 @@ Você pode me mandar o nome, por exemplo:
 Assim eu consulto a disponibilidade e inicio seu pedido.`;
 }
 
+async function buscarOuCriarClienteAsaas(params: {
+  nome: string;
+  cpf: string;
+  telefone?: string;
+}) {
+  const token = getAsaasToken();
+  if (!token) throw new Error("Chave Asaas não configurada.");
+
+  const cpf = limparCpf(params.cpf);
+  const search = await fetch(`${ASAAS_API_URL}/customers?cpfCnpj=${cpf}`, {
+    method: "GET",
+    headers: {
+      access_token: token,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const searchData = await search.json().catch(() => ({}));
+  const existente = searchData?.data?.[0];
+  if (existente?.id) return existente;
+
+  const create = await fetch(`${ASAAS_API_URL}/customers`, {
+    method: "POST",
+    headers: {
+      access_token: token,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: params.nome,
+      cpfCnpj: cpf,
+      mobilePhone: params.telefone || undefined,
+    }),
+  });
+
+  const createData = await create.json().catch(() => ({}));
+  if (!create.ok) {
+    throw new Error(extrairMensagemErroAsaas(createData));
+  }
+  return createData;
+}
+
+async function gerarPixAsaasParaPedido(pedido: any) {
+  const token = getAsaasToken();
+  if (!token) {
+    return { erro: true, mensagem: "Chave Asaas não configurada." };
+  }
+
+  const nome = String(pedido?.clienteNome || "").trim();
+  const cpf = limparCpf(pedido?.clienteCpf || pedido?.cpf);
+  const valor = Number(pedido?.total || pedido?.valorTotal || pedido?.subtotal || 0);
+
+  if (!nome) return { erro: true, mensagem: "Nome do cliente não informado." };
+  if (!cpfValido(cpf)) return { erro: true, mensagem: "CPF inválido. Informe 11 dígitos válidos." };
+  if (!valor || valor <= 0) return { erro: true, mensagem: "Valor inválido para gerar Pix." };
+
+  const cliente = await buscarOuCriarClienteAsaas({
+    nome,
+    cpf,
+    telefone: pedido?.clienteTelefone || pedido?.clienteWhatsapp,
+  });
+
+  const paymentResponse = await fetch(`${ASAAS_API_URL}/payments`, {
+    method: "POST",
+    headers: {
+      access_token: token,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      customer: cliente.id,
+      billingType: "PIX",
+      value: valor,
+      dueDate: hojeISO(),
+      description: `Pedido Maison Noor ${pedido.id || "WhatsApp"}`,
+      externalReference: String(pedido.id || "whatsapp-bot"),
+    }),
+  });
+
+  const paymentData = await paymentResponse.json().catch(() => ({}));
+  if (!paymentResponse.ok || !paymentData?.id) {
+    return { erro: true, mensagem: extrairMensagemErroAsaas(paymentData) };
+  }
+
+  const qrResponse = await fetch(`${ASAAS_API_URL}/payments/${paymentData.id}/pixQrCode`, {
+    method: "GET",
+    headers: {
+      access_token: token,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const qrData = await qrResponse.json().catch(() => ({}));
+  if (!qrResponse.ok) {
+    return { erro: true, mensagem: extrairMensagemErroAsaas(qrData) };
+  }
+
+  await adminDb.collection(PEDIDOS_COLLECTION).doc(pedido.id).set(
+    {
+      status: "aguardando_pagamento",
+      statusPagamento: "aguardando_pix",
+      formaPagamento: "pix",
+      asaasPaymentId: paymentData.id,
+      asaasCustomerId: cliente.id,
+      pixInvoiceUrl: paymentData.invoiceUrl || paymentData.bankSlipUrl || "",
+      pixPayload: qrData.payload || "",
+      pixEncodedImage: qrData.encodedImage || "",
+      pixExpirationDate: qrData.expirationDate || "",
+      updatedAt: FieldValue.serverTimestamp(),
+      atualizadoEm: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return {
+    erro: false,
+    paymentId: paymentData.id,
+    invoiceUrl: paymentData.invoiceUrl || paymentData.bankSlipUrl || "",
+    payload: qrData.payload || "",
+    encodedImage: qrData.encodedImage || "",
+    expirationDate: qrData.expirationDate || "",
+  };
+}
+
+async function tratarPedidoEmAndamento(params: {
+  telefone: string;
+  mensagem: string;
+  contexto: ContextoConversa | null;
+}) {
+  const { telefone, mensagem, contexto } = params;
+  const pedidoId = contexto?.pedidoEmAndamentoId;
+  if (!pedidoId) return null;
+
+  let pedido = await lerPedidoPorId(pedidoId);
+  if (!pedido) return null;
+
+  const dadosExtraidos = extrairDadosPedidoDaMensagem(mensagem);
+  pedido = await atualizarPedidoComDados(pedidoId, dadosExtraidos);
+
+  const faltantes = resumoDadosFaltantes(pedido);
+  const cpfAtual = limparCpf(pedido?.clienteCpf || pedido?.cpf);
+
+  if (cpfAtual && !cpfValido(cpfAtual)) {
+    return {
+      texto: `Recebi seus dados, mas o CPF informado parece inválido.
+
+Para gerar o Pix automaticamente, me envie um CPF válido com 11 dígitos.
+
+Exemplo:
+CPF: 12345678909`,
+      intencao: "pedido_em_andamento",
+    };
+  }
+
+  if (faltantes.length) {
+    return {
+      texto: `Perfeito, estou finalizando seu pedido ✨
+
+Ainda preciso destas informações:
+${faltantes.map((item) => `- ${item}`).join("\n")}
+
+Pode enviar tudo assim:
+Nome: Seu nome completo
+CPF: 00000000000
+CEP: 00000000
+Pagamento: Pix`,
+      intencao: "pedido_em_andamento",
+    };
+  }
+
+  if (normalizarTexto(pedido.formaPagamento).includes("pix")) {
+    const pix = await gerarPixAsaasParaPedido(pedido);
+
+    if (pix.erro) {
+      return {
+        texto: `Recebi seus dados, mas não consegui gerar o Pix automaticamente agora.
+
+Motivo: ${pix.mensagem}
+
+Nossa equipe humana pode continuar o atendimento por aqui e gerar o pagamento para você. ✨`,
+        intencao: "pedido_em_andamento",
+      };
+    }
+
+    await salvarContexto(telefone, {
+      pedidoEmAndamentoStatus: "aguardando_pagamento",
+      ultimoPedidoId: pedido.id,
+      ultimoPedidoStatus: "aguardando_pagamento",
+    });
+
+    const payloadTexto = pix.payload
+      ? `
+
+Pix copia e cola:
+${pix.payload}`
+      : "";
+
+    return {
+      texto: `✨ Pedido confirmado!
+
+Produto: *${pedido.itens?.[0]?.nome || "Produto Maison Noor"}*
+Total: *${formatarMoeda(Number(pedido.total || pedido.valorTotal || 0))}*
+Pagamento: *Pix*
+
+${pix.invoiceUrl ? `Link para pagamento/QR Code:
+${pix.invoiceUrl}` : "O QR Code foi gerado no sistema."}${payloadTexto}
+
+Após o pagamento, nossa equipe confirma e continua o atendimento por aqui.`,
+      intencao: "pix_gerado",
+    };
+  }
+
+  await adminDb.collection(PEDIDOS_COLLECTION).doc(pedido.id).set(
+    {
+      status: "aguardando_atendimento",
+      statusPagamento: "pendente",
+      updatedAt: FieldValue.serverTimestamp(),
+      atualizadoEm: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  await salvarContexto(telefone, {
+    pedidoEmAndamentoStatus: "aguardando_atendimento",
+    ultimoPedidoId: pedido.id,
+    ultimoPedidoStatus: "aguardando_atendimento",
+  });
+
+  return {
+    texto: `✨ Pedido recebido!
+
+Produto: *${pedido.itens?.[0]?.nome || "Produto Maison Noor"}*
+Total: *${formatarMoeda(Number(pedido.total || pedido.valorTotal || 0))}*
+Forma de pagamento: *${pedido.formaPagamento || "cartão/atendimento"}*
+
+Nossa equipe humana continuará o atendimento por aqui para finalizar o pagamento e a entrega.`,
+    intencao: "pedido_recebido",
+  };
+}
+
 async function gerarResposta(
   produtos: ProdutoBot[],
   mensagem: string,
@@ -1015,119 +942,31 @@ async function gerarResposta(
   const intencao = detectarIntencao(mensagem);
 
   if (!msg) {
-    return {
-      texto: montarRespostaGenerica(),
-      produto: undefined as ProdutoBot | undefined,
-      intencao: "saudacao",
-    };
+    return { texto: montarRespostaGenerica(), produto: undefined as ProdutoBot | undefined, intencao: "saudacao" };
+  }
+
+  if (telefone && contexto?.pedidoEmAndamentoId) {
+    const respostaPedido = await tratarPedidoEmAndamento({ telefone, mensagem, contexto });
+    if (respostaPedido) {
+      return {
+        texto: respostaPedido.texto,
+        produto: produtoPorId(produtos, contexto.ultimoProdutoId),
+        intencao: respostaPedido.intencao,
+      };
+    }
   }
 
   const produtoEncontrado = encontrarProdutoPorMensagem(produtos, mensagem);
   const produtoContexto = produtoPorId(produtos, contexto?.ultimoProdutoId);
   const produtoAlvo = produtoEncontrado || produtoContexto;
 
-  const pedidoEmAndamentoId = contexto?.pedidoEmAndamentoId || contexto?.ultimoPedidoId || "";
-  const pedidoEmAndamento = pedidoEmAndamentoId ? await consultarPedidoPorId(pedidoEmAndamentoId) : null;
-
-  if (
-    telefone &&
-    pedidoEstaEmAndamento(pedidoEmAndamento) &&
-    intencao !== "status_pedido" &&
-    intencao !== "humano" &&
-    !produtoEncontrado
-  ) {
-    if (intencao === "comprar") {
-      return {
-        texto: `✨ Já existe um pedido em andamento para você:
-
-Pedido: *${pedidoEmAndamento.id}*
-Produto: *${pedidoEmAndamento.itens?.[0]?.nome || "produto Maison Noor"}*
-
-Para finalizar, envie:
-1. Nome completo
-2. CEP ou cidade/bairro
-3. Forma de pagamento desejada: Pix ou cartão
-
-Nossa equipe humana também pode continuar o atendimento por aqui. ✨`,
-        produto: produtoAlvo,
-        intencao: "pedido_em_andamento",
-        pedidoEmAndamentoId: pedidoEmAndamento.id,
-        pedidoEmAndamentoStatus: pedidoEmAndamento.status || "pendente",
-      };
-    }
-
-    if (mensagemTemDadosDePedido(mensagem) || intencao === "pagamento" || intencao === "entrega") {
-      const { pedido, dados } = await atualizarPedidoComDadosCliente(pedidoEmAndamento.id, mensagem);
-      const pedidoBase = pedido || pedidoEmAndamento;
-
-      if (normalizarTexto(dados.formaPagamento || pedidoBase?.formaPagamento || pedidoEmAndamento?.formaPagamento).includes("pix") || normalizarTexto(contexto?.pedidoEmAndamentoStatus).includes("aguardando_cpf_pix")) {
-        const pix = await gerarPixAsaasParaPedido(pedidoBase, dados);
-
-        if (pix.ok) {
-          return {
-            texto: respostaPixGerado(pedidoBase, pix),
-            produto: produtoAlvo,
-            intencao: "pix_gerado",
-            pedidoEmAndamentoId: "",
-            pedidoEmAndamentoStatus: "aguardando_pagamento",
-          };
-        }
-
-        if ((pix as any).precisaCpf) {
-          return {
-            texto: `✨ Perfeito, já recebi os dados do pedido.
-
-Para gerar o Pix automaticamente, preciso que você envie o *CPF do titular da compra* com 11 dígitos.
-
-Exemplo:
-CPF: 123.456.789-00`,
-            produto: produtoAlvo,
-            intencao: "aguardando_cpf_pix",
-            pedidoEmAndamentoId: pedidoEmAndamento.id,
-            pedidoEmAndamentoStatus: "aguardando_cpf_pix",
-          };
-        }
-
-        return {
-          texto: `✨ Recebi seus dados, mas não consegui gerar o Pix automaticamente agora.
-
-Motivo: ${pix.mensagem || "falha ao gerar cobrança"}
-
-Nossa equipe humana vai continuar o atendimento por aqui para finalizar o pagamento.`,
-          produto: produtoAlvo,
-          intencao: "pix_erro",
-          pedidoEmAndamentoId: pedidoEmAndamento.id,
-          pedidoEmAndamentoStatus: "pendente_atendimento",
-        };
-      }
-
-      return {
-        texto: respostaPedidoDadosRecebidos(pedidoBase, dados),
-        produto: produtoAlvo,
-        intencao: "pedido_dados_recebidos",
-        pedidoEmAndamentoId: pedidoEmAndamento.id,
-        pedidoEmAndamentoStatus: "pendente_atendimento",
-      };
-    }
-  }
-
   if (intencao === "status_pedido" && telefone) {
     const pedido = await consultarUltimoPedido(telefone);
-    return {
-      texto: respostaStatusPedido(pedido),
-      produto: produtoAlvo,
-      intencao,
-    };
+    return { texto: respostaStatusPedido(pedido), produto: produtoAlvo, intencao };
   }
 
   if (intencao === "comprar") {
-    if (!produtoAlvo) {
-      return {
-        texto: montarRespostaCompraSemProduto(),
-        produto: undefined,
-        intencao,
-      };
-    }
+    if (!produtoAlvo) return { texto: montarRespostaCompraSemProduto(), produto: undefined, intencao };
 
     if (produtoDisponivel(produtoAlvo) <= 0) {
       return {
@@ -1140,18 +979,24 @@ Posso te indicar uma fragrância parecida ou avisar o atendimento humano para ve
     }
 
     let pedidoId = "";
-
     if (telefone) {
-      if (pedidoEstaEmAndamento(pedidoEmAndamento)) {
-        pedidoId = pedidoEmAndamento.id;
+      const pedidoAberto = contexto?.pedidoEmAndamentoId ? await lerPedidoPorId(contexto.pedidoEmAndamentoId) : null;
+      if (pedidoAberto && ["aguardando_dados", "dados_parciais", "aguardando_pagamento"].includes(String(pedidoAberto.status || ""))) {
+        pedidoId = pedidoAberto.id;
       } else {
         const pedido = await criarPedidoWhatsapp(telefone, produtoAlvo);
         pedidoId = pedido.id;
+        await salvarContexto(telefone, {
+          pedidoEmAndamentoId: pedidoId,
+          pedidoEmAndamentoStatus: "aguardando_dados",
+          ultimoPedidoId: pedidoId,
+          ultimoPedidoStatus: "aguardando_dados",
+        });
       }
     }
 
     return {
-      texto: `✨ Perfeito! ${pedidoEstaEmAndamento(pedidoEmAndamento) ? "Seu pedido já está em andamento" : "Iniciei seu pedido"} para:
+      texto: `✨ Perfeito! Iniciei seu pedido para:
 
 *${produtoAlvo.nome}*
 Valor: *${formatarMoeda(Number(produtoAlvo.precoVenda || 0))}*
@@ -1160,133 +1005,38 @@ Disponibilidade: *disponível para compra*
 ${pedidoId ? `Pedido criado no sistema: *${pedidoId}*\n\n` : ""}Link do produto:
 ${linkProduto(produtoAlvo)}
 
-Para finalizar, envie:
+Para finalizar e gerar o Pix, envie:
 1. Nome completo
-2. CEP ou cidade/bairro
-3. Forma de pagamento desejada: Pix ou cartão
+2. CPF
+3. CEP ou cidade/bairro
+4. Forma de pagamento desejada: Pix ou cartão
 
-Se preferir, nossa equipe humana continua o atendimento por aqui. ✨`,
-      produto: produtoAlvo,
-      intencao,
-      pedidoEmAndamentoId: pedidoId,
-      pedidoEmAndamentoStatus: "aguardando_dados_cliente",
-    };
-  }
-
-  if (intencao === "humano") {
-    return {
-      texto: respostaAtendimentoHumano(),
+Exemplo:
+Nome: Maria Silva
+CPF: 12345678909
+CEP: 12230000
+Pagamento: Pix`,
       produto: produtoAlvo,
       intencao,
     };
   }
 
-  if (intencao === "encomenda") {
-    return {
-      texto: respostaEncomenda(),
-      produto: produtoAlvo,
-      intencao,
-    };
-  }
+  if (intencao === "humano") return { texto: respostaAtendimentoHumano(), produto: produtoAlvo, intencao };
+  if (intencao === "encomenda") return { texto: respostaEncomenda(), produto: produtoAlvo, intencao };
+  if (intencao === "entrega") return { texto: respostaEntrega(), produto: produtoAlvo, intencao };
+  if (intencao === "pagamento") return { texto: respostaPagamento(), produto: produtoAlvo, intencao };
+  if (intencao === "perfil_doce") return { texto: recomendarPorPerfil(produtos, "doce", mensagem), produto: produtoAlvo, intencao };
+  if (intencao === "perfil_fresco") return { texto: recomendarPorPerfil(produtos, "fresco", mensagem), produto: produtoAlvo, intencao };
+  if (intencao === "perfil_intenso") return { texto: recomendarPorPerfil(produtos, "intenso", mensagem), produto: produtoAlvo, intencao };
+  if (intencao === "presente") return { texto: recomendarPorPerfil(produtos, "presente", mensagem), produto: produtoAlvo, intencao };
+  if (intencao === "similar") return { texto: recomendarPorPerfil(produtos, "similar", mensagem), produto: produtoAlvo, intencao };
 
-  if (intencao === "entrega") {
-    return {
-      texto: respostaEntrega(),
-      produto: produtoAlvo,
-      intencao,
-    };
-  }
+  if (msg.includes("feminino") || msg.includes("feminina") || msg.includes("mulher")) return { texto: montarListaCategoria(produtos, "feminino"), produto: produtoAlvo, intencao: "categoria_feminino", categoria: "feminino" };
+  if (msg.includes("masculino") || msg.includes("masculina") || msg.includes("homem")) return { texto: montarListaCategoria(produtos, "masculino"), produto: produtoAlvo, intencao: "categoria_masculino", categoria: "masculino" };
+  if (msg.includes("unissex") || msg.includes("unisex")) return { texto: montarListaCategoria(produtos, "unissex"), produto: produtoAlvo, intencao: "categoria_unissex", categoria: "unissex" };
+  if (msg.includes("oi") || msg.includes("ola") || msg.includes("bom dia") || msg.includes("boa tarde") || msg.includes("boa noite")) return { texto: montarRespostaGenerica(), produto: produtoAlvo, intencao: "saudacao" };
 
-  if (intencao === "pagamento") {
-    return {
-      texto: respostaPagamento(),
-      produto: produtoAlvo,
-      intencao,
-    };
-  }
-
-  if (intencao === "perfil_doce") {
-    return {
-      texto: recomendarPorPerfil(produtos, "doce", mensagem),
-      produto: produtoAlvo,
-      intencao,
-    };
-  }
-
-  if (intencao === "perfil_fresco") {
-    return {
-      texto: recomendarPorPerfil(produtos, "fresco", mensagem),
-      produto: produtoAlvo,
-      intencao,
-    };
-  }
-
-  if (intencao === "perfil_intenso") {
-    return {
-      texto: recomendarPorPerfil(produtos, "intenso", mensagem),
-      produto: produtoAlvo,
-      intencao,
-    };
-  }
-
-  if (intencao === "presente") {
-    return {
-      texto: recomendarPorPerfil(produtos, "presente", mensagem),
-      produto: produtoAlvo,
-      intencao,
-    };
-  }
-
-  if (intencao === "similar") {
-    return {
-      texto: recomendarPorPerfil(produtos, "similar", mensagem),
-      produto: produtoAlvo,
-      intencao,
-    };
-  }
-
-  if (msg.includes("feminino") || msg.includes("feminina") || msg.includes("mulher")) {
-    return {
-      texto: montarListaCategoria(produtos, "feminino"),
-      produto: undefined,
-      intencao: "categoria_feminino",
-      categoria: "feminino",
-    };
-  }
-
-  if (msg.includes("masculino") || msg.includes("masculina") || msg.includes("homem")) {
-    return {
-      texto: montarListaCategoria(produtos, "masculino"),
-      produto: undefined,
-      intencao: "categoria_masculino",
-      categoria: "masculino",
-    };
-  }
-
-  if (msg.includes("unissex") || msg.includes("unisex")) {
-    return {
-      texto: montarListaCategoria(produtos, "unissex"),
-      produto: undefined,
-      intencao: "categoria_unissex",
-      categoria: "unissex",
-    };
-  }
-
-  if (produtoEncontrado) {
-    return {
-      texto: montarRespostaProduto(produtoEncontrado),
-      produto: produtoEncontrado,
-      intencao: "produto",
-    };
-  }
-
-  if (msg.includes("oi") || msg.includes("ola") || msg.includes("bom dia") || msg.includes("boa tarde") || msg.includes("boa noite")) {
-    return {
-      texto: montarRespostaGenerica(),
-      produto: produtoAlvo,
-      intencao: "saudacao",
-    };
-  }
+  if (produtoEncontrado) return { texto: montarRespostaProduto(produtoEncontrado), produto: produtoEncontrado, intencao: "produto" };
 
   return {
     texto: `Não encontrei esse perfume no catálogo agora.
@@ -1299,7 +1049,7 @@ Você pode me mandar o nome completo ou escolher uma categoria:
 
 Também posso chamar o atendimento humano da Maison Noor para te ajudar ✨`,
     produto: produtoAlvo,
-    intencao: "fallback",
+    intencao: "nao_encontrado",
   };
 }
 
@@ -1321,10 +1071,7 @@ async function enviarMensagemZapi(telefoneCliente: string, texto: string) {
         "Content-Type": "application/json",
         "Client-Token": clientToken,
       },
-      body: JSON.stringify({
-        phone: telefoneCliente,
-        message: texto,
-      }),
+      body: JSON.stringify({ phone: telefoneCliente, message: texto }),
     }
   );
 
@@ -1337,34 +1084,24 @@ async function enviarMensagemZapi(telefoneCliente: string, texto: string) {
   return true;
 }
 
-async function enviarMensagemWhatsAppMeta(telefoneCliente: string, texto: string) {
+async function enviarMensagemMeta(telefoneCliente: string, texto: string) {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if (!token || !phoneNumberId) return false;
 
-  if (!token || !phoneNumberId) {
-    console.error("WhatsApp Cloud API não configurada.");
-    return false;
-  }
-
-  const response = await fetch(
-    `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: telefoneCliente,
-        type: "text",
-        text: {
-          preview_url: true,
-          body: texto,
-        },
-      }),
-    }
-  );
+  const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: telefoneCliente,
+      type: "text",
+      text: { preview_url: true, body: texto },
+    }),
+  });
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -1377,27 +1114,19 @@ async function enviarMensagemWhatsAppMeta(telefoneCliente: string, texto: string
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-
   const mode = searchParams.get("hub.mode");
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
   const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
 
   if (mode === "subscribe" && token && token === verifyToken) {
-    return new Response(challenge || "", {
-      status: 200,
-      headers: {
-        "Content-Type": "text/plain",
-      },
-    });
+    return new Response(challenge || "", { status: 200, headers: { "Content-Type": "text/plain" } });
   }
 
   return NextResponse.json({
     ok: true,
-    message: "API whatsapp-bot Maison Noor ativa com memória, pedidos, status e recomendações.",
-    exemploPost: {
-      message: "Tem Yara Candy?",
-    },
+    message: "API whatsapp-bot Maison Noor ativa com CPF, Pix Asaas, memória, pedidos e Z-API.",
+    exemploPost: { message: "Tem Yara Candy?" },
   });
 }
 
@@ -1407,31 +1136,22 @@ export async function POST(req: Request) {
 
     if (isWebhookZapi(body)) {
       if (body?.fromMe === true) {
-        return NextResponse.json({
-          ok: true,
-          origem: "z-api",
-          ignorado: true,
-          motivo: "Mensagem enviada pelo próprio número.",
-        });
+        return NextResponse.json({ ok: true, origem: "z-api", ignorado: true, motivo: "Mensagem enviada pelo próprio número." });
       }
-
       if (body?.isGroup === true || body?.chatName?.includes?.("grupo")) {
-        return NextResponse.json({
-          ok: true,
-          origem: "z-api",
-          ignorado: true,
-          motivo: "Mensagem de grupo ignorada.",
-        });
+        return NextResponse.json({ ok: true, origem: "z-api", ignorado: true, motivo: "Mensagem de grupo ignorada." });
       }
     }
 
     const mensagem = extrairMensagem(body);
-    const telefoneZapi = extrairTelefoneZapi(body);
-    const telefoneMeta = extrairTelefoneWhatsAppMeta(body);
-    const telefoneCliente = telefoneZapi || telefoneMeta || "";
-    const contexto = await lerContexto(telefoneCliente);
+    const telefoneCliente = isWebhookZapi(body)
+      ? extrairTelefoneZapi(body)
+      : isWebhookWhatsAppMeta(body)
+      ? extrairTelefoneWhatsAppMeta(body)
+      : "";
 
     const produtos = await buscarProdutos();
+    const contexto = telefoneCliente ? await lerContexto(telefoneCliente) : null;
     const resultado = await gerarResposta(produtos, mensagem, contexto, telefoneCliente);
     const resposta = resultado.texto;
 
@@ -1439,47 +1159,42 @@ export async function POST(req: Request) {
       await salvarContexto(telefoneCliente, {
         ultimaMensagem: mensagem,
         ultimaResposta: resposta,
-        ultimoProdutoId: resultado.produto?.id || contexto?.ultimoProdutoId || "",
-        ultimoProdutoNome: resultado.produto?.nome || contexto?.ultimoProdutoNome || "",
-        ultimoProdutoPreco: Number(resultado.produto?.precoVenda || contexto?.ultimoProdutoPreco || 0),
-        ultimaCategoria: (resultado as any).categoria || contexto?.ultimaCategoria || "",
         ultimaIntencao: resultado.intencao,
-        pedidoEmAndamentoId:
-          (resultado as any).pedidoEmAndamentoId ??
-          (resultado.intencao === "pedido_dados_recebidos" ? "" : contexto?.pedidoEmAndamentoId || ""),
-        pedidoEmAndamentoStatus:
-          (resultado as any).pedidoEmAndamentoStatus || contexto?.pedidoEmAndamentoStatus || "",
-        ultimoPedidoId:
-          (resultado as any).pedidoEmAndamentoId || contexto?.ultimoPedidoId || "",
-        ultimoPedidoStatus:
-          (resultado as any).pedidoEmAndamentoStatus || contexto?.ultimoPedidoStatus || "",
+        ultimoProdutoId: resultado.produto?.id || contexto?.ultimoProdutoId,
+        ultimoProdutoNome: resultado.produto?.nome || contexto?.ultimoProdutoNome,
+        ultimoProdutoPreco: resultado.produto?.precoVenda || contexto?.ultimoProdutoPreco,
+        ultimaCategoria: (resultado as any).categoria || contexto?.ultimaCategoria,
       });
     }
 
     if (isWebhookZapi(body)) {
-      const enviado = telefoneCliente ? await enviarMensagemZapi(telefoneCliente, resposta) : false;
-
-      return NextResponse.json({
-        ok: true,
-        origem: "z-api",
-        totalProdutosLidos: produtos.length,
-        mensagemRecebida: mensagem,
-        telefoneCliente,
-        respostaEnviada: enviado,
-      });
+      if (telefoneCliente && resposta) {
+        const enviado = await enviarMensagemZapi(telefoneCliente, resposta);
+        return NextResponse.json({
+          ok: true,
+          origem: "z-api",
+          totalProdutosLidos: produtos.length,
+          mensagemRecebida: mensagem,
+          telefoneCliente,
+          respostaEnviada: enviado,
+        });
+      }
+      return NextResponse.json({ ok: false, origem: "z-api", error: "Telefone do cliente não encontrado no webhook." });
     }
 
     if (isWebhookWhatsAppMeta(body)) {
-      const enviado = telefoneCliente ? await enviarMensagemWhatsAppMeta(telefoneCliente, resposta) : false;
-
-      return NextResponse.json({
-        ok: true,
-        origem: "whatsapp-meta",
-        totalProdutosLidos: produtos.length,
-        mensagemRecebida: mensagem,
-        telefoneCliente,
-        respostaEnviada: enviado,
-      });
+      if (telefoneCliente && resposta) {
+        const enviado = await enviarMensagemMeta(telefoneCliente, resposta);
+        return NextResponse.json({
+          ok: true,
+          origem: "meta-whatsapp",
+          totalProdutosLidos: produtos.length,
+          mensagemRecebida: mensagem,
+          telefoneCliente,
+          respostaEnviada: enviado,
+        });
+      }
+      return NextResponse.json({ ok: false, origem: "meta-whatsapp", error: "Telefone do cliente não encontrado no webhook." });
     }
 
     return NextResponse.json({
@@ -1491,12 +1206,8 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("Erro no whatsapp-bot:", error);
-
     return NextResponse.json(
-      {
-        ok: false,
-        error: "Erro ao processar mensagem do WhatsApp.",
-      },
+      { ok: false, error: "Erro ao processar mensagem do WhatsApp." },
       { status: 500 }
     );
   }
