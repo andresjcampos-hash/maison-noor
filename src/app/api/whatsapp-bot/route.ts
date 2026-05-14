@@ -37,6 +37,10 @@ type ContextoConversa = {
   ultimoProdutoPreco?: number;
   ultimaCategoria?: string;
   ultimaIntencao?: string;
+  pedidoEmAndamentoId?: string;
+  pedidoEmAndamentoStatus?: string;
+  ultimoPedidoId?: string;
+  ultimoPedidoStatus?: string;
   atualizadoEm?: unknown;
   criadoEm?: unknown;
 };
@@ -527,6 +531,7 @@ async function criarPedidoWhatsapp(telefone: string, produto: ProdutoBot) {
     canal: "whatsapp",
     status: "pendente",
     statusPagamento: "pendente",
+    etapaAtendimento: "aguardando_dados_cliente",
     clienteWhatsapp: telefone,
     clienteTelefone: telefone,
     clienteNome: "",
@@ -558,6 +563,136 @@ async function criarPedidoWhatsapp(telefone: string, produto: ProdutoBot) {
     id: ref.id,
     ...pedido,
   };
+}
+
+
+async function consultarPedidoPorId(pedidoId?: string) {
+  if (!pedidoId) return null;
+
+  try {
+    const ref = adminDb.collection(PEDIDOS_COLLECTION).doc(pedidoId);
+    const snap = await ref.get();
+
+    if (!snap.exists) return null;
+
+    return {
+      id: snap.id,
+      ...snap.data(),
+    } as any;
+  } catch (error) {
+    console.error("Erro ao consultar pedido por ID:", error);
+    return null;
+  }
+}
+
+function pedidoEstaEmAndamento(pedido: any) {
+  if (!pedido) return false;
+
+  const status = normalizarTexto(pedido.status || pedido.statusPedido || "");
+  const etapa = normalizarTexto(pedido.etapaAtendimento || "");
+
+  if (["cancelado", "cancelada", "finalizado", "finalizada", "pago", "entregue", "concluido", "concluida"].some((item) => status.includes(item))) {
+    return false;
+  }
+
+  return (
+    status.includes("pendente") ||
+    status.includes("aberto") ||
+    status.includes("aguardando") ||
+    etapa.includes("aguardando") ||
+    etapa.includes("dados") ||
+    etapa.includes("atendimento")
+  );
+}
+
+function mensagemTemDadosDePedido(mensagem: string) {
+  const msg = normalizarTexto(mensagem);
+
+  const temPagamento = /\b(pix|cartao|cartão|credito|crédito|debito|débito|dinheiro)\b/.test(msg);
+  const temCep = /\b\d{5}-?\d{3}\b/.test(mensagem) || /\b\d{8}\b/.test(mensagem);
+  const temEndereco = /\b(rua|avenida|av|bairro|cidade|cep|numero|número|complemento|entrega|retirada)\b/.test(msg);
+  const linhasUteis = mensagem
+    .split(/\n+/g)
+    .map((linha) => linha.trim())
+    .filter(Boolean);
+
+  return temPagamento || temCep || temEndereco || linhasUteis.length >= 2;
+}
+
+function extrairDadosFinalizacaoPedido(mensagem: string) {
+  const linhas = mensagem
+    .split(/\n+/g)
+    .map((linha) => linha.trim())
+    .filter(Boolean);
+
+  const texto = mensagem.trim();
+  const msg = normalizarTexto(texto);
+  const cepMatch = texto.match(/\b\d{5}-?\d{3}\b/) || texto.match(/\b\d{8}\b/);
+  const cep = cepMatch ? cepMatch[0].replace(/\D/g, "") : "";
+
+  let formaPagamento = "";
+  if (/\bpix\b/.test(msg)) formaPagamento = "Pix";
+  else if (/\b(cartao|cartão|credito|crédito|debito|débito)\b/.test(msg)) formaPagamento = "Cartão";
+  else if (/\bdinheiro\b/.test(msg)) formaPagamento = "Dinheiro";
+
+  const linhasSemPagamento = linhas.filter((linha) => {
+    const normalizada = normalizarTexto(linha);
+    if (/\b(pix|cartao|cartão|credito|crédito|debito|débito|dinheiro)\b/.test(normalizada)) return false;
+    if (/^\d{5}-?\d{3}$/.test(linha) || /^\d{8}$/.test(linha)) return false;
+    return true;
+  });
+
+  const clienteNome = linhasSemPagamento[0] || "";
+  const localEntrega = linhasSemPagamento.slice(1).join(" - ") || (cep ? `CEP ${cep}` : "");
+
+  return {
+    clienteNome,
+    cep,
+    localEntrega,
+    formaPagamento,
+    observacaoCliente: texto,
+  };
+}
+
+async function atualizarPedidoComDadosCliente(pedidoId: string, mensagem: string) {
+  const dados = extrairDadosFinalizacaoPedido(mensagem);
+
+  const updateData: any = {
+    etapaAtendimento: "dados_cliente_recebidos",
+    status: "pendente_atendimento",
+    statusPedido: "pendente_atendimento",
+    dadosClienteRecebidos: true,
+    dadosClienteMensagem: dados.observacaoCliente,
+    updatedAt: FieldValue.serverTimestamp(),
+    atualizadoEm: FieldValue.serverTimestamp(),
+  };
+
+  if (dados.clienteNome) updateData.clienteNome = dados.clienteNome;
+  if (dados.cep) updateData.clienteCep = dados.cep;
+  if (dados.localEntrega) updateData.clienteEnderecoResumo = dados.localEntrega;
+  if (dados.formaPagamento) updateData.formaPagamento = dados.formaPagamento;
+
+  await adminDb.collection(PEDIDOS_COLLECTION).doc(pedidoId).set(updateData, { merge: true });
+
+  const pedidoAtualizado = await consultarPedidoPorId(pedidoId);
+
+  return {
+    pedido: pedidoAtualizado,
+    dados,
+  };
+}
+
+function respostaPedidoDadosRecebidos(pedido: any, dados: ReturnType<typeof extrairDadosFinalizacaoPedido>) {
+  const itemNome = pedido?.itens?.[0]?.nome || "produto Maison Noor";
+  const total = Number(pedido?.total || pedido?.valorTotal || pedido?.subtotal || 0);
+
+  return `✨ Perfeito! Recebi seus dados para o pedido:
+
+Pedido: *${pedido?.id || "em andamento"}*
+Produto: *${itemNome}*
+Valor: *${formatarMoeda(total)}*
+${dados.clienteNome ? `Nome: *${dados.clienteNome}*\n` : ""}${dados.cep ? `CEP: *${dados.cep}*\n` : ""}${dados.formaPagamento ? `Pagamento: *${dados.formaPagamento}*\n` : ""}
+Nossa equipe humana vai continuar o atendimento por aqui para confirmar entrega, pagamento e finalização. ✨`;
 }
 
 async function consultarUltimoPedido(telefone: string) {
@@ -689,6 +824,49 @@ async function gerarResposta(
   const produtoContexto = produtoPorId(produtos, contexto?.ultimoProdutoId);
   const produtoAlvo = produtoEncontrado || produtoContexto;
 
+  const pedidoEmAndamentoId = contexto?.pedidoEmAndamentoId || contexto?.ultimoPedidoId || "";
+  const pedidoEmAndamento = pedidoEmAndamentoId ? await consultarPedidoPorId(pedidoEmAndamentoId) : null;
+
+  if (
+    telefone &&
+    pedidoEstaEmAndamento(pedidoEmAndamento) &&
+    intencao !== "status_pedido" &&
+    intencao !== "humano" &&
+    !produtoEncontrado
+  ) {
+    if (intencao === "comprar") {
+      return {
+        texto: `✨ Já existe um pedido em andamento para você:
+
+Pedido: *${pedidoEmAndamento.id}*
+Produto: *${pedidoEmAndamento.itens?.[0]?.nome || "produto Maison Noor"}*
+
+Para finalizar, envie:
+1. Nome completo
+2. CEP ou cidade/bairro
+3. Forma de pagamento desejada: Pix ou cartão
+
+Nossa equipe humana também pode continuar o atendimento por aqui. ✨`,
+        produto: produtoAlvo,
+        intencao: "pedido_em_andamento",
+        pedidoEmAndamentoId: pedidoEmAndamento.id,
+        pedidoEmAndamentoStatus: pedidoEmAndamento.status || "pendente",
+      };
+    }
+
+    if (mensagemTemDadosDePedido(mensagem) || intencao === "pagamento" || intencao === "entrega") {
+      const { pedido, dados } = await atualizarPedidoComDadosCliente(pedidoEmAndamento.id, mensagem);
+
+      return {
+        texto: respostaPedidoDadosRecebidos(pedido || pedidoEmAndamento, dados),
+        produto: produtoAlvo,
+        intencao: "pedido_dados_recebidos",
+        pedidoEmAndamentoId: pedidoEmAndamento.id,
+        pedidoEmAndamentoStatus: "pendente_atendimento",
+      };
+    }
+  }
+
   if (intencao === "status_pedido" && telefone) {
     const pedido = await consultarUltimoPedido(telefone);
     return {
@@ -720,12 +898,16 @@ Posso te indicar uma fragrância parecida ou avisar o atendimento humano para ve
     let pedidoId = "";
 
     if (telefone) {
-      const pedido = await criarPedidoWhatsapp(telefone, produtoAlvo);
-      pedidoId = pedido.id;
+      if (pedidoEstaEmAndamento(pedidoEmAndamento)) {
+        pedidoId = pedidoEmAndamento.id;
+      } else {
+        const pedido = await criarPedidoWhatsapp(telefone, produtoAlvo);
+        pedidoId = pedido.id;
+      }
     }
 
     return {
-      texto: `✨ Perfeito! Iniciei seu pedido para:
+      texto: `✨ Perfeito! ${pedidoEstaEmAndamento(pedidoEmAndamento) ? "Seu pedido já está em andamento" : "Iniciei seu pedido"} para:
 
 *${produtoAlvo.nome}*
 Valor: *${formatarMoeda(Number(produtoAlvo.precoVenda || 0))}*
@@ -742,6 +924,8 @@ Para finalizar, envie:
 Se preferir, nossa equipe humana continua o atendimento por aqui. ✨`,
       produto: produtoAlvo,
       intencao,
+      pedidoEmAndamentoId: pedidoId,
+      pedidoEmAndamentoStatus: "aguardando_dados_cliente",
     };
   }
 
@@ -1016,6 +1200,15 @@ export async function POST(req: Request) {
         ultimoProdutoPreco: Number(resultado.produto?.precoVenda || contexto?.ultimoProdutoPreco || 0),
         ultimaCategoria: (resultado as any).categoria || contexto?.ultimaCategoria || "",
         ultimaIntencao: resultado.intencao,
+        pedidoEmAndamentoId:
+          (resultado as any).pedidoEmAndamentoId ??
+          (resultado.intencao === "pedido_dados_recebidos" ? "" : contexto?.pedidoEmAndamentoId || ""),
+        pedidoEmAndamentoStatus:
+          (resultado as any).pedidoEmAndamentoStatus || contexto?.pedidoEmAndamentoStatus || "",
+        ultimoPedidoId:
+          (resultado as any).pedidoEmAndamentoId || contexto?.ultimoPedidoId || "",
+        ultimoPedidoStatus:
+          (resultado as any).pedidoEmAndamentoStatus || contexto?.ultimoPedidoStatus || "",
       });
     }
 
