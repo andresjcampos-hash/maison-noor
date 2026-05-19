@@ -15,6 +15,17 @@ type CartItem = {
   imageUrl?: string;
   produtoId?: string;
   precoVenda?: number;
+  tipo?: string;
+  categoria?: string;
+  volumeMl?: number;
+  pesoKg?: number;
+  weight?: number;
+  larguraCm?: number;
+  width?: number;
+  alturaCm?: number;
+  height?: number;
+  comprimentoCm?: number;
+  length?: number;
 };
 
 type FreightOption = {
@@ -87,6 +98,117 @@ const CART_KEYS = [
 const LAST_CEP_KEY = "maison_noor_last_cep";
 const FREE_SHIPPING_MIN_VALUE = Number(process.env.NEXT_PUBLIC_FREE_SHIPPING_MIN_VALUE || 399);
 
+function normalizarTextoLogistico(valor?: string) {
+  return String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function numeroValido(valor: unknown) {
+  const numero = Number(valor || 0);
+  return Number.isFinite(numero) && numero > 0 ? numero : 0;
+}
+
+function inferirDadosLogisticosItem(item: CartItem) {
+  const nome = normalizarTextoLogistico(`${item.nome} ${item.tipo || ""} ${item.categoria || ""}`);
+  const qtd = Math.max(1, Number(item.qtd || item.quantidade || 1));
+
+  const pesoInformado = numeroValido(item.pesoKg ?? item.weight);
+  const larguraInformada = numeroValido(item.larguraCm ?? item.width);
+  const alturaInformada = numeroValido(item.alturaCm ?? item.height);
+  const comprimentoInformado = numeroValido(item.comprimentoCm ?? item.length);
+
+  const isBodySplash =
+    nome.includes("body splash") ||
+    nome.includes("bodysplash") ||
+    nome.includes("splash") ||
+    nome.includes("body");
+
+  const isKit =
+    nome.includes("kit") ||
+    nome.includes("combo") ||
+    nome.includes("presente") ||
+    nome.includes("caixa");
+
+  const isCreme =
+    nome.includes("creme") ||
+    nome.includes("hidratante") ||
+    nome.includes("lotion") ||
+    nome.includes("loção");
+
+  const isMini =
+    nome.includes("30ml") ||
+    nome.includes("35ml") ||
+    nome.includes("50ml") ||
+    Number(item.volumeMl || 0) <= 50;
+
+  if (pesoInformado && larguraInformada && alturaInformada && comprimentoInformado) {
+    return {
+      quantidade: qtd,
+      pesoKg: pesoInformado,
+      larguraCm: larguraInformada,
+      alturaCm: alturaInformada,
+      comprimentoCm: comprimentoInformado,
+      perfilLogistico: "dimensoes_cadastradas",
+    };
+  }
+
+  if (isKit) {
+    return {
+      quantidade: qtd,
+      pesoKg: pesoInformado || 1.45,
+      larguraCm: larguraInformada || 22,
+      alturaCm: alturaInformada || 14,
+      comprimentoCm: comprimentoInformado || 28,
+      perfilLogistico: "kit_premium",
+    };
+  }
+
+  if (isBodySplash) {
+    return {
+      quantidade: qtd,
+      pesoKg: pesoInformado || 0.85,
+      larguraCm: larguraInformada || 12,
+      alturaCm: alturaInformada || 12,
+      comprimentoCm: comprimentoInformado || 26,
+      perfilLogistico: "body_splash_embalado",
+    };
+  }
+
+  if (isCreme) {
+    return {
+      quantidade: qtd,
+      pesoKg: pesoInformado || 0.8,
+      larguraCm: larguraInformada || 13,
+      alturaCm: alturaInformada || 10,
+      comprimentoCm: comprimentoInformado || 18,
+      perfilLogistico: "creme_hidratante_embalado",
+    };
+  }
+
+  if (isMini) {
+    return {
+      quantidade: qtd,
+      pesoKg: pesoInformado || 0.65,
+      larguraCm: larguraInformada || 11,
+      alturaCm: alturaInformada || 10,
+      comprimentoCm: comprimentoInformado || 16,
+      perfilLogistico: "perfume_mini_embalado",
+    };
+  }
+
+  return {
+    quantidade: qtd,
+    pesoKg: pesoInformado || 0.95,
+    larguraCm: larguraInformada || 13,
+    alturaCm: alturaInformada || 12,
+    comprimentoCm: comprimentoInformado || 20,
+    perfilLogistico: "perfume_premium_embalado",
+  };
+}
+
 function getCepFromStorage() {
   if (typeof window === "undefined") return "";
   return window.localStorage.getItem(LAST_CEP_KEY) || "";
@@ -138,6 +260,17 @@ function getCartFromStorage(): CartItem[] {
           nome: String(item.nome ?? item.name ?? item.title ?? "").trim(),
           preco: Number(item.preco ?? item.precoVenda ?? item.price ?? item.valor ?? 0),
           precoVenda: Number(item.precoVenda ?? item.preco ?? item.price ?? item.valor ?? 0),
+          tipo: item.tipo ?? item.type,
+          categoria: item.categoria ?? item.category,
+          volumeMl: Number(item.volumeMl ?? item.volume ?? item.ml ?? 0) || undefined,
+          pesoKg: Number(item.pesoKg ?? item.weight ?? item.peso ?? 0) || undefined,
+          weight: Number(item.weight ?? item.pesoKg ?? item.peso ?? 0) || undefined,
+          larguraCm: Number(item.larguraCm ?? item.width ?? item.largura ?? 0) || undefined,
+          width: Number(item.width ?? item.larguraCm ?? item.largura ?? 0) || undefined,
+          alturaCm: Number(item.alturaCm ?? item.height ?? item.altura ?? 0) || undefined,
+          height: Number(item.height ?? item.alturaCm ?? item.altura ?? 0) || undefined,
+          comprimentoCm: Number(item.comprimentoCm ?? item.length ?? item.comprimento ?? 0) || undefined,
+          length: Number(item.length ?? item.comprimentoCm ?? item.comprimento ?? 0) || undefined,
           qtd: Number(item.qtd ?? item.quantidade ?? 1),
           quantidade: Number(item.quantidade ?? item.qtd ?? 1),
           imagem: String(item.imagem ?? item.imageUrl ?? item.image ?? ""),
@@ -177,6 +310,13 @@ function saveCartToStorage(items: CartItem[]) {
       nome: item.nome,
       preco: Number(item.preco || item.precoVenda || 0),
       precoVenda: Number(item.precoVenda || item.preco || 0),
+      tipo: item.tipo || "",
+      categoria: item.categoria || "",
+      volumeMl: item.volumeMl || null,
+      pesoKg: item.pesoKg || item.weight || null,
+      larguraCm: item.larguraCm || item.width || null,
+      alturaCm: item.alturaCm || item.height || null,
+      comprimentoCm: item.comprimentoCm || item.length || null,
       qtd: Number(item.qtd || item.quantidade || 1),
       quantidade: Number(item.quantidade || item.qtd || 1),
       imagem: item.imagem || item.imageUrl || "",
@@ -246,16 +386,21 @@ async function consultarFrete(cepDigits: string, subtotal: number, totalItens: n
       cep: cepDigits,
       subtotal,
       totalItens,
-      itens: getCartFromStorage().map((item) => ({
-        id: item.id || item.produtoId || item.nome,
-        nome: item.nome,
-        quantidade: Number(item.qtd || item.quantidade || 1),
-        preco: Number(item.preco || item.precoVenda || 0),
-        pesoKg: Number((item as any).pesoKg || (item as any).weight || 0) || undefined,
-        larguraCm: Number((item as any).larguraCm || (item as any).width || 0) || undefined,
-        alturaCm: Number((item as any).alturaCm || (item as any).height || 0) || undefined,
-        comprimentoCm: Number((item as any).comprimentoCm || (item as any).length || 0) || undefined,
-      })),
+      itens: getCartFromStorage().map((item) => {
+        const logistica = inferirDadosLogisticosItem(item);
+
+        return {
+          id: item.id || item.produtoId || item.nome,
+          nome: item.nome,
+          quantidade: logistica.quantidade,
+          preco: Number(item.preco || item.precoVenda || 0),
+          pesoKg: logistica.pesoKg,
+          larguraCm: logistica.larguraCm,
+          alturaCm: logistica.alturaCm,
+          comprimentoCm: logistica.comprimentoCm,
+          perfilLogistico: logistica.perfilLogistico,
+        };
+      }),
     }),
   });
 
