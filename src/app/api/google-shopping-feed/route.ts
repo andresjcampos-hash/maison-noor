@@ -1,7 +1,7 @@
 // src/app/api/google-shopping-feed/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -9,18 +9,15 @@ export const revalidate = 0;
 const SITE_URL = "https://www.maisonnoor.com.br";
 const DEFAULT_IMAGE = `${SITE_URL}/produtos/sem-imagem.png`;
 
-type CategoriaCRM = "masculino" | "feminino" | "unissex";
-
 type ProdutoFirebase = {
-  id: string;
   nome?: string;
   marca?: string;
   volumeMl?: number;
-  categoria?: CategoriaCRM;
+  categoria?: string;
   precoVenda?: number;
   estoque?: number;
   reservado?: number;
-  ativo?: boolean;
+  ativo?: boolean | string;
   observacoes?: string;
   descricao?: string;
   tipo?: string;
@@ -58,10 +55,17 @@ function escapeXml(valor: unknown) {
     .replace(/'/g, "&apos;");
 }
 
-function somenteTexto(valor: unknown) {
+function limparTexto(valor: unknown, limite = 5000) {
   return String(valor ?? "")
+    .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .slice(0, limite);
+}
+
+function numeroSeguro(valor: unknown, fallback = 0) {
+  const n = Number(valor);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 function slugify(texto: string) {
@@ -83,64 +87,61 @@ function urlAbsoluta(valor?: string) {
   return `${SITE_URL}${texto.startsWith("/") ? texto : `/${texto}`}`;
 }
 
-function getImagemPrincipal(produto: ProdutoFirebase) {
-  const slug = slugify(produto.nome || "produto");
+function getImagens(produto: ProdutoFirebase) {
+  const slug = slugify(produto.nome || "produto-maison-noor");
 
-  const imagem =
-    produto.imagem ||
-    produto.imageUrl ||
-    produto.foto ||
-    produto.imagem2 ||
-    produto.image2 ||
-    produto.imageUrl2 ||
-    produto.foto2 ||
-    produto.imagem3 ||
-    produto.image3 ||
-    produto.imageUrl3 ||
-    produto.foto3 ||
-    (Array.isArray(produto.fotos) ? produto.fotos[0] : "") ||
-    (Array.isArray(produto.imagens) ? produto.imagens[0] : "") ||
-    (Array.isArray(produto.galeria) ? produto.galeria[0] : "") ||
-    `/produtos/${slug}.png`;
+  const candidatas = [
+    produto.imagem,
+    produto.imageUrl,
+    produto.foto,
 
-  return urlAbsoluta(imagem);
-}
-
-function getImagensAdicionais(produto: ProdutoFirebase) {
-  const slug = slugify(produto.nome || "produto");
-
-  const imagens = [
     produto.imagem2,
     produto.image2,
     produto.imageUrl2,
     produto.foto2,
+
     produto.imagem3,
     produto.image3,
     produto.imageUrl3,
     produto.foto3,
+
     ...(Array.isArray(produto.fotos) ? produto.fotos : []),
     ...(Array.isArray(produto.imagens) ? produto.imagens : []),
     ...(Array.isArray(produto.galeria) ? produto.galeria : []),
-    `/produtos/${slug}-1.png`,
-    `/produtos/${slug}-2.png`,
-    `/produtos/${slug}-3.png`,
-  ]
-    .map((item) => urlAbsoluta(item))
-    .filter((item) => item && item !== DEFAULT_IMAGE);
 
-  return Array.from(new Set(imagens)).slice(0, 10);
+    `/produtos/${slug}.png`,
+    `/produtos/${slug}.jpg`,
+    `/produtos/${slug}.jpeg`,
+    `/produtos/${slug}.webp`,
+  ];
+
+  const limpas = candidatas
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .map(urlAbsoluta);
+
+  return Array.from(new Set(limpas));
 }
 
-function categoriaGoogle(categoria?: CategoriaCRM) {
-  if (categoria === "masculino") return "Health & Beauty > Personal Care > Cosmetics > Perfume & Cologne";
-  if (categoria === "feminino") return "Health & Beauty > Personal Care > Cosmetics > Perfume & Cologne";
+function categoriaGoogle(produto: ProdutoFirebase) {
+  const texto = `${produto.nome || ""} ${produto.tipo || ""} ${produto.categoria || ""}`.toLowerCase();
+
+  if (texto.includes("creme") || texto.includes("hidratante")) {
+    return "Health & Beauty > Personal Care > Cosmetics > Skin Care > Lotion & Moisturizer";
+  }
+
+  if (texto.includes("body splash") || texto.includes("splash")) {
+    return "Health & Beauty > Personal Care > Cosmetics > Perfume & Cologne";
+  }
+
   return "Health & Beauty > Personal Care > Cosmetics > Perfume & Cologne";
 }
 
-function generoGoogle(categoria?: CategoriaCRM) {
-  if (categoria === "masculino") return "male";
-  if (categoria === "feminino") return "female";
-  return "unisex";
+function productType(produto: ProdutoFirebase) {
+  const categoria = limparTexto(produto.categoria || "Unissex", 80);
+  const tipo = limparTexto(produto.tipo || "Perfume", 80);
+
+  return `Maison Noor > ${tipo} > ${categoria}`;
 }
 
 function montarDescricao(produto: ProdutoFirebase) {
@@ -151,94 +152,83 @@ function montarDescricao(produto: ProdutoFirebase) {
     produto.notasTopo ? `Notas de saída: ${produto.notasTopo}.` : "",
     produto.notasCoracao ? `Notas de coração: ${produto.notasCoracao}.` : "",
     produto.notasFundo ? `Notas de fundo: ${produto.notasFundo}.` : "",
-    "Perfume árabe original com curadoria premium Maison Noor.",
+    produto.volumeMl ? `Volume: ${produto.volumeMl}ml.` : "",
+    "Produto original com curadoria premium Maison Noor.",
   ];
 
-  const texto = somenteTexto(partes.filter(Boolean).join(" "));
-
-  return texto || "Perfume árabe original com curadoria premium Maison Noor.";
+  return limparTexto(partes.filter(Boolean).join(" "), 5000);
 }
 
-function formatarPreco(preco: number) {
-  return `${preco.toFixed(2)} BRL`;
+function produtoAtivo(data: ProdutoFirebase) {
+  const ativo = data.ativo;
+  if (ativo === false) return false;
+  if (String(ativo).toLowerCase() === "false") return false;
+  return true;
+}
+
+function montarItemXml(id: string, produto: ProdutoFirebase) {
+  const nome = limparTexto(produto.nome || "Produto Maison Noor", 150);
+  const marca = limparTexto(produto.marca || "Maison Noor", 70);
+  const preco = numeroSeguro(produto.precoVenda, 0);
+  const estoque = numeroSeguro(produto.estoque, 0);
+  const reservado = numeroSeguro(produto.reservado, 0);
+  const disponivel = Math.max(0, estoque - reservado);
+  const imagens = getImagens(produto);
+  const imagemPrincipal = imagens[0] || DEFAULT_IMAGE;
+  const urlProduto = `${SITE_URL}/produto/${encodeURIComponent(id)}`;
+  const titulo = produto.volumeMl ? `${nome} ${produto.volumeMl}ml` : nome;
+  const descricao = montarDescricao(produto);
+
+  const adicionais = imagens
+    .slice(1, 10)
+    .map((img) => `      <g:additional_image_link>${escapeXml(img)}</g:additional_image_link>`)
+    .join("\n");
+
+  return `    <item>
+      <g:id>${escapeXml(id)}</g:id>
+      <g:title>${escapeXml(titulo)}</g:title>
+      <g:description>${escapeXml(descricao)}</g:description>
+      <g:link>${escapeXml(urlProduto)}</g:link>
+      <g:image_link>${escapeXml(imagemPrincipal)}</g:image_link>
+${adicionais ? `${adicionais}\n` : ""}      <g:availability>${disponivel > 0 ? "in_stock" : "out_of_stock"}</g:availability>
+      <g:price>${preco.toFixed(2)} BRL</g:price>
+      <g:condition>new</g:condition>
+      <g:brand>${escapeXml(marca)}</g:brand>
+      <g:identifier_exists>false</g:identifier_exists>
+      <g:google_product_category>${escapeXml(categoriaGoogle(produto))}</g:google_product_category>
+      <g:product_type>${escapeXml(productType(produto))}</g:product_type>
+      <g:adult>no</g:adult>
+    </item>`;
 }
 
 export async function GET() {
   try {
-    const produtosRef = collection(db, "products");
+    const snap = await getDocs(collection(db, "products"));
 
-    let snap;
-    try {
-      snap = await getDocs(query(produtosRef, where("ativo", "==", true)));
-    } catch {
-      snap = await getDocs(produtosRef);
-    }
+    const itens: string[] = [];
 
-    const itens = snap.docs
-      .map((docSnap) => {
-        const data = docSnap.data() as ProdutoFirebase;
+    snap.forEach((documento) => {
+      const data = documento.data() as ProdutoFirebase;
 
-        const produto: ProdutoFirebase = {
-          ...data,
-          id: docSnap.id,
-        };
+      if (!produtoAtivo(data)) return;
 
-        const nome = somenteTexto(produto.nome || "Perfume Maison Noor");
-        const preco = Number(produto.precoVenda || 0);
-        const estoque = Number(produto.estoque || 0);
-        const reservado = Number(produto.reservado || 0);
-        const disponivel = Math.max(0, estoque - reservado);
-        const ativo = produto.ativo ?? true;
+      const nome = limparTexto(data.nome || "", 150);
+      const preco = numeroSeguro(data.precoVenda, 0);
 
-        if (!ativo || preco <= 0 || !nome) return "";
+      if (!nome) return;
+      if (preco <= 0) return;
 
-        const link = `${SITE_URL}/produto/${produto.id}`;
-        const imagemPrincipal = getImagemPrincipal(produto);
-        const imagensAdicionais = getImagensAdicionais(produto).filter(
-          (img) => img !== imagemPrincipal,
-        );
-
-        const marca = somenteTexto(produto.marca || "Maison Noor");
-        const volume = produto.volumeMl ? `${produto.volumeMl}ml` : "";
-        const titulo = volume ? `${nome} ${volume}` : nome;
-        const descricao = montarDescricao(produto).slice(0, 5000);
-        const disponibilidade = disponivel > 0 ? "in_stock" : "out_of_stock";
-        const tipoProduto = produto.tipo || "Perfume árabe";
-
-        const imagensXml = imagensAdicionais
-          .map((img) => `    <g:additional_image_link>${escapeXml(img)}</g:additional_image_link>`)
-          .join("\n");
-
-        return `  <item>
-    <g:id>${escapeXml(produto.id)}</g:id>
-    <g:title>${escapeXml(titulo)}</g:title>
-    <g:description>${escapeXml(descricao)}</g:description>
-    <g:link>${escapeXml(link)}</g:link>
-    <g:image_link>${escapeXml(imagemPrincipal)}</g:image_link>
-${imagensXml}
-    <g:availability>${disponibilidade}</g:availability>
-    <g:price>${escapeXml(formatarPreco(preco))}</g:price>
-    <g:condition>new</g:condition>
-    <g:brand>${escapeXml(marca)}</g:brand>
-    <g:google_product_category>${escapeXml(categoriaGoogle(produto.categoria))}</g:google_product_category>
-    <g:product_type>${escapeXml(`Perfumes árabes > ${tipoProduto}`)}</g:product_type>
-    <g:gender>${escapeXml(generoGoogle(produto.categoria))}</g:gender>
-    <g:age_group>adult</g:age_group>
-    <g:identifier_exists>no</g:identifier_exists>
-    <g:adult>no</g:adult>
-  </item>`;
-      })
-      .filter(Boolean)
-      .join("\n");
+      itens.push(montarItemXml(documento.id, data));
+    });
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
-<channel>
-  <title>Maison Noor Parfums</title>
-  <link>${SITE_URL}</link>
-  <description>Feed de produtos da Maison Noor Parfums para Google Merchant Center</description>
-${itens}
-</channel>
+<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">
+  <channel>
+    <title>Maison Noor Parfums</title>
+    <link>${SITE_URL}</link>
+    <description>Feed de produtos da Maison Noor Parfums para Google Merchant Center</description>
+${itens.join("\n")}
+  </channel>
 </rss>`;
 
     return new NextResponse(xml, {
@@ -251,11 +241,21 @@ ${itens}
   } catch (error) {
     console.error("Erro ao gerar feed Google Shopping:", error);
 
-    return NextResponse.json(
-      {
-        erro: "Erro ao gerar feed Google Shopping",
+    const xmlErro = `<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">
+  <channel>
+    <title>Maison Noor Parfums</title>
+    <link>${SITE_URL}</link>
+    <description>Erro ao gerar feed de produtos.</description>
+  </channel>
+</rss>`;
+
+    return new NextResponse(xmlErro, {
+      status: 500,
+      headers: {
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "no-store, max-age=0",
       },
-      { status: 500 },
-    );
+    });
   }
 }
