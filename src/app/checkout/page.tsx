@@ -23,6 +23,11 @@ type FreightOption = {
   prazo: string;
   valor: number;
   destaque?: string;
+  transportadora?: string;
+  servico?: string;
+  prazoDias?: number | null;
+  freteGratis?: boolean;
+  valorOriginal?: number;
 };
 
 type SavedOrderItem = {
@@ -78,6 +83,42 @@ const CART_KEYS = [
   "maison_cart",
   "maison_noor_bag",
 ] as const;
+
+const LAST_CEP_KEY = "maison_noor_last_cep";
+const FREE_SHIPPING_MIN_VALUE = Number(process.env.NEXT_PUBLIC_FREE_SHIPPING_MIN_VALUE || 399);
+
+function getCepFromStorage() {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(LAST_CEP_KEY) || "";
+}
+
+function saveCepToStorage(cepDigits: string) {
+  if (typeof window === "undefined") return;
+  if (cepDigits.length === 8) {
+    window.localStorage.setItem(LAST_CEP_KEY, cepDigits);
+  }
+}
+
+function calcularFaltaFreteGratis(subtotal: number) {
+  return Math.max(0, FREE_SHIPPING_MIN_VALUE - subtotal);
+}
+
+function escolherMelhorFrete(options: FreightOption[]) {
+  if (!options.length) return "";
+
+  const gratis = options.find((option) => option.freteGratis || Number(option.valor || 0) === 0);
+  if (gratis) return gratis.id;
+
+  const ordenadas = [...options].sort((a, b) => {
+    const valorA = Number(a.valor || 0);
+    const valorB = Number(b.valor || 0);
+    if (valorA !== valorB) return valorA - valorB;
+
+    return Number(a.prazoDias || 999) - Number(b.prazoDias || 999);
+  });
+
+  return ordenadas[0]?.id || "";
+}
 
 function getCartFromStorage(): CartItem[] {
   if (typeof window === "undefined") return [];
@@ -168,6 +209,11 @@ function normalizarOpcoesFrete(data: any): FreightOption[] {
         prazo: String(item.prazo || item.delivery_time || item.tempo || "Prazo a confirmar"),
         valor: Number(item.valor ?? item.price ?? item.preco ?? 0),
         destaque: item.destaque ? String(item.destaque) : undefined,
+        transportadora: item.transportadora ? String(item.transportadora) : undefined,
+        servico: item.servico ? String(item.servico) : undefined,
+        prazoDias: item.prazoDias ?? item.delivery_time ?? null,
+        freteGratis: Boolean(item.freteGratis || item.valor === 0 || item.price === 0),
+        valorOriginal: item.valorOriginal != null ? Number(item.valorOriginal) : undefined,
       }))
       .filter((item) => item.id && item.nome && Number.isFinite(item.valor));
   }
@@ -180,6 +226,11 @@ function normalizarOpcoesFrete(data: any): FreightOption[] {
         prazo: String(item?.prazo || item?.delivery_time || "Prazo a confirmar"),
         valor: Number(item?.valor ?? item?.price ?? item?.preco ?? 0),
         destaque: item?.destaque ? String(item.destaque) : undefined,
+        transportadora: item?.transportadora ? String(item.transportadora) : undefined,
+        servico: item?.servico ? String(item.servico) : undefined,
+        prazoDias: item?.prazoDias ?? item?.delivery_time ?? null,
+        freteGratis: Boolean(item?.freteGratis || item?.valor === 0 || item?.price === 0),
+        valorOriginal: item?.valorOriginal != null ? Number(item.valorOriginal) : undefined,
       }))
       .filter((item) => item.id && item.nome && Number.isFinite(item.valor));
   }
@@ -200,6 +251,10 @@ async function consultarFrete(cepDigits: string, subtotal: number, totalItens: n
         nome: item.nome,
         quantidade: Number(item.qtd || item.quantidade || 1),
         preco: Number(item.preco || item.precoVenda || 0),
+        pesoKg: Number((item as any).pesoKg || (item as any).weight || 0) || undefined,
+        larguraCm: Number((item as any).larguraCm || (item as any).width || 0) || undefined,
+        alturaCm: Number((item as any).alturaCm || (item as any).height || 0) || undefined,
+        comprimentoCm: Number((item as any).comprimentoCm || (item as any).length || 0) || undefined,
       })),
     }),
   });
@@ -423,6 +478,11 @@ export default function CheckoutPage() {
     setMounted(true);
     setCarrinho(getCartFromStorage());
 
+    const cepSalvo = getCepFromStorage();
+    if (cepSalvo) {
+      setCep(formatarCep(cepSalvo));
+    }
+
     const handleResize = () => setIsMobile(window.innerWidth < 980);
     const handleStorage = () => setCarrinho(getCartFromStorage());
 
@@ -467,10 +527,11 @@ export default function CheckoutPage() {
       if (exibirFeedback) setCheckoutFeedback("Calculando frete pelo Melhor Envio...");
 
       const options = await consultarFrete(digits, subtotal, totalItens);
+      saveCepToStorage(digits);
       setFreightOptions(options);
       setSelectedFreight((prev) => {
         if (prev && options.some((option) => option.id === prev)) return prev;
-        return options.find((option) => option.id === "pac")?.id || options[0]?.id || "";
+        return escolherMelhorFrete(options);
       });
 
       if (exibirFeedback) setCheckoutFeedback("");
@@ -515,6 +576,9 @@ export default function CheckoutPage() {
   const total = subtotal + freteSelecionado;
   const cepDigits = cep.replace(/\D/g, "");
   const cepValido = cepDigits.length === 8;
+  const faltaFreteGratis = calcularFaltaFreteGratis(subtotal);
+  const temFreteGratis = freightOptions.some((option) => option.freteGratis || Number(option.valor || 0) === 0);
+  const melhorFreteNome = freteAtual?.nome || "A definir";
 
   useEffect(() => {
     if (!mounted || !carrinho.length) return;
@@ -1414,6 +1478,26 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
+              <div style={styles.freeShippingBox}>
+                {faltaFreteGratis <= 0 ? (
+                  <>
+                    <strong style={styles.freeShippingTitle}>Frete grátis disponível</strong>
+                    <span style={styles.freeShippingText}>
+                      Selecione uma opção de entrega com frete grátis quando disponível para o seu CEP.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <strong style={styles.freeShippingTitle}>
+                      Faltam {formatarMoeda(faltaFreteGratis)} para tentar frete grátis
+                    </strong>
+                    <span style={styles.freeShippingText}>
+                      Frete grátis inteligente acima de {formatarMoeda(FREE_SHIPPING_MIN_VALUE)}, conforme disponibilidade do Melhor Envio.
+                    </span>
+                  </>
+                )}
+              </div>
+
               <div style={styles.fieldWrap}>
                 <label style={styles.label}>Informe seu CEP</label>
                 <div style={styles.cepRow}>
@@ -1461,7 +1545,14 @@ export default function CheckoutPage() {
                           </div>
                           <div style={styles.freightPrazo}>{option.prazo}</div>
                         </div>
-                        <strong style={styles.freightPrice}>{formatarMoeda(option.valor)}</strong>
+                        <div style={styles.freightPriceWrap}>
+                          {option.freteGratis && option.valorOriginal ? (
+                            <span style={styles.freightOriginalPrice}>{formatarMoeda(option.valorOriginal)}</span>
+                          ) : null}
+                          <strong style={option.freteGratis ? styles.freightFreePrice : styles.freightPrice}>
+                            {option.freteGratis ? "Grátis" : formatarMoeda(option.valor)}
+                          </strong>
+                        </div>
                       </button>
                     );
                   })}
@@ -1511,12 +1602,12 @@ export default function CheckoutPage() {
 
                 <div style={styles.summaryRow}>
                   <span>Frete</span>
-                  <strong>{loadingFrete ? "Calculando..." : freightOptions.length ? formatarMoeda(freteSelecionado) : "Informe o CEP"}</strong>
+                  <strong>{loadingFrete ? "Calculando..." : freightOptions.length ? (freteSelecionado === 0 ? "Grátis" : formatarMoeda(freteSelecionado)) : "Informe o CEP"}</strong>
                 </div>
 
                 <div style={styles.summaryRow}>
                   <span>Entrega selecionada</span>
-                  <strong>{freteAtual ? freteAtual.prazo : "A definir"}</strong>
+                  <strong>{freteAtual ? `${melhorFreteNome} • ${freteAtual.prazo}` : "A definir"}</strong>
                 </div>
 
                 <div style={styles.divider} />
@@ -1526,6 +1617,10 @@ export default function CheckoutPage() {
                   <strong>{formatarMoeda(total)}</strong>
                 </div>
               </div>
+
+              {temFreteGratis ? (
+                <div style={styles.freeCheckoutNotice}>Frete grátis aplicado na opção selecionada quando disponível.</div>
+              ) : null}
 
               <div style={styles.paymentSelector}>
                 <button
@@ -2029,6 +2124,25 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 16,
     fontWeight: 800,
   },
+  freeShippingBox: {
+    marginBottom: 14,
+    borderRadius: 16,
+    border: "1px solid rgba(64, 132, 74, 0.20)",
+    background: "linear-gradient(180deg, rgba(242, 251, 244, 0.92), rgba(255, 250, 244, 0.88))",
+    padding: "12px 14px",
+    display: "grid",
+    gap: 4,
+  },
+  freeShippingTitle: {
+    color: "#2D6A34",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+  freeShippingText: {
+    color: "#6b5c4e",
+    fontSize: 12,
+    lineHeight: 1.45,
+  },
   fieldWrap: {
     display: "grid",
     gap: 8,
@@ -2122,6 +2236,25 @@ const styles: Record<string, React.CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
+  freightPriceWrap: {
+    display: "grid",
+    gap: 3,
+    justifyItems: "end",
+    minWidth: 76,
+  },
+  freightOriginalPrice: {
+    color: "#a89784",
+    fontSize: 11,
+    textDecoration: "line-through",
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+  },
+  freightFreePrice: {
+    color: "#2D6A34",
+    fontSize: 16,
+    whiteSpace: "nowrap",
+    fontWeight: 900,
+  },
   freightPrice: {
     color: "#b98a3e",
     fontSize: 16,
@@ -2188,6 +2321,19 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#ead8b7",
     margin: "14px 0",
   },
+  summaryTotalBox: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 16,
+    padding: "12px 12px",
+    background: "linear-gradient(180deg, #fff8ef, #f3dfc2)",
+    border: "1px solid #e0c79f",
+    color: "#2b2118",
+    fontSize: 15,
+    fontWeight: 900,
+  },
   pixHighlightCard: {
     marginTop: 16,
     marginBottom: 14,
@@ -2232,6 +2378,18 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#7c6c5d",
     fontSize: 11.5,
     lineHeight: 1.4,
+  },
+  freeCheckoutNotice: {
+    marginTop: 12,
+    borderRadius: 14,
+    padding: "10px 12px",
+    background: "rgba(242, 251, 244, 0.95)",
+    border: "1px solid rgba(45, 106, 52, 0.18)",
+    color: "#2D6A34",
+    fontSize: 12,
+    lineHeight: 1.45,
+    fontWeight: 800,
+    textAlign: "center",
   },
   noticeBox: {
     marginTop: 14,

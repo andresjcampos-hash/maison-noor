@@ -12,6 +12,16 @@ type ItemCarrinhoFrete = {
   preco?: number;
   precoVenda?: number;
   valor?: number;
+
+  // Preparado para quando o CRM passar dimensões reais por produto.
+  pesoKg?: number;
+  weight?: number;
+  larguraCm?: number;
+  width?: number;
+  alturaCm?: number;
+  height?: number;
+  comprimentoCm?: number;
+  length?: number;
 };
 
 type MelhorEnvioQuote = {
@@ -31,8 +41,30 @@ type MelhorEnvioQuote = {
   error?: string;
 };
 
+type OpcaoFreteNormalizada = {
+  id: string;
+  codigo: string;
+  nome: string;
+  servico: string;
+  transportadora: string;
+  valor: number;
+  valorOriginal: number;
+  prazo: string;
+  prazoDias: number | null;
+  destaque: string;
+  freteGratis?: boolean;
+};
+
 function somenteNumeros(valor: unknown) {
   return String(valor || "").replace(/\D/g, "");
+}
+
+function normalizarTexto(valor: unknown) {
+  return String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 function getEnv(name: string, fallback = "") {
@@ -55,6 +87,15 @@ function getMelhorEnvioBaseUrl() {
 function numeroSeguro(valor: unknown, fallback: number) {
   const numero = Number(valor);
   return Number.isFinite(numero) && numero > 0 ? numero : fallback;
+}
+
+function getFreteGratisMinimo() {
+  return numeroSeguro(
+    process.env.MELHOR_ENVIO_FREE_SHIPPING_MIN_VALUE ||
+      process.env.FREE_SHIPPING_MIN_VALUE ||
+      process.env.NEXT_PUBLIC_FREE_SHIPPING_MIN_VALUE,
+    399
+  );
 }
 
 function getConfiguracaoPacote(totalItensRaw: unknown) {
@@ -94,14 +135,19 @@ function montarProdutosParaCotacao(body: any) {
       .map((item, index) => {
         const quantidade = Math.max(1, Math.ceil(Number(item.quantidade || item.qtd || 1)));
         const preco = numeroSeguro(item.preco || item.precoVenda || item.valor, 1);
-        const pacote = getConfiguracaoPacote(1);
+        const pacotePadrao = getConfiguracaoPacote(1);
+
+        const width = numeroSeguro(item.larguraCm || item.width, pacotePadrao.larguraCm);
+        const height = numeroSeguro(item.alturaCm || item.height, pacotePadrao.alturaCm);
+        const length = numeroSeguro(item.comprimentoCm || item.length, pacotePadrao.comprimentoCm);
+        const weight = numeroSeguro(item.pesoKg || item.weight, pacotePadrao.pesoKg);
 
         return {
           id: String(item.id || item.produtoId || `produto-${index + 1}`),
-          width: pacote.larguraCm,
-          height: pacote.alturaCm,
-          length: pacote.comprimentoCm,
-          weight: pacote.pesoKg,
+          width,
+          height,
+          length,
+          weight,
           insurance_value: Number(preco.toFixed(2)),
           quantity: quantidade,
         };
@@ -137,7 +183,31 @@ function formatarPrazo(dias: unknown) {
   return arredondado === 1 ? "1 dia útil" : `${arredondado} dias úteis`;
 }
 
-function normalizarCotacoes(cotacoes: MelhorEnvioQuote[]) {
+function getTransportadorasBloqueadas() {
+  const raw = getEnv("MELHOR_ENVIO_BLOCKED_CARRIERS");
+  if (!raw) return [];
+
+  return raw
+    .split(",")
+    .map((item) => normalizarTexto(item))
+    .filter(Boolean);
+}
+
+function transportadoraPermitida(nome: string) {
+  const bloqueadas = getTransportadorasBloqueadas();
+  if (!bloqueadas.length) return true;
+
+  const texto = normalizarTexto(nome);
+  return !bloqueadas.some((bloqueada) => texto.includes(bloqueada));
+}
+
+function normalizarCotacoes(cotacoes: MelhorEnvioQuote[], subtotalRaw: unknown) {
+  const subtotal = Number(subtotalRaw || 0);
+  const minimoFreteGratis = getFreteGratisMinimo();
+  const aplicarFreteGratis = subtotal >= minimoFreteGratis;
+
+  const vistos = new Set<string>();
+
   const opcoes = cotacoes
     .filter((item) => !item?.error)
     .map((item) => {
@@ -146,24 +216,33 @@ function normalizarCotacoes(cotacoes: MelhorEnvioQuote[]) {
       const companyName = String(item.company?.name || "").trim();
       const serviceName = String(item.name || "Entrega").trim();
       const nome = companyName ? `${companyName} ${serviceName}` : serviceName;
+      const idBase = String(item.id || `${companyName}-${serviceName}`).replace(/\s+/g, "-").toLowerCase();
 
       return {
-        id: String(item.id || `${companyName}-${serviceName}`).replace(/\s+/g, "-").toLowerCase(),
+        id: idBase,
         codigo: String(item.id || ""),
         nome,
         servico: serviceName,
         transportadora: companyName,
         valor: Number(valor.toFixed(2)),
+        valorOriginal: Number(valor.toFixed(2)),
         prazo: formatarPrazo(prazo),
         prazoDias: Number(prazo) || null,
         destaque: "",
       };
     })
     .filter((item) => item.nome && Number.isFinite(item.valor) && item.valor > 0)
+    .filter((item) => transportadoraPermitida(`${item.transportadora} ${item.servico} ${item.nome}`))
+    .filter((item) => {
+      const chave = `${normalizarTexto(item.nome)}-${item.valor}-${item.prazoDias || "x"}`;
+      if (vistos.has(chave)) return false;
+      vistos.add(chave);
+      return true;
+    })
     .sort((a, b) => {
       if (a.valor !== b.valor) return a.valor - b.valor;
       return Number(a.prazoDias || 999) - Number(b.prazoDias || 999);
-    });
+    }) as OpcaoFreteNormalizada[];
 
   if (!opcoes.length) return [];
 
@@ -172,14 +251,27 @@ function normalizarCotacoes(cotacoes: MelhorEnvioQuote[]) {
 
   return opcoes.slice(0, 6).map((item, index) => {
     let destaque = "Opção de entrega";
+    let valor = item.valor;
+    let freteGratis = false;
 
-    if (item.valor === menorValor) destaque = "Mais econômico";
-    if (Number(item.prazoDias || 999) === menorPrazo) destaque = "Entrega mais rápida";
-    if (index === 0 && destaque === "Opção de entrega") destaque = "Mais escolhido";
+    if (aplicarFreteGratis && item.valor === menorValor) {
+      valor = 0;
+      freteGratis = true;
+      destaque = "Frete grátis";
+    } else if (item.valor === menorValor) {
+      destaque = "Mais econômico";
+    } else if (Number(item.prazoDias || 999) === menorPrazo) {
+      destaque = "Entrega mais rápida";
+    } else if (index === 0) {
+      destaque = "Melhor custo-benefício";
+    }
 
     return {
       ...item,
+      valor,
+      valorOriginal: item.valorOriginal,
       destaque,
+      freteGratis,
     };
   });
 }
@@ -242,6 +334,7 @@ export async function POST(req: Request) {
     }
 
     const produtos = montarProdutosParaCotacao(body);
+    const subtotal = Number(body?.subtotal || body?.valor || body?.total || 0);
 
     const payload = {
       from: {
@@ -255,6 +348,7 @@ export async function POST(req: Request) {
         receipt: false,
         own_hand: false,
         collect: false,
+        insurance_value: Math.max(1, Number(subtotal || 1)),
       },
     };
 
@@ -292,7 +386,7 @@ export async function POST(req: Request) {
     }
 
     const cotacoes = Array.isArray(data) ? data : data?.data || [];
-    const opcoes = normalizarCotacoes(cotacoes);
+    const opcoes = normalizarCotacoes(cotacoes, subtotal);
 
     if (!opcoes.length) {
       return NextResponse.json(
@@ -304,11 +398,19 @@ export async function POST(req: Request) {
       );
     }
 
+    const freteGratisMinimo = getFreteGratisMinimo();
+
     return NextResponse.json({
       origem: cepOrigem,
       destino: cepDestino,
-      subtotal: Number(body?.subtotal || body?.valor || body?.total || 0),
+      subtotal,
       plataforma: "melhor_envio",
+      freteGratisMinimo,
+      faltaParaFreteGratis: Math.max(0, Number((freteGratisMinimo - subtotal).toFixed(2))),
+      freteGratisDisponivel: subtotal >= freteGratisMinimo,
+      pacote: {
+        produtos,
+      },
       opcoes,
       raw: process.env.NODE_ENV === "development" ? data : undefined,
     });
