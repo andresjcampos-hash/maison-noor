@@ -146,6 +146,68 @@ function prazoTexto(min: number, max: number) {
   return `${min} a ${max} dias úteis`;
 }
 
+
+function regiaoCep(cepDestino: string) {
+  const prefixo = Number(String(cepDestino || "").replace(/\D/g, "").slice(0, 2));
+
+  if (prefixo >= 1 && prefixo <= 19) return "sudeste_sp";
+  if (prefixo >= 20 && prefixo <= 39) return "sudeste";
+  if (prefixo >= 40 && prefixo <= 59) return "nordeste";
+  if (prefixo >= 60 && prefixo <= 69) return "nordeste_norte";
+  if (prefixo >= 70 && prefixo <= 79) return "centro_oeste";
+  if (prefixo >= 80 && prefixo <= 99) return "sul";
+
+  return "indefinida";
+}
+
+function margemPrazoSeguranca(servico: string, nomeTabela: string, cepDestino: string) {
+  const texto = normalizarTexto(`${nomeTabela} ${servico}`);
+  const regiao = regiaoCep(cepDestino);
+
+  let min = 1;
+  let max = 2;
+
+  if (texto.includes("sedex")) {
+    min = 1;
+    max = 2;
+  } else if (texto.includes("pac")) {
+    min = 1;
+    max = 2;
+  } else if (texto.includes("jadlog") || texto.includes("package") || texto.includes(".com")) {
+    min = 1;
+    max = 2;
+  } else if (texto.includes("loggi")) {
+    min = 1;
+    max = 2;
+  }
+
+  // Margem logística realista para evitar promessa curta demais no checkout.
+  // Sul, Nordeste, Norte e Centro-Oeste costumam sofrer mais variação de coleta, triagem e interiorização.
+  if (["sul", "nordeste", "nordeste_norte", "centro_oeste"].includes(regiao)) {
+    min += 1;
+    max += 1;
+  }
+
+  return { min, max };
+}
+
+function aplicarPrazoSeguro(
+  prazoMinOriginal: number,
+  prazoMaxOriginal: number,
+  servico: string,
+  nomeTabela: string,
+  cepDestino: string
+) {
+  const baseMin = Math.max(1, Number(prazoMinOriginal || prazoMaxOriginal || 1));
+  const baseMax = Math.max(baseMin, Number(prazoMaxOriginal || prazoMinOriginal || baseMin));
+  const margem = margemPrazoSeguranca(servico, nomeTabela, cepDestino);
+
+  const min = Math.max(1, baseMin + margem.min);
+  const max = Math.max(min, baseMax + margem.max);
+
+  return { min, max };
+}
+
 function nomeExibicao(servico: string, nomeTabela: string) {
   const base = `${nomeTabela} ${servico}`.toLowerCase();
 
@@ -214,20 +276,22 @@ function consultarTabelaLocal(cepDestino: string, pacote: ReturnType<typeof mont
     if (!melhor) continue;
 
     const precoBase = numeroSeguro(melhor.linha[4], 0);
-    const prazoMin = numeroSeguro(melhor.linha[5], 0);
-    const prazoMax = numeroSeguro(melhor.linha[6], 0);
+    const prazoMinOriginal = numeroSeguro(melhor.linha[5], 0);
+    const prazoMaxOriginal = numeroSeguro(melhor.linha[6], 0);
     const servico = String(melhor.linha[8] || tabela.servicoOriginal || nomeTabela);
     const nome = nomeExibicao(servico, nomeTabela);
+    const prazoSeguro = aplicarPrazoSeguro(prazoMinOriginal, prazoMaxOriginal, servico, nomeTabela, cepDestino);
     const valorOriginal = arredondarPremium(precoBase + MARGEM_OPERACIONAL_FRETE);
-    const prazoDias = prazoMax || prazoMin || null;
+    const prazoDias = prazoSeguro.max || prazoSeguro.min || null;
 
     opcoes.push({
       id: `${normalizarTexto(nome).replace(/[^a-z0-9]+/g, "_")}_${opcoes.length}`,
       nome,
       servico,
       transportadora: nome.split(" ")[0],
-      prazo: prazoTexto(prazoMin, prazoMax),
+      prazo: prazoTexto(prazoSeguro.min, prazoSeguro.max),
       prazoDias,
+      prazoOriginal: prazoTexto(prazoMinOriginal, prazoMaxOriginal),
       valor: valorOriginal,
       valorOriginal,
       freteGratis: false,
