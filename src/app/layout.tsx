@@ -43,9 +43,9 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   icons: {
-    icon: "/logo.png",
-    shortcut: "/logo.png",
-    apple: "/logo.png",
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
   },
   openGraph: {
     type: "website",
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
       "Descubra perfumes árabes originais com curadoria premium Maison Noor, atendimento consultivo e fragrâncias inesquecíveis.",
     images: [
       {
-        url: "/logo.png",
+        url: "/icon.png",
         width: 1200,
         height: 630,
         alt: "Maison Noor Parfums - Perfumes Árabes Premium",
@@ -69,7 +69,7 @@ export const metadata: Metadata = {
     title: "Maison Noor Parfums | Perfumes Árabes Premium",
     description:
       "Perfumes árabes originais com curadoria premium e atendimento consultivo Maison Noor.",
-    images: ["/logo.png"],
+    images: ["/icon.png"],
   },
   robots: {
     index: true,
@@ -97,7 +97,7 @@ export default function RootLayout({
     "@type": "Organization",
     name: "Maison Noor Parfums",
     url: SITE_URL,
-    logo: `${SITE_URL}/logo.png`,
+    logo: `${SITE_URL}/icon.png`,
     sameAs: [],
     contactPoint: [
       {
@@ -114,7 +114,7 @@ export default function RootLayout({
     "@context": "https://schema.org",
     "@type": "Store",
     name: "Maison Noor Parfums",
-    image: `${SITE_URL}/logo.png`,
+    image: `${SITE_URL}/icon.png`,
     url: SITE_URL,
     telephone: "+55-12-98262-7108",
     priceRange: "R$",
@@ -138,11 +138,19 @@ export default function RootLayout({
           selection:text-black
         "
       >
-        <Script id="maison-noor-organization-jsonld" type="application/ld+json" strategy="afterInteractive">
+        <Script
+          id="maison-noor-organization-jsonld"
+          type="application/ld+json"
+          strategy="afterInteractive"
+        >
           {JSON.stringify(organizationJsonLd)}
         </Script>
 
-        <Script id="maison-noor-store-jsonld" type="application/ld+json" strategy="afterInteractive">
+        <Script
+          id="maison-noor-store-jsonld"
+          type="application/ld+json"
+          strategy="afterInteractive"
+        >
           {JSON.stringify(storeJsonLd)}
         </Script>
 
