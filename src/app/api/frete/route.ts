@@ -2,139 +2,321 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const CEP_ORIGEM = "12230000"; // CEP origem Maison Noor
+type ItemCarrinhoFrete = {
+  id?: string;
+  produtoId?: string;
+  nome?: string;
+  name?: string;
+  quantidade?: number;
+  qtd?: number;
+  preco?: number;
+  precoVenda?: number;
+  valor?: number;
+};
 
-function somenteNumeros(valor: string) {
+type MelhorEnvioQuote = {
+  id?: number | string;
+  name?: string;
+  price?: string | number;
+  custom_price?: string | number;
+  discount?: string | number;
+  currency?: string;
+  delivery_time?: number | string;
+  custom_delivery_time?: number | string;
+  company?: {
+    id?: number | string;
+    name?: string;
+    picture?: string;
+  };
+  error?: string;
+};
+
+function somenteNumeros(valor: unknown) {
   return String(valor || "").replace(/\D/g, "");
 }
 
-function calcularFrete(cepDestinoRaw: string, subtotalRaw?: number) {
-  const cepDestino = somenteNumeros(cepDestinoRaw);
-  const cepOrigem = somenteNumeros(CEP_ORIGEM);
-  const subtotal = Number(subtotalRaw || 0);
+function getEnv(name: string, fallback = "") {
+  return String(process.env[name] || fallback).trim();
+}
 
-  if (!cepDestino || cepDestino.length !== 8) {
-    return null;
+function getMelhorEnvioBaseUrl() {
+  const custom = getEnv("MELHOR_ENVIO_API_URL");
+  if (custom) return custom.replace(/\/$/, "");
+
+  const env = getEnv("MELHOR_ENVIO_ENV", "production").toLowerCase();
+
+  if (env === "sandbox" || env === "test" || env === "teste") {
+    return "https://sandbox.melhorenvio.com.br";
   }
 
-  if (!cepOrigem || cepOrigem.length !== 8) {
-    return null;
-  }
+  return "https://www.melhorenvio.com.br";
+}
 
-  const origemBase = Number(cepOrigem.substring(0, 5));
-  const destinoBase = Number(cepDestino.substring(0, 5));
-  const distanciaSimples = Math.abs(destinoBase - origemBase);
+function numeroSeguro(valor: unknown, fallback: number) {
+  const numero = Number(valor);
+  return Number.isFinite(numero) && numero > 0 ? numero : fallback;
+}
 
-  let mini = 14.9;
-  let pac = 18.9;
-  let sedex = 28.9;
+function getConfiguracaoPacote(totalItensRaw: unknown) {
+  const totalItens = Math.max(1, Math.ceil(Number(totalItensRaw || 1)));
 
-  let prazoMini = "5 a 9 dias úteis";
-  let prazoPac = "4 a 8 dias úteis";
-  let prazoSedex = "1 a 3 dias úteis";
+  const pesoPorItemKg = numeroSeguro(
+    process.env.MELHOR_ENVIO_PRODUCT_WEIGHT_KG,
+    0.55
+  );
 
-  if (distanciaSimples <= 800) {
-    mini = 12.9;
-    pac = 15.9;
-    sedex = 23.9;
-    prazoMini = "4 a 7 dias úteis";
-    prazoPac = "3 a 6 dias úteis";
-    prazoSedex = "1 a 2 dias úteis";
-  } else if (distanciaSimples <= 2500) {
-    mini = 15.9;
-    pac = 18.9;
-    sedex = 27.9;
-    prazoMini = "5 a 8 dias úteis";
-    prazoPac = "4 a 7 dias úteis";
-    prazoSedex = "2 a 3 dias úteis";
-  } else if (distanciaSimples <= 5000) {
-    mini = 18.9;
-    pac = 22.9;
-    sedex = 32.9;
-    prazoMini = "6 a 10 dias úteis";
-    prazoPac = "5 a 9 dias úteis";
-    prazoSedex = "2 a 4 dias úteis";
-  } else if (distanciaSimples <= 9000) {
-    mini = 22.9;
-    pac = 27.9;
-    sedex = 38.9;
-    prazoMini = "7 a 12 dias úteis";
-    prazoPac = "6 a 10 dias úteis";
-    prazoSedex = "3 a 5 dias úteis";
-  } else {
-    mini = 25.9;
-    pac = 31.9;
-    sedex = 44.9;
-    prazoMini = "8 a 13 dias úteis";
-    prazoPac = "7 a 12 dias úteis";
-    prazoSedex = "4 a 6 dias úteis";
-  }
+  const larguraCm = numeroSeguro(process.env.MELHOR_ENVIO_PACKAGE_WIDTH_CM, 14);
+  const alturaBaseCm = numeroSeguro(process.env.MELHOR_ENVIO_PACKAGE_HEIGHT_CM, 10);
+  const comprimentoCm = numeroSeguro(process.env.MELHOR_ENVIO_PACKAGE_LENGTH_CM, 20);
 
-  // Ajuste por valor do pedido
-  if (subtotal >= 399) {
-    pac = Math.max(0, pac - 5);
-    mini = Math.max(0, mini - 4);
-  }
+  // Mantém a caixa realista quando houver mais de 1 perfume no pedido.
+  const alturaCm = Math.min(100, alturaBaseCm + Math.max(0, totalItens - 1) * 4);
+  const pesoKg = Math.min(30, pesoPorItemKg * totalItens);
 
   return {
-    mini: {
-      id: "mini",
-      nome: "Correios Mini Envios",
-      valor: Number(mini.toFixed(2)),
-      prazo: prazoMini,
-      destaque: "Opção econômica",
-    },
-    pac: {
-      id: "pac",
-      nome: "Correios PAC",
-      valor: Number(pac.toFixed(2)),
-      prazo: prazoPac,
-      destaque: "Mais escolhido",
-    },
-    sedex: {
-      id: "sedex",
-      nome: "Correios Sedex",
-      valor: Number(sedex.toFixed(2)),
-      prazo: prazoSedex,
-      destaque: "Entrega mais rápida",
-    },
+    totalItens,
+    pesoKg,
+    larguraCm,
+    alturaCm,
+    comprimentoCm,
   };
+}
+
+function montarProdutosParaCotacao(body: any) {
+  const itens: ItemCarrinhoFrete[] = Array.isArray(body?.itens)
+    ? body.itens
+    : Array.isArray(body?.items)
+      ? body.items
+      : [];
+
+  if (itens.length > 0) {
+    return itens
+      .map((item, index) => {
+        const quantidade = Math.max(1, Math.ceil(Number(item.quantidade || item.qtd || 1)));
+        const preco = numeroSeguro(item.preco || item.precoVenda || item.valor, 1);
+        const pacote = getConfiguracaoPacote(1);
+
+        return {
+          id: String(item.id || item.produtoId || `produto-${index + 1}`),
+          width: pacote.larguraCm,
+          height: pacote.alturaCm,
+          length: pacote.comprimentoCm,
+          weight: pacote.pesoKg,
+          insurance_value: Number(preco.toFixed(2)),
+          quantity: quantidade,
+        };
+      })
+      .filter((item) => item.quantity > 0);
+  }
+
+  const totalItens = Math.max(1, Math.ceil(Number(body?.totalItens || body?.quantidade || 1)));
+  const subtotal = numeroSeguro(body?.subtotal || body?.valor || body?.total, 1);
+  const pacote = getConfiguracaoPacote(totalItens);
+
+  return [
+    {
+      id: "pedido-maison-noor",
+      width: pacote.larguraCm,
+      height: pacote.alturaCm,
+      length: pacote.comprimentoCm,
+      weight: pacote.pesoKg,
+      insurance_value: Number(subtotal.toFixed(2)),
+      quantity: 1,
+    },
+  ];
+}
+
+function formatarPrazo(dias: unknown) {
+  const numero = Number(dias);
+
+  if (!Number.isFinite(numero) || numero <= 0) {
+    return "Prazo a confirmar";
+  }
+
+  const arredondado = Math.ceil(numero);
+  return arredondado === 1 ? "1 dia útil" : `${arredondado} dias úteis`;
+}
+
+function normalizarCotacoes(cotacoes: MelhorEnvioQuote[]) {
+  const opcoes = cotacoes
+    .filter((item) => !item?.error)
+    .map((item) => {
+      const valor = Number(item.custom_price ?? item.price ?? 0);
+      const prazo = item.custom_delivery_time ?? item.delivery_time;
+      const companyName = String(item.company?.name || "").trim();
+      const serviceName = String(item.name || "Entrega").trim();
+      const nome = companyName ? `${companyName} ${serviceName}` : serviceName;
+
+      return {
+        id: String(item.id || `${companyName}-${serviceName}`).replace(/\s+/g, "-").toLowerCase(),
+        codigo: String(item.id || ""),
+        nome,
+        servico: serviceName,
+        transportadora: companyName,
+        valor: Number(valor.toFixed(2)),
+        prazo: formatarPrazo(prazo),
+        prazoDias: Number(prazo) || null,
+        destaque: "",
+      };
+    })
+    .filter((item) => item.nome && Number.isFinite(item.valor) && item.valor > 0)
+    .sort((a, b) => {
+      if (a.valor !== b.valor) return a.valor - b.valor;
+      return Number(a.prazoDias || 999) - Number(b.prazoDias || 999);
+    });
+
+  if (!opcoes.length) return [];
+
+  const menorValor = Math.min(...opcoes.map((item) => item.valor));
+  const menorPrazo = Math.min(...opcoes.map((item) => Number(item.prazoDias || 999)));
+
+  return opcoes.slice(0, 6).map((item, index) => {
+    let destaque = "Opção de entrega";
+
+    if (item.valor === menorValor) destaque = "Mais econômico";
+    if (Number(item.prazoDias || 999) === menorPrazo) destaque = "Entrega mais rápida";
+    if (index === 0 && destaque === "Opção de entrega") destaque = "Mais escolhido";
+
+    return {
+      ...item,
+      destaque,
+    };
+  });
+}
+
+function extrairMensagemErro(data: any) {
+  if (!data) return "";
+
+  if (typeof data === "string") return data;
+
+  if (data?.message) return String(data.message);
+  if (data?.error) return String(data.error);
+  if (data?.erro) return String(data.erro);
+
+  const errors = data?.errors;
+  if (Array.isArray(errors)) {
+    return errors
+      .map((item) => item?.message || item?.description || item)
+      .filter(Boolean)
+      .join(" | ");
+  }
+
+  if (errors && typeof errors === "object") {
+    return Object.values(errors).flat().join(" | ");
+  }
+
+  return "";
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const cep = body?.cep;
-    const subtotal = Number(body?.subtotal || body?.valor || body?.total || 0);
+    const cepDestino = somenteNumeros(body?.cep || body?.cepDestino || body?.destino);
+    const cepOrigem = somenteNumeros(
+      process.env.MELHOR_ENVIO_ORIGIN_CEP ||
+        process.env.CEP_ORIGEM ||
+        process.env.NEXT_PUBLIC_CEP_ORIGEM ||
+        "12230000"
+    );
 
-    if (!cep) {
+    const token = getEnv("MELHOR_ENVIO_TOKEN");
+    const userAgent = getEnv(
+      "MELHOR_ENVIO_USER_AGENT",
+      "Maison Noor (andre_lbatista@outlook.com)"
+    );
+
+    if (!cepDestino || cepDestino.length !== 8) {
+      return NextResponse.json({ erro: "CEP de destino inválido." }, { status: 400 });
+    }
+
+    if (!cepOrigem || cepOrigem.length !== 8) {
+      return NextResponse.json({ erro: "CEP de origem inválido." }, { status: 500 });
+    }
+
+    if (!token) {
       return NextResponse.json(
-        { erro: "CEP não informado" },
-        { status: 400 }
+        { erro: "Token do Melhor Envio não configurado no servidor." },
+        { status: 500 }
       );
     }
 
-    const frete = calcularFrete(cep, subtotal);
+    const produtos = montarProdutosParaCotacao(body);
 
-    if (!frete) {
+    const payload = {
+      from: {
+        postal_code: cepOrigem,
+      },
+      to: {
+        postal_code: cepDestino,
+      },
+      products: produtos,
+      options: {
+        receipt: false,
+        own_hand: false,
+        collect: false,
+      },
+    };
+
+    const endpoint = `${getMelhorEnvioBaseUrl()}/api/v2/me/shipment/calculate`;
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        "User-Agent": userAgent,
+      },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      console.error("Erro Melhor Envio:", {
+        status: response.status,
+        data,
+      });
+
       return NextResponse.json(
-        { erro: "CEP inválido" },
-        { status: 400 }
+        {
+          erro:
+            extrairMensagemErro(data) ||
+            "Não foi possível calcular o frete pelo Melhor Envio.",
+          detalhes: data,
+        },
+        { status: response.status }
+      );
+    }
+
+    const cotacoes = Array.isArray(data) ? data : data?.data || [];
+    const opcoes = normalizarCotacoes(cotacoes);
+
+    if (!opcoes.length) {
+      return NextResponse.json(
+        {
+          erro: "O Melhor Envio não retornou opções disponíveis para esse CEP.",
+          detalhes: data,
+        },
+        { status: 422 }
       );
     }
 
     return NextResponse.json({
-      origem: CEP_ORIGEM,
-      destino: somenteNumeros(cep),
-      subtotal,
-      opcoes: frete,
+      origem: cepOrigem,
+      destino: cepDestino,
+      subtotal: Number(body?.subtotal || body?.valor || body?.total || 0),
+      plataforma: "melhor_envio",
+      opcoes,
+      raw: process.env.NODE_ENV === "development" ? data : undefined,
     });
   } catch (error) {
-    console.error("Erro ao calcular frete:", error);
+    console.error("Erro ao calcular frete Melhor Envio:", error);
 
     return NextResponse.json(
-      { erro: "Erro ao calcular frete" },
+      { erro: "Erro ao calcular frete pelo Melhor Envio." },
       { status: 500 }
     );
   }

@@ -195,6 +195,12 @@ async function consultarFrete(cepDigits: string, subtotal: number, totalItens: n
       cep: cepDigits,
       subtotal,
       totalItens,
+      itens: getCartFromStorage().map((item) => ({
+        id: item.id || item.produtoId || item.nome,
+        nome: item.nome,
+        quantidade: Number(item.qtd || item.quantidade || 1),
+        preco: Number(item.preco || item.precoVenda || 0),
+      })),
     }),
   });
 
@@ -458,7 +464,7 @@ export default function CheckoutPage() {
     try {
       setLoadingFrete(true);
       setErroFrete("");
-      if (exibirFeedback) setCheckoutFeedback("Calculando frete pelos Correios...");
+      if (exibirFeedback) setCheckoutFeedback("Calculando frete pelo Melhor Envio...");
 
       const options = await consultarFrete(digits, subtotal, totalItens);
       setFreightOptions(options);
@@ -1294,7 +1300,7 @@ export default function CheckoutPage() {
               </div>
               <div style={styles.heroHighlightCard}>
                 <span style={styles.heroHighlightTitle}>Envio estimado</span>
-                <span style={styles.heroHighlightText}>Prazo e frete antes de finalizar</span>
+                <span style={styles.heroHighlightText}>Frete real antes de finalizar</span>
               </div>
             </div>
           </div>
@@ -1433,7 +1439,7 @@ export default function CheckoutPage() {
               </div>
 
               {loadingFrete ? (
-                <div style={styles.noticeSoftBox}>Calculando frete pelos Correios...</div>
+                <div style={styles.noticeSoftBox}>Calculando frete pelo Melhor Envio...</div>
               ) : freightOptions.length > 0 ? (
                 <div style={styles.freightListPremium}>
                   {freightOptions.map((option) => {
