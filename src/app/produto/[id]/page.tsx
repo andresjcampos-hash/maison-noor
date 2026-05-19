@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import type { CSSProperties, MouseEvent } from "react";
 import { db } from "@/lib/firebase";
 import {
@@ -19,6 +19,7 @@ type CategoriaCRM = "masculino" | "feminino" | "unissex";
 
 type ProdutoFirebase = {
   id: string;
+  slug?: string;
   nome: string;
   marca?: string;
   volumeMl?: number;
@@ -75,6 +76,7 @@ type ProdutoCarrinho = {
 
 type ProdutoRelacionado = {
   id: string;
+  slug?: string;
   nome: string;
   marca?: string;
   preco: number;
@@ -372,6 +374,20 @@ function limparDescricaoSeo(valor?: string) {
     .slice(0, 155);
 }
 
+function getProdutoSlug(produto: Pick<ProdutoFirebase, "slug" | "nome" | "id">): string {
+  const slug = String(produto.slug || "").trim();
+  return slug || slugify(produto.nome || produto.id);
+}
+
+function getProdutoUrl(produto: Pick<ProdutoFirebase, "slug" | "nome" | "id">): string {
+  return `/produto/${getProdutoSlug(produto)}`;
+}
+
+function isPossivelIdFirebase(valor: string): boolean {
+  return /^[A-Za-z0-9_-]{12,}$/.test(String(valor || "").trim());
+}
+
+
 function atualizarMetaTag(atributo: "name" | "property", chave: string, conteudo: string) {
   if (typeof document === "undefined") return;
 
@@ -388,6 +404,7 @@ function atualizarMetaTag(atributo: "name" | "property", chave: string, conteudo
 
 export default function ProdutoPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = params?.id as string;
 
   const [produto, setProduto] = useState<ProdutoFirebase | null>(null);
@@ -421,8 +438,17 @@ export default function ProdutoPage() {
         setLoading(true);
         setErro("");
 
-        const ref = doc(db, "products", id);
-        const snap = await getDoc(ref);
+        let snap = await getDoc(doc(db, "products", id));
+
+        if (!snap.exists()) {
+          const slugSnap = await getDocs(
+            query(collection(db, "products"), where("slug", "==", id), limit(1)),
+          );
+
+          if (!slugSnap.empty) {
+            snap = slugSnap.docs[0];
+          }
+        }
 
         if (!snap.exists()) {
           setProduto(null);
@@ -431,9 +457,15 @@ export default function ProdutoPage() {
         }
 
         const data = snap.data() as any;
+        const slugAtual = String(data.slug || "").trim() || slugify(data.nome || snap.id);
+
+        if (isPossivelIdFirebase(id) && slugAtual && slugAtual !== id) {
+          router.replace(`/produto/${slugAtual}`);
+        }
 
         setProduto({
           id: snap.id,
+          slug: slugAtual,
           nome: data.nome ?? "",
           marca: data.marca,
           volumeMl: data.volumeMl,
@@ -488,7 +520,7 @@ export default function ProdutoPage() {
     }
 
     carregarProduto();
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => {
     async function carregarRelacionados() {
@@ -528,6 +560,7 @@ export default function ProdutoPage() {
 
             acumulado.set(item.id, {
               id: item.id,
+              slug: data.slug || slugify(data.nome || item.id),
               nome: data.nome || "Perfume Maison Noor",
               marca: data.marca,
               preco: Number(data.precoVenda) || 0,
@@ -619,7 +652,7 @@ export default function ProdutoPage() {
     const categoria = produtoPronto.categoriaFinal || "perfume árabe";
     const preco = produtoPronto.precoFinal || 0;
     const imagem = urlAbsoluta(produtoPronto.imagemFinal);
-    const url = `${SITE_URL}/produto/${produtoPronto.id}`;
+    const url = `${SITE_URL}${getProdutoUrl(produtoPronto)}`;
     const titulo = `${produtoPronto.nome} | Perfume Árabe Premium | Maison Noor`;
     const descricao = limparDescricaoSeo(
       `${produtoPronto.nome} ${marca}. ${produtoPronto.descricaoFinal} ${produtoPronto.tamanho !== "—" ? `Volume ${produtoPronto.tamanho}.` : ""} Curadoria premium Maison Noor.`,
@@ -1964,7 +1997,7 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               {relacionados.map((item) => (
                 <Link
                   key={item.id}
-                  href={`/produto/${item.id}`}
+                  href={`/produto/${item.slug || item.id}`}
                   style={styles.relatedCard}
                 >
                   <div style={styles.relatedImageWrap}>
