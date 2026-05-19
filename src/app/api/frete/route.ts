@@ -13,7 +13,6 @@ type ItemCarrinhoFrete = {
   precoVenda?: number;
   valor?: number;
 
-  // Preparado para quando o CRM passar dimensões reais por produto.
   pesoKg?: number;
   weight?: number;
   larguraCm?: number;
@@ -29,8 +28,6 @@ type MelhorEnvioQuote = {
   name?: string;
   price?: string | number;
   custom_price?: string | number;
-  discount?: string | number;
-  currency?: string;
   delivery_time?: number | string;
   custom_delivery_time?: number | string;
   company?: {
@@ -101,25 +98,22 @@ function getFreteGratisMinimo() {
 function getConfiguracaoPacote(totalItensRaw: unknown) {
   const totalItens = Math.max(1, Math.ceil(Number(totalItensRaw || 1)));
 
-  const pesoPorItemKg = numeroSeguro(
-    process.env.MELHOR_ENVIO_PRODUCT_WEIGHT_KG,
-    0.55
-  );
+  // Padrão seguro para perfumes/body splash embalados.
+  // Pode ser sobrescrito no .env depois, sem mexer no código.
+  const pesoPorItemKg = numeroSeguro(process.env.MELHOR_ENVIO_PRODUCT_WEIGHT_KG, 0.45);
+  const larguraCm = numeroSeguro(process.env.MELHOR_ENVIO_PACKAGE_WIDTH_CM, 16);
+  const alturaBaseCm = numeroSeguro(process.env.MELHOR_ENVIO_PACKAGE_HEIGHT_CM, 12);
+  const comprimentoCm = numeroSeguro(process.env.MELHOR_ENVIO_PACKAGE_LENGTH_CM, 22);
 
-  const larguraCm = numeroSeguro(process.env.MELHOR_ENVIO_PACKAGE_WIDTH_CM, 14);
-  const alturaBaseCm = numeroSeguro(process.env.MELHOR_ENVIO_PACKAGE_HEIGHT_CM, 10);
-  const comprimentoCm = numeroSeguro(process.env.MELHOR_ENVIO_PACKAGE_LENGTH_CM, 20);
-
-  // Mantém a caixa realista quando houver mais de 1 perfume no pedido.
   const alturaCm = Math.min(100, alturaBaseCm + Math.max(0, totalItens - 1) * 4);
-  const pesoKg = Math.min(30, pesoPorItemKg * totalItens);
+  const pesoKg = Math.min(30, Math.max(0.3, pesoPorItemKg * totalItens));
 
   return {
     totalItens,
-    pesoKg,
-    larguraCm,
-    alturaCm,
-    comprimentoCm,
+    pesoKg: Number(pesoKg.toFixed(3)),
+    larguraCm: Number(larguraCm.toFixed(1)),
+    alturaCm: Number(alturaCm.toFixed(1)),
+    comprimentoCm: Number(comprimentoCm.toFixed(1)),
   };
 }
 
@@ -143,11 +137,11 @@ function montarProdutosParaCotacao(body: any) {
         const weight = numeroSeguro(item.pesoKg || item.weight, pacotePadrao.pesoKg);
 
         return {
-          id: String(item.id || item.produtoId || `produto-${index + 1}`),
-          width,
-          height,
-          length,
-          weight,
+          id: String(item.id || item.produtoId || `produto-${index + 1}`).slice(0, 64),
+          width: Number(width.toFixed(1)),
+          height: Number(height.toFixed(1)),
+          length: Number(length.toFixed(1)),
+          weight: Number(weight.toFixed(3)),
           insurance_value: Number(preco.toFixed(2)),
           quantity: quantidade,
         };
@@ -170,6 +164,20 @@ function montarProdutosParaCotacao(body: any) {
       quantity: 1,
     },
   ];
+}
+
+function montarPacoteUnicoParaCotacao(body: any) {
+  const totalItens = Math.max(1, Math.ceil(Number(body?.totalItens || body?.quantidade || 1)));
+  const subtotal = numeroSeguro(body?.subtotal || body?.valor || body?.total, 1);
+  const pacote = getConfiguracaoPacote(totalItens);
+
+  return {
+    width: pacote.larguraCm,
+    height: pacote.alturaCm,
+    length: pacote.comprimentoCm,
+    weight: pacote.pesoKg,
+    insurance_value: Number(subtotal.toFixed(2)),
+  };
 }
 
 function formatarPrazo(dias: unknown) {
@@ -216,7 +224,9 @@ function normalizarCotacoes(cotacoes: MelhorEnvioQuote[], subtotalRaw: unknown) 
       const companyName = String(item.company?.name || "").trim();
       const serviceName = String(item.name || "Entrega").trim();
       const nome = companyName ? `${companyName} ${serviceName}` : serviceName;
-      const idBase = String(item.id || `${companyName}-${serviceName}`).replace(/\s+/g, "-").toLowerCase();
+      const idBase = String(item.id || `${companyName}-${serviceName}`)
+        .replace(/\s+/g, "-")
+        .toLowerCase();
 
       return {
         id: idBase,
@@ -281,23 +291,117 @@ function extrairMensagemErro(data: any) {
 
   if (typeof data === "string") return data;
 
-  if (data?.message) return String(data.message);
-  if (data?.error) return String(data.error);
-  if (data?.erro) return String(data.erro);
+  const mensagens: string[] = [];
+
+  if (data?.message) mensagens.push(String(data.message));
+  if (data?.error) mensagens.push(String(data.error));
+  if (data?.erro) mensagens.push(String(data.erro));
 
   const errors = data?.errors;
+
   if (Array.isArray(errors)) {
-    return errors
-      .map((item) => item?.message || item?.description || item)
-      .filter(Boolean)
-      .join(" | ");
+    for (const item of errors) {
+      if (typeof item === "string") mensagens.push(item);
+      if (item?.message) mensagens.push(String(item.message));
+      if (item?.description) mensagens.push(String(item.description));
+    }
   }
 
-  if (errors && typeof errors === "object") {
-    return Object.values(errors).flat().join(" | ");
+  if (errors && typeof errors === "object" && !Array.isArray(errors)) {
+    Object.entries(errors).forEach(([campo, valor]) => {
+      if (Array.isArray(valor)) {
+        valor.forEach((msg) => mensagens.push(`${campo}: ${String(msg)}`));
+      } else if (valor) {
+        mensagens.push(`${campo}: ${String(valor)}`);
+      }
+    });
   }
 
-  return "";
+  return Array.from(new Set(mensagens.filter(Boolean))).join(" | ");
+}
+
+function calcularFreteFallback(cepOrigem: string, cepDestino: string, subtotalRaw: unknown) {
+  const origemBase = Number(cepOrigem.substring(0, 5));
+  const destinoBase = Number(cepDestino.substring(0, 5));
+  const distancia = Math.abs(destinoBase - origemBase);
+  const subtotal = Number(subtotalRaw || 0);
+  const minimoFreteGratis = getFreteGratisMinimo();
+
+  let economico = 18.9;
+  let expresso = 29.9;
+  let prazoEco = 7;
+  let prazoExp = 3;
+
+  if (distancia <= 900) {
+    economico = 14.9;
+    expresso = 22.9;
+    prazoEco = 5;
+    prazoExp = 2;
+  } else if (distancia <= 3000) {
+    economico = 22.9;
+    expresso = 34.9;
+    prazoEco = 8;
+    prazoExp = 4;
+  } else if (distancia <= 7000) {
+    economico = 31.9;
+    expresso = 48.9;
+    prazoEco = 11;
+    prazoExp = 6;
+  } else {
+    economico = 39.9;
+    expresso = 59.9;
+    prazoEco = 13;
+    prazoExp = 8;
+  }
+
+  const freteGratis = subtotal >= minimoFreteGratis;
+  const valorEconomico = freteGratis ? 0 : economico;
+
+  return [
+    {
+      id: "fallback-economico",
+      codigo: "fallback-economico",
+      nome: "Entrega econômica",
+      servico: "Econômica",
+      transportadora: "Maison Noor",
+      valor: Number(valorEconomico.toFixed(2)),
+      valorOriginal: Number(economico.toFixed(2)),
+      prazo: formatarPrazo(prazoEco),
+      prazoDias: prazoEco,
+      destaque: freteGratis ? "Frete grátis" : "Estimativa segura",
+      freteGratis,
+    },
+    {
+      id: "fallback-expresso",
+      codigo: "fallback-expresso",
+      nome: "Entrega expressa",
+      servico: "Expressa",
+      transportadora: "Maison Noor",
+      valor: Number(expresso.toFixed(2)),
+      valorOriginal: Number(expresso.toFixed(2)),
+      prazo: formatarPrazo(prazoExp),
+      prazoDias: prazoExp,
+      destaque: "Entrega mais rápida",
+      freteGratis: false,
+    },
+  ];
+}
+
+async function cotarMelhorEnvio(endpoint: string, token: string, userAgent: string, payload: any) {
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": userAgent,
+    },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  const data = await response.json().catch(() => null);
+  return { response, data };
 }
 
 export async function POST(req: Request) {
@@ -334,9 +438,11 @@ export async function POST(req: Request) {
     }
 
     const produtos = montarProdutosParaCotacao(body);
+    const pacoteUnico = montarPacoteUnicoParaCotacao(body);
     const subtotal = Number(body?.subtotal || body?.valor || body?.total || 0);
+    const endpoint = `${getMelhorEnvioBaseUrl()}/api/v2/me/shipment/calculate`;
 
-    const payload = {
+    const payloadProdutos = {
       from: {
         postal_code: cepOrigem,
       },
@@ -348,72 +454,108 @@ export async function POST(req: Request) {
         receipt: false,
         own_hand: false,
         collect: false,
-        insurance_value: Math.max(1, Number(subtotal || 1)),
       },
     };
 
-    const endpoint = `${getMelhorEnvioBaseUrl()}/api/v2/me/shipment/calculate`;
+    let { response, data } = await cotarMelhorEnvio(endpoint, token, userAgent, payloadProdutos);
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        "User-Agent": userAgent,
-      },
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    });
-
-    const data = await response.json().catch(() => null);
-
+    // Segunda tentativa usando package único. Isso evita erro em algumas transportadoras
+    // quando a validação de products fica restritiva.
     if (!response.ok) {
-      console.error("Erro Melhor Envio:", {
+      console.error("Erro Melhor Envio com products:", {
         status: response.status,
         data,
+        payload: payloadProdutos,
       });
 
-      return NextResponse.json(
-        {
-          erro:
-            extrairMensagemErro(data) ||
-            "Não foi possível calcular o frete pelo Melhor Envio.",
-          detalhes: data,
+      const payloadPacote = {
+        from: {
+          postal_code: cepOrigem,
         },
-        { status: response.status }
-      );
+        to: {
+          postal_code: cepDestino,
+        },
+        package: pacoteUnico,
+        options: {
+          receipt: false,
+          own_hand: false,
+          collect: false,
+          insurance_value: Math.max(1, Number(subtotal || 1)),
+        },
+      };
+
+      const tentativaPacote = await cotarMelhorEnvio(endpoint, token, userAgent, payloadPacote);
+      response = tentativaPacote.response;
+      data = tentativaPacote.data;
+
+      if (!response.ok) {
+        console.error("Erro Melhor Envio com package:", {
+          status: response.status,
+          data,
+          payload: payloadPacote,
+        });
+      }
     }
 
-    const cotacoes = Array.isArray(data) ? data : data?.data || [];
+    const cotacoes = response.ok ? (Array.isArray(data) ? data : data?.data || []) : [];
     const opcoes = normalizarCotacoes(cotacoes, subtotal);
-
-    if (!opcoes.length) {
-      return NextResponse.json(
-        {
-          erro: "O Melhor Envio não retornou opções disponíveis para esse CEP.",
-          detalhes: data,
-        },
-        { status: 422 }
-      );
-    }
-
     const freteGratisMinimo = getFreteGratisMinimo();
 
-    return NextResponse.json({
-      origem: cepOrigem,
-      destino: cepDestino,
-      subtotal,
-      plataforma: "melhor_envio",
-      freteGratisMinimo,
-      faltaParaFreteGratis: Math.max(0, Number((freteGratisMinimo - subtotal).toFixed(2))),
-      freteGratisDisponivel: subtotal >= freteGratisMinimo,
-      pacote: {
-        produtos,
+    if (opcoes.length) {
+      return NextResponse.json({
+        origem: cepOrigem,
+        destino: cepDestino,
+        subtotal,
+        plataforma: "melhor_envio",
+        freteGratisMinimo,
+        faltaParaFreteGratis: Math.max(0, Number((freteGratisMinimo - subtotal).toFixed(2))),
+        freteGratisDisponivel: subtotal >= freteGratisMinimo,
+        pacote: {
+          produtos,
+          pacoteUnico,
+        },
+        opcoes,
+        raw: process.env.NODE_ENV === "development" ? data : undefined,
+      });
+    }
+
+    const mensagemMelhorEnvio =
+      extrairMensagemErro(data) ||
+      "O Melhor Envio não retornou opções disponíveis para esse CEP.";
+
+    const permitirFallback =
+      getEnv("MELHOR_ENVIO_ALLOW_FALLBACK", "true").toLowerCase() !== "false";
+
+    if (permitirFallback) {
+      const opcoesFallback = calcularFreteFallback(cepOrigem, cepDestino, subtotal);
+
+      return NextResponse.json({
+        origem: cepOrigem,
+        destino: cepDestino,
+        subtotal,
+        plataforma: "fallback_maison_noor",
+        fallback: true,
+        aviso:
+          "Cotação automática indisponível no Melhor Envio para este CEP. Exibimos uma estimativa segura para não travar o checkout.",
+        erroMelhorEnvio: mensagemMelhorEnvio,
+        freteGratisMinimo,
+        faltaParaFreteGratis: Math.max(0, Number((freteGratisMinimo - subtotal).toFixed(2))),
+        freteGratisDisponivel: subtotal >= freteGratisMinimo,
+        pacote: {
+          produtos,
+          pacoteUnico,
+        },
+        opcoes: opcoesFallback,
+      });
+    }
+
+    return NextResponse.json(
+      {
+        erro: mensagemMelhorEnvio,
+        detalhes: data,
       },
-      opcoes,
-      raw: process.env.NODE_ENV === "development" ? data : undefined,
-    });
+      { status: response.status || 422 }
+    );
   } catch (error) {
     console.error("Erro ao calcular frete Melhor Envio:", error);
 
