@@ -194,8 +194,13 @@ function consultarTabelaLocal(cepDestino: string, pacote: ReturnType<typeof mont
     } | null = null;
 
     for (const linha of tabela.linhas) {
-      const [cepIni, cepFim, pesoMin, pesoMax, , , , fatorCubagem] = linha;
+      const cepIni = numeroSeguro(linha[0], 0);
+      const cepFim = numeroSeguro(linha[1], 0);
+      const pesoMin = numeroSeguro(linha[2], 0);
+      const pesoMax = numeroSeguro(linha[3], 0);
+      const fatorCubagem = numeroSeguro(linha[7], 6000);
 
+      if (!cepIni || !cepFim || !pesoMax) continue;
       if (cepNumero < cepIni || cepNumero > cepFim) continue;
 
       const pesoTaxadoGramas = calcularPesoTaxadoGramas(pacote, fatorCubagem);
@@ -208,7 +213,10 @@ function consultarTabelaLocal(cepDestino: string, pacote: ReturnType<typeof mont
 
     if (!melhor) continue;
 
-    const [, , , , precoBase, prazoMin, prazoMax, , servico] = melhor.linha;
+    const precoBase = numeroSeguro(melhor.linha[4], 0);
+    const prazoMin = numeroSeguro(melhor.linha[5], 0);
+    const prazoMax = numeroSeguro(melhor.linha[6], 0);
+    const servico = String(melhor.linha[8] || tabela.servicoOriginal || nomeTabela);
     const nome = nomeExibicao(servico, nomeTabela);
     const valorOriginal = arredondarPremium(precoBase + MARGEM_OPERACIONAL_FRETE);
     const prazoDias = prazoMax || prazoMin || null;
