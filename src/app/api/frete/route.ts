@@ -19,17 +19,7 @@ type ItemFrete = {
   length?: number;
 };
 
-type LinhaTabela = [
-  number, // CEP Inicial
-  number, // CEP Final
-  number, // Peso Mínimo g
-  number, // Peso Máximo g
-  number, // Preço
-  number, // Prazo Mínimo
-  number, // Prazo Máximo
-  number, // Fator cubagem
-  string  // Serviço
-];
+type LinhaTabela = (string | number)[];
 
 type TabelaLocal = {
   servicoOriginal: string;
