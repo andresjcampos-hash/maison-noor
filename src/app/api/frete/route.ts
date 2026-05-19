@@ -238,16 +238,44 @@ function consultarTabelaLocal(cepDestino: string, pacote: ReturnType<typeof mont
 
   if (!opcoes.length) return [];
 
-  opcoes.sort((a, b) => {
+  // Remove duplicados: quando a tabela possui várias faixas válidas para o mesmo serviço,
+  // mantemos apenas a melhor opção por nome de entrega.
+  const melhoresPorServico = new Map<string, any>();
+
+  for (const opcao of opcoes) {
+    const chave = normalizarTexto(opcao.nome).replace(/[^a-z0-9]+/g, "_");
+    const atual = melhoresPorServico.get(chave);
+
+    if (!atual) {
+      melhoresPorServico.set(chave, opcao);
+      continue;
+    }
+
+    const valorOpcao = Number(opcao.valor || 0);
+    const valorAtual = Number(atual.valor || 0);
+    const prazoOpcao = Number(opcao.prazoDias || 999);
+    const prazoAtual = Number(atual.prazoDias || 999);
+
+    if (valorOpcao < valorAtual || (valorOpcao === valorAtual && prazoOpcao < prazoAtual)) {
+      melhoresPorServico.set(chave, opcao);
+    }
+  }
+
+  const opcoesUnicas = Array.from(melhoresPorServico.values()).map((opcao, index) => ({
+    ...opcao,
+    id: `${normalizarTexto(opcao.nome).replace(/[^a-z0-9]+/g, "_")}_${index}`,
+  }));
+
+  opcoesUnicas.sort((a, b) => {
     const valorDiff = Number(a.valor) - Number(b.valor);
     if (valorDiff !== 0) return valorDiff;
     return Number(a.prazoDias || 999) - Number(b.prazoDias || 999);
   });
 
-  const menorValor = Math.min(...opcoes.map((o) => Number(o.valor)));
-  const menorPrazo = Math.min(...opcoes.map((o) => Number(o.prazoDias || 999)));
+  const menorValor = Math.min(...opcoesUnicas.map((o) => Number(o.valor)));
+  const menorPrazo = Math.min(...opcoesUnicas.map((o) => Number(o.prazoDias || 999)));
 
-  const comDestaque = opcoes.map((opcao) => ({
+  const comDestaque = opcoesUnicas.map((opcao) => ({
     ...opcao,
     destaque: montarDestaque(opcao.nome, Number(opcao.valor), menorValor, Number(opcao.prazoDias || 999), menorPrazo),
   }));
