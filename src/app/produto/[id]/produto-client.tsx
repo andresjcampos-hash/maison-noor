@@ -22,6 +22,7 @@ type CategoriaCRM = "masculino" | "feminino" | "unissex";
 
 type ProdutoFirebase = {
   id: string;
+  slug?: string;
   nome: string;
   marca?: string;
   volumeMl?: number;
