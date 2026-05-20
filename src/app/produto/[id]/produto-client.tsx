@@ -2,19 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import type { CSSProperties, MouseEvent } from "react";
 import { db } from "@/lib/firebase";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
   limit,
-  orderBy,
   query,
-  serverTimestamp,
   where,
 } from "firebase/firestore";
 
@@ -79,24 +76,13 @@ type ProdutoCarrinho = {
 
 type ProdutoRelacionado = {
   id: string;
+  slug?: string;
   nome: string;
   marca?: string;
   preco: number;
   imagem: string;
   categoria: string;
   tamanho: string;
-};
-
-type AvaliacaoProduto = {
-  id: string;
-  produtoId: string;
-  produtoSlug: string;
-  nome: string;
-  nota: number;
-  comentario: string;
-  titulo?: string;
-  createdAt?: any;
-  aprovado?: boolean;
 };
 
 function formatarMoeda(valor: number) {
@@ -114,6 +100,11 @@ function slugify(texto: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+function getProdutoSlug(produto: Pick<ProdutoFirebase, "slug" | "nome" | "id">): string {
+  const slug = String(produto.slug || "").trim();
+  return slug || slugify(produto.nome || produto.id);
 }
 
 function categoriaSite(categoria?: CategoriaCRM): string {
@@ -388,6 +379,20 @@ function limparDescricaoSeo(valor?: string) {
     .slice(0, 155);
 }
 
+function getProdutoSlug(produto: Pick<ProdutoFirebase, "slug" | "nome" | "id">): string {
+  const slug = String(produto.slug || "").trim();
+  return slug || slugify(produto.nome || produto.id);
+}
+
+function getProdutoUrl(produto: Pick<ProdutoFirebase, "slug" | "nome" | "id">): string {
+  return `/produto/${getProdutoSlug(produto)}`;
+}
+
+function isPossivelIdFirebase(valor: string): boolean {
+  return /^[A-Za-z0-9_-]{12,}$/.test(String(valor || "").trim());
+}
+
+
 function atualizarMetaTag(atributo: "name" | "property", chave: string, conteudo: string) {
   if (typeof document === "undefined") return;
 
@@ -402,8 +407,9 @@ function atualizarMetaTag(atributo: "name" | "property", chave: string, conteudo
   meta.setAttribute("content", conteudo);
 }
 
-export default function ProdutoPage() {
+export default function ProdutoClient() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = params?.id as string;
 
   const [produto, setProduto] = useState<ProdutoFirebase | null>(null);
@@ -418,15 +424,6 @@ export default function ProdutoPage() {
   const [hoverBuyNow, setHoverBuyNow] = useState(false);
   const [hoverAddCart, setHoverAddCart] = useState(false);
   const [hoverWhatsapp, setHoverWhatsapp] = useState(false);
-  const [avaliacoesReais, setAvaliacoesReais] = useState<AvaliacaoProduto[]>([]);
-  const [carregandoAvaliacoes, setCarregandoAvaliacoes] = useState(false);
-  const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
-  const [mensagemAvaliacao, setMensagemAvaliacao] = useState("");
-  const [formAvaliacao, setFormAvaliacao] = useState({
-    nome: "",
-    nota: 5,
-    comentario: "",
-  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -446,8 +443,17 @@ export default function ProdutoPage() {
         setLoading(true);
         setErro("");
 
-        const ref = doc(db, "products", id);
-        const snap = await getDoc(ref);
+        let snap = await getDoc(doc(db, "products", id));
+
+        if (!snap.exists()) {
+          const slugSnap = await getDocs(
+            query(collection(db, "products"), where("slug", "==", id), limit(1)),
+          );
+
+          if (!slugSnap.empty) {
+            snap = slugSnap.docs[0];
+          }
+        }
 
         if (!snap.exists()) {
           setProduto(null);
@@ -456,9 +462,15 @@ export default function ProdutoPage() {
         }
 
         const data = snap.data() as any;
+        const slugAtual = String(data.slug || "").trim() || slugify(data.nome || snap.id);
+
+        if (isPossivelIdFirebase(id) && slugAtual && slugAtual !== id) {
+          router.replace(`/produto/${slugAtual}`);
+        }
 
         setProduto({
           id: snap.id,
+          slug: slugAtual,
           nome: data.nome ?? "",
           marca: data.marca,
           volumeMl: data.volumeMl,
@@ -513,7 +525,7 @@ export default function ProdutoPage() {
     }
 
     carregarProduto();
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => {
     async function carregarRelacionados() {
@@ -553,6 +565,7 @@ export default function ProdutoPage() {
 
             acumulado.set(item.id, {
               id: item.id,
+              slug: data.slug || slugify(data.nome || item.id),
               nome: data.nome || "Perfume Maison Noor",
               marca: data.marca,
               preco: Number(data.precoVenda) || 0,
@@ -578,60 +591,6 @@ export default function ProdutoPage() {
 
     carregarRelacionados();
   }, [produto]);
-
-  useEffect(() => {
-    async function carregarAvaliacoes() {
-      if (!produto?.id) return;
-
-      try {
-        setCarregandoAvaliacoes(true);
-
-        const slugProduto = String(produto.slug || slugify(produto.nome || produto.id)).trim();
-        const reviewsRef = collection(db, "reviews");
-
-        const consultas = [
-          query(reviewsRef, where("produtoSlug", "==", slugProduto), orderBy("createdAt", "desc"), limit(30)),
-          query(reviewsRef, where("produtoId", "==", produto.id), orderBy("createdAt", "desc"), limit(30)),
-        ];
-
-        const acumulado = new Map<string, AvaliacaoProduto>();
-
-        for (const consulta of consultas) {
-          const snap = await getDocs(consulta);
-
-          snap.docs.forEach((item) => {
-            if (acumulado.has(item.id)) return;
-
-            const data = item.data() as any;
-            const aprovado = data.aprovado !== false;
-
-            if (!aprovado) return;
-
-            acumulado.set(item.id, {
-              id: item.id,
-              produtoId: String(data.produtoId || produto.id),
-              produtoSlug: String(data.produtoSlug || slugProduto),
-              nome: String(data.nome || "Cliente Maison Noor").trim(),
-              nota: Math.min(5, Math.max(1, Number(data.nota) || 5)),
-              comentario: String(data.comentario || "").trim(),
-              titulo: String(data.titulo || "").trim(),
-              createdAt: data.createdAt,
-              aprovado,
-            });
-          });
-        }
-
-        setAvaliacoesReais(Array.from(acumulado.values()).filter((item) => item.comentario));
-      } catch (error) {
-        console.error("Erro ao carregar avaliações reais:", error);
-        setAvaliacoesReais([]);
-      } finally {
-        setCarregandoAvaliacoes(false);
-      }
-    }
-
-    carregarAvaliacoes();
-  }, [produto?.id, produto?.slug, produto?.nome]);
 
   const isMobile = windowWidth < 768;
   const isTablet = windowWidth >= 768 && windowWidth < 1100;
@@ -698,7 +657,7 @@ export default function ProdutoPage() {
     const categoria = produtoPronto.categoriaFinal || "perfume árabe";
     const preco = produtoPronto.precoFinal || 0;
     const imagem = urlAbsoluta(produtoPronto.imagemFinal);
-    const url = `${SITE_URL}/produto/${produtoPronto.id}`;
+    const url = `${SITE_URL}${getProdutoUrl(produtoPronto)}`;
     const titulo = `${produtoPronto.nome} | Perfume Árabe Premium | Maison Noor`;
     const descricao = limparDescricaoSeo(
       `${produtoPronto.nome} ${marca}. ${produtoPronto.descricaoFinal} ${produtoPronto.tamanho !== "—" ? `Volume ${produtoPronto.tamanho}.` : ""} Curadoria premium Maison Noor.`,
@@ -799,63 +758,6 @@ export default function ProdutoPage() {
       setTimeout(() => setAdicionado(false), 2200);
     } catch (e) {
       console.error("Erro ao salvar na sacola:", e);
-    }
-  }
-
-  async function enviarAvaliacao() {
-    if (!produtoPronto || salvandoAvaliacao) return;
-
-    const nome = formAvaliacao.nome.trim();
-    const comentario = formAvaliacao.comentario.trim();
-    const nota = Math.min(5, Math.max(1, Number(formAvaliacao.nota) || 5));
-
-    if (!nome || nome.length < 2) {
-      setMensagemAvaliacao("Informe seu nome para enviar a avaliação.");
-      return;
-    }
-
-    if (!comentario || comentario.length < 10) {
-      setMensagemAvaliacao("Escreva uma avaliação com pelo menos 10 caracteres.");
-      return;
-    }
-
-    try {
-      setSalvandoAvaliacao(true);
-      setMensagemAvaliacao("");
-
-      const slugProduto = getProdutoSlug(produtoPronto);
-
-      const docRef = await addDoc(collection(db, "reviews"), {
-        produtoId: produtoPronto.id,
-        produtoSlug: slugProduto,
-        produtoNome: produtoPronto.nome,
-        nome,
-        nota,
-        comentario,
-        aprovado: true,
-        origem: "site",
-        createdAt: serverTimestamp(),
-      });
-
-      const novaAvaliacao: AvaliacaoProduto = {
-        id: docRef.id,
-        produtoId: produtoPronto.id,
-        produtoSlug: slugProduto,
-        nome,
-        nota,
-        comentario,
-        aprovado: true,
-        createdAt: new Date(),
-      };
-
-      setAvaliacoesReais((atuais) => [novaAvaliacao, ...atuais]);
-      setFormAvaliacao({ nome: "", nota: 5, comentario: "" });
-      setMensagemAvaliacao("Avaliação enviada com sucesso. Obrigado por ajudar outros clientes Maison Noor.");
-    } catch (error) {
-      console.error("Erro ao enviar avaliação:", error);
-      setMensagemAvaliacao("Não foi possível enviar a avaliação agora. Verifique as regras do Firestore para a coleção reviews.");
-    } finally {
-      setSalvandoAvaliacao(false);
     }
   }
 
@@ -1295,73 +1197,6 @@ export default function ProdutoPage() {
     };
   }, [produtoPronto]);
 
-
-  const avaliacoesVisiveis = useMemo(() => {
-    if (!avaliacoesReais.length) return avaliacoesMaisonNoor;
-
-    const reaisFormatadas = avaliacoesReais.map((avaliacao) => {
-      let dataFormatada = "Avaliação real Maison Noor";
-
-      try {
-        const data =
-          typeof avaliacao.createdAt?.toDate === "function"
-            ? avaliacao.createdAt.toDate()
-            : avaliacao.createdAt instanceof Date
-              ? avaliacao.createdAt
-              : null;
-
-        if (data) {
-          dataFormatada = data.toLocaleDateString("pt-BR", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          });
-        }
-      } catch {
-        dataFormatada = "Avaliação real Maison Noor";
-      }
-
-      return {
-        nome: avaliacao.nome,
-        titulo: avaliacao.titulo || "Avaliação de cliente",
-        texto: avaliacao.comentario,
-        data: dataFormatada,
-        estrelas: avaliacao.nota,
-        selo: "Avaliação real",
-        destaque: "Cliente Maison Noor",
-      };
-    });
-
-    return [...reaisFormatadas, ...avaliacoesMaisonNoor].slice(0, 8);
-  }, [avaliacoesReais, avaliacoesMaisonNoor]);
-
-  const resumoAvaliacoesFinal = useMemo(() => {
-    if (!avaliacoesReais.length) return resumoAvaliacoesMaisonNoor;
-
-    const totalAvaliacoes = avaliacoesReais.length;
-    const media =
-      avaliacoesReais.reduce((total, item) => total + (Number(item.nota) || 5), 0) /
-      Math.max(1, totalAvaliacoes);
-
-    const contar = (nota: number) =>
-      avaliacoesReais.filter((item) => Math.round(Number(item.nota) || 5) === nota).length;
-
-    const cinco = Math.round((contar(5) / totalAvaliacoes) * 100);
-    const quatro = Math.round((contar(4) / totalAvaliacoes) * 100);
-    const tresOuMenos = Math.max(0, 100 - cinco - quatro);
-
-    return {
-      nota: media.toFixed(1),
-      totalAvaliacoes,
-      satisfacao: media >= 4.8 ? "satisfação excelente" : "alta satisfação",
-      barras: [
-        { label: "5 estrelas", value: cinco },
-        { label: "4 estrelas", value: quatro },
-        { label: "3 estrelas", value: tresOuMenos },
-      ],
-    };
-  }, [avaliacoesReais, resumoAvaliacoesMaisonNoor]);
-
   if (loading) {
     return (
       <main style={styles.page}>
@@ -1601,16 +1436,16 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                       <span style={styles.reviewsKicker}>Experiência de clientes</span>
                       <strong style={styles.reviewsTitle}>Avaliações Maison Noor</strong>
                     </div>
-                    <span style={styles.reviewsSeal}>{resumoAvaliacoesFinal.nota}</span>
+                    <span style={styles.reviewsSeal}>{resumoAvaliacoesMaisonNoor.nota}</span>
                   </div>
 
                   <div style={styles.reviewsStarsRow}>
                     <span style={styles.reviewsStars}>★★★★★</span>
-                    <span style={styles.reviewsScoreText}>{resumoAvaliacoesFinal.nota} de 5 • {resumoAvaliacoesMaisonNoor.totalAvaliacoes} avaliações • {resumoAvaliacoesMaisonNoor.satisfacao}</span>
+                    <span style={styles.reviewsScoreText}>{resumoAvaliacoesMaisonNoor.nota} de 5 • {resumoAvaliacoesMaisonNoor.totalAvaliacoes} avaliações • {resumoAvaliacoesMaisonNoor.satisfacao}</span>
                   </div>
 
                   <div style={styles.reviewsBars}>
-                    {resumoAvaliacoesFinal.barras.map((item) => (
+                    {resumoAvaliacoesMaisonNoor.barras.map((item) => (
                       <div key={item.label} style={styles.reviewBarLine}>
                         <span style={styles.reviewBarLabel}>{item.label}</span>
                         <div style={styles.reviewBarTrack}>
@@ -1626,79 +1461,8 @@ Pode me passar mais detalhes e as opções de pagamento?`;
                     ))}
                   </div>
 
-                  <div style={styles.reviewFormBox}>
-                    <strong style={styles.reviewFormTitle}>Deixe sua avaliação real</strong>
-                    <span style={styles.reviewFormSubtitle}>
-                      Sua opinião ajuda outros clientes a escolherem a fragrância ideal.
-                    </span>
-
-                    <div style={styles.reviewFormGrid}>
-                      <input
-                        value={formAvaliacao.nome}
-                        onChange={(e) =>
-                          setFormAvaliacao((atual) => ({
-                            ...atual,
-                            nome: e.target.value,
-                          }))
-                        }
-                        placeholder="Seu nome"
-                        style={styles.reviewInput}
-                      />
-
-                      <select
-                        value={formAvaliacao.nota}
-                        onChange={(e) =>
-                          setFormAvaliacao((atual) => ({
-                            ...atual,
-                            nota: Number(e.target.value),
-                          }))
-                        }
-                        style={styles.reviewSelect}
-                      >
-                        <option value={5}>★★★★★ 5 estrelas</option>
-                        <option value={4}>★★★★☆ 4 estrelas</option>
-                        <option value={3}>★★★☆☆ 3 estrelas</option>
-                        <option value={2}>★★☆☆☆ 2 estrelas</option>
-                        <option value={1}>★☆☆☆☆ 1 estrela</option>
-                      </select>
-                    </div>
-
-                    <textarea
-                      value={formAvaliacao.comentario}
-                      onChange={(e) =>
-                        setFormAvaliacao((atual) => ({
-                          ...atual,
-                          comentario: e.target.value,
-                        }))
-                      }
-                      placeholder="Conte como foi sua experiência com essa fragrância..."
-                      style={styles.reviewTextarea}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={enviarAvaliacao}
-                      disabled={salvandoAvaliacao}
-                      style={{
-                        ...styles.reviewSubmitButton,
-                        opacity: salvandoAvaliacao ? 0.7 : 1,
-                        cursor: salvandoAvaliacao ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      {salvandoAvaliacao ? "Enviando..." : "Enviar avaliação"}
-                    </button>
-
-                    {mensagemAvaliacao ? (
-                      <span style={styles.reviewFormMessage}>{mensagemAvaliacao}</span>
-                    ) : null}
-                  </div>
-
-                  {carregandoAvaliacoes ? (
-                    <div style={styles.reviewLoadingText}>Carregando avaliações reais...</div>
-                  ) : null}
-
                   <div style={styles.reviewCardsList}>
-                    {avaliacoesVisiveis.map((avaliacao) => (
+                    {avaliacoesMaisonNoor.map((avaliacao) => (
                       <article key={`${avaliacao.nome}-${avaliacao.titulo}`} style={styles.reviewCard}>
                         <div style={styles.reviewTop}>
                           <span style={styles.reviewAvatar}>{avaliacao.nome.slice(0, 1)}</span>
@@ -2238,7 +2002,7 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               {relacionados.map((item) => (
                 <Link
                   key={item.id}
-                  href={`/produto/${item.id}`}
+                  href={`/produto/${item.slug || item.id}`}
                   style={styles.relatedCard}
                 >
                   <div style={styles.relatedImageWrap}>
@@ -2418,97 +2182,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "11px",
     fontWeight: 800,
     textAlign: "right",
-  },
-  reviewFormBox: {
-    display: "grid",
-    gap: "9px",
-    marginBottom: "14px",
-    padding: "13px",
-    borderRadius: "17px",
-    border: "1px solid #E3CDAF",
-    background: "linear-gradient(180deg, rgba(255,249,241,0.92), rgba(242,223,195,0.72))",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.78)",
-  },
-  reviewFormTitle: {
-    color: "#2F2721",
-    fontSize: "14px",
-    fontWeight: 900,
-    lineHeight: 1.25,
-  },
-  reviewFormSubtitle: {
-    color: "#7B6958",
-    fontSize: "12px",
-    lineHeight: 1.45,
-  },
-  reviewFormGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 150px",
-    gap: "8px",
-  },
-  reviewInput: {
-    width: "100%",
-    minHeight: "40px",
-    borderRadius: "12px",
-    border: "1px solid #E0C9A9",
-    background: "#FFFDF9",
-    color: "#3A2F29",
-    fontSize: "13px",
-    fontWeight: 700,
-    padding: "0 11px",
-    outline: "none",
-    boxSizing: "border-box",
-  },
-  reviewSelect: {
-    width: "100%",
-    minHeight: "40px",
-    borderRadius: "12px",
-    border: "1px solid #E0C9A9",
-    background: "#FFFDF9",
-    color: "#3A2F29",
-    fontSize: "12px",
-    fontWeight: 800,
-    padding: "0 9px",
-    outline: "none",
-    boxSizing: "border-box",
-  },
-  reviewTextarea: {
-    width: "100%",
-    minHeight: "86px",
-    borderRadius: "14px",
-    border: "1px solid #E0C9A9",
-    background: "#FFFDF9",
-    color: "#3A2F29",
-    fontSize: "13px",
-    lineHeight: 1.5,
-    padding: "11px",
-    resize: "vertical",
-    outline: "none",
-    boxSizing: "border-box",
-    fontFamily: "Arial, sans-serif",
-  },
-  reviewSubmitButton: {
-    width: "fit-content",
-    minHeight: "40px",
-    border: "1px solid #C6975F",
-    borderRadius: "999px",
-    padding: "0 16px",
-    background: "linear-gradient(135deg, #D8B178, #BD9055)",
-    color: "#2A2018",
-    fontSize: "12px",
-    fontWeight: 900,
-    boxShadow: "0 10px 18px rgba(120, 87, 45, 0.12)",
-  },
-  reviewFormMessage: {
-    color: "#6B523A",
-    fontSize: "12px",
-    fontWeight: 800,
-    lineHeight: 1.45,
-  },
-  reviewLoadingText: {
-    marginBottom: "10px",
-    color: "#8A755D",
-    fontSize: "12px",
-    fontWeight: 800,
   },
   reviewCardsList: {
     display: "grid",
