@@ -99,6 +99,11 @@ type AvaliacaoProduto = {
   aprovado?: boolean;
 };
 
+type FaqProduto = {
+  pergunta: string;
+  resposta: string;
+};
+
 function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", {
     style: "currency",
@@ -375,6 +380,64 @@ function montarCombinaCom(produto: ProdutoFirebase) {
   itens.add("💎 Curadoria Maison Noor");
 
   return Array.from(itens).slice(0, 6);
+}
+
+function montarFaqProduto(
+  produto: ProdutoFirebase & {
+    disponivel?: number;
+    categoriaFinal?: string;
+    familiaOlfativaFinal?: string;
+    fixacaoFinal?: string;
+    projecaoFinal?: string;
+    ocasiaoFinal?: string;
+    climaIdealFinal?: string;
+    tipoFinal?: string;
+    tamanho?: string;
+  },
+): FaqProduto[] {
+  const nome = produto.nome || "este perfume";
+  const marca = produto.marca || "Maison Noor";
+  const categoria = produto.categoriaFinal || categoriaSite(produto.categoria);
+  const familia = produto.familiaOlfativaFinal || produto.familiaOlfativa || "perfil olfativo sofisticado";
+  const fixacao = produto.fixacaoFinal || produto.fixacao || "boa fixação";
+  const ocasiao = produto.ocasiaoFinal || produto.ocasiao || "uso diário, ocasiões especiais e momentos marcantes";
+  const clima = produto.climaIdealFinal || produto.climaIdeal || inferirClima(produto);
+  const tipo = produto.tipoFinal || produto.tipo || "perfume importado";
+  const tamanho = produto.tamanho && produto.tamanho !== "—" ? produto.tamanho : produto.volumeMl ? `${produto.volumeMl}ml` : "";
+  const disponivel = Number(produto.disponivel ?? produto.estoque ?? 0) > 0;
+
+  return [
+    {
+      pergunta: `${nome} é original?`,
+      resposta: `Sim. A Maison Noor trabalha com produtos originais e selecionados com curadoria premium. O ${nome}${marca ? ` da ${marca}` : ""} é apresentado no site com informações de marca, perfil e disponibilidade para compra assistida.`,
+    },
+    {
+      pergunta: `Qual é a fixação do ${nome}?`,
+      resposta: `A fixação informada para este produto é: ${fixacao}. A duração pode variar conforme tipo de pele, clima, quantidade aplicada e região de aplicação.`,
+    },
+    {
+      pergunta: `Qual é o estilo olfativo do ${nome}?`,
+      resposta: `O ${nome} possui perfil ${familia}. É uma fragrância indicada para quem busca uma assinatura olfativa elegante, marcante e com curadoria Maison Noor.`,
+    },
+    {
+      pergunta: `${nome} é masculino, feminino ou unissex?`,
+      resposta: `No catálogo Maison Noor, este produto está classificado como ${categoria}. Mesmo assim, perfume é uma escolha pessoal: o mais importante é combinar com seu estilo, ocasião e presença desejada.`,
+    },
+    {
+      pergunta: `Em qual ocasião usar o ${nome}?`,
+      resposta: `A recomendação de uso é: ${ocasiao}. Também combina com ${clima.toLowerCase()}, mantendo uma presença sofisticada sem perder elegância.`,
+    },
+    {
+      pergunta: `O ${nome} está disponível para compra?`,
+      resposta: disponivel
+        ? "Sim. O produto aparece com estoque disponível para envio. Você pode adicionar à sacola, comprar pelo site ou chamar a Maison Noor no WhatsApp para confirmar frete, pagamento e detalhes do atendimento."
+        : "No momento, o produto pode estar indisponível no estoque. Você pode chamar a Maison Noor no WhatsApp para consultar previsão de reposição ou receber sugestões parecidas.",
+    },
+    {
+      pergunta: "Como funciona a compra assistida Maison Noor?",
+      resposta: `A compra assistida ajuda você a escolher com mais segurança. A equipe pode orientar sobre ${tipo.toLowerCase()}, fixação, projeção, ocasião de uso${tamanho ? `, volume ${tamanho}` : ""}, disponibilidade, frete e forma de pagamento.`,
+    },
+  ];
 }
 
 const SITE_URL = "https://www.maisonnoor.com.br";
@@ -1368,6 +1431,29 @@ export default function ProdutoPage() {
     };
   }, [avaliacoesReais, resumoAvaliacoesMaisonNoor]);
 
+  const faqProduto = useMemo(() => {
+    if (!produtoPronto) return [];
+
+    return montarFaqProduto(produtoPronto);
+  }, [produtoPronto]);
+
+  const faqJsonLd = useMemo(() => {
+    if (!faqProduto.length) return null;
+
+    return {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: faqProduto.map((item) => ({
+        "@type": "Question",
+        name: item.pergunta,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.resposta,
+        },
+      })),
+    };
+  }, [faqProduto]);
+
   if (loading) {
     return (
       <main style={styles.page}>
@@ -1428,6 +1514,12 @@ Pode me passar mais detalhes e as opções de pagamento?`;
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(seoData.productJsonLd) }}
+        />
+      ) : null}
+      {faqJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
         />
       ) : null}
       <div
@@ -2220,6 +2312,42 @@ Pode me passar mais detalhes e as opções de pagamento?`;
           </div>
         </section>
 
+        {faqProduto.length > 0 && (
+          <section style={styles.faqSection}>
+            <div style={styles.faqHeader}>
+              <div>
+                <p style={styles.faqKicker}>Perguntas frequentes</p>
+                <h2 style={styles.faqTitle}>
+                  Dúvidas comuns sobre {produtoPronto.nome}
+                </h2>
+              </div>
+
+              <span style={styles.faqSeal}>FAQ SEO</span>
+            </div>
+
+            <div
+              style={{
+                ...styles.faqGrid,
+                gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+              }}
+            >
+              {faqProduto.map((item, index) => (
+                <details
+                  key={`${item.pergunta}-${index}`}
+                  style={styles.faqItem}
+                  open={index < 2}
+                >
+                  <summary style={styles.faqQuestion}>
+                    <span>{item.pergunta}</span>
+                    <strong style={styles.faqPlus}>+</strong>
+                  </summary>
+                  <p style={styles.faqAnswer}>{item.resposta}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+        )}
+
         {relacionados.length > 0 && (
           <section style={styles.relatedSection}>
             <div style={styles.relatedHeader}>
@@ -2323,6 +2451,99 @@ Pode me passar mais detalhes e as opções de pagamento?`;
 }
 
 const styles: Record<string, CSSProperties> = {
+
+  faqSection: {
+    marginTop: "22px",
+    background:
+      "radial-gradient(circle at top left, rgba(212,175,119,0.14), transparent 34%), linear-gradient(180deg, #FFFEFC, #FCF7EF)",
+    border: "1px solid #EADBC8",
+    borderRadius: "28px",
+    padding: "18px",
+    boxShadow: "0 18px 38px rgba(48,34,20,0.06)",
+  },
+  faqHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "14px",
+    marginBottom: "14px",
+  },
+  faqKicker: {
+    margin: "0 0 6px",
+    color: "#A8844C",
+    fontSize: "12px",
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
+  },
+  faqTitle: {
+    margin: 0,
+    color: "#2F2721",
+    fontSize: "22px",
+    lineHeight: 1.15,
+    fontFamily: "Georgia, 'Times New Roman', serif",
+  },
+  faqSeal: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "32px",
+    padding: "0 12px",
+    borderRadius: "999px",
+    border: "1px solid rgba(190, 145, 85, 0.35)",
+    background: "linear-gradient(135deg, #1B1612, #2A211A)",
+    color: "#F6E9D6",
+    fontSize: "10px",
+    fontWeight: 900,
+    letterSpacing: "0.1em",
+    textTransform: "uppercase",
+    whiteSpace: "nowrap",
+  },
+  faqGrid: {
+    display: "grid",
+    gap: "12px",
+  },
+  faqItem: {
+    border: "1px solid #E7D7C1",
+    borderRadius: "18px",
+    background: "linear-gradient(180deg, #FFFDF9, #F7EBDD)",
+    padding: "0",
+    overflow: "hidden",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
+  },
+  faqQuestion: {
+    cursor: "pointer",
+    listStyle: "none",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+    padding: "14px 15px",
+    color: "#3A2F29",
+    fontSize: "14px",
+    fontWeight: 900,
+    lineHeight: 1.35,
+  },
+  faqPlus: {
+    width: "26px",
+    height: "26px",
+    borderRadius: "999px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    background: "linear-gradient(135deg, #D8B178, #BD9055)",
+    color: "#2A2018",
+    fontSize: "16px",
+    fontWeight: 900,
+  },
+  faqAnswer: {
+    margin: 0,
+    padding: "0 15px 15px",
+    color: "#6F6258",
+    fontSize: "13px",
+    lineHeight: 1.65,
+  },
 
   reviewsPanel: {
     marginTop: "14px",

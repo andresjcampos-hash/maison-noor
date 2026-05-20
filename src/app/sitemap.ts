@@ -1,10 +1,9 @@
 import type { MetadataRoute } from "next";
-import { adminDb } from "@/lib/firebase-admin";
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = "https://www.maisonnoor.com.br";
 
-  const staticPages: MetadataRoute.Sitemap = [
+  return [
     {
       url: baseUrl,
       lastModified: new Date(),
@@ -17,32 +16,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily",
       priority: 0.9,
     },
+    {
+      url: `${baseUrl}/perfumes-arabes-femininos`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.95,
+    },
+    {
+      url: `${baseUrl}/perfumes-arabes-masculinos`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.95,
+    },
+    {
+      url: `${baseUrl}/perfumes-arabes-unissex`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.9,
+    },
+    {
+      url: `${baseUrl}/body-splash`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.85,
+    },
+    {
+      url: `${baseUrl}/checkout`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.5,
+    },
   ];
-
-  try {
-    const snapshot = await adminDb.collection("products").get();
-
-    const productPages: MetadataRoute.Sitemap = snapshot.docs.map((doc) => {
-      const data = doc.data();
-
-      const slug =
-        data.slug ||
-        data.nomeSlug ||
-        data.slugUrl ||
-        doc.id;
-
-      return {
-        url: `${baseUrl}/produto/${slug}`,
-        lastModified: new Date(),
-        changeFrequency: "weekly",
-        priority: 0.8,
-      };
-    });
-
-    return [...staticPages, ...productPages];
-  } catch (error) {
-    console.error("Erro ao gerar sitemap:", error);
-
-    return staticPages;
-  }
 }
