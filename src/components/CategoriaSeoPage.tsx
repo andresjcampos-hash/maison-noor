@@ -26,7 +26,85 @@ type ProdutoFirebase = {
   familiaOlfativa?: string;
   fixacao?: string;
   descricao?: string;
+  createdAt?: any;
+  updatedAt?: any;
+  destaque?: boolean;
+  novidade?: boolean;
+  lancamento?: boolean;
+  novo?: boolean;
+  maisVendido?: boolean;
+  bestSeller?: boolean;
+  ordemVitrine?: number;
+  ordem?: number;
+  posicao?: number;
+  position?: number;
 };
+
+type ProdutoCarrinho = {
+  id: string;
+  nome: string;
+  preco: number;
+  imagem: string;
+  tamanho: string;
+};
+
+const CART_KEYS = [
+  "maison_noor_sacola",
+  "maison_noor_sacola_v1",
+  "maison_noor_cart",
+  "maison_noor_cart_v1",
+] as const;
+
+function salvarSacola(items: ProdutoCarrinho[]) {
+  if (typeof window === "undefined") return;
+
+  const payload = JSON.stringify(
+    items.map((item) => ({
+      id: item.id,
+      produtoId: item.id,
+      nome: item.nome,
+      preco: Number(item.preco || 0),
+      precoVenda: Number(item.preco || 0),
+      imagem: item.imagem,
+      imageUrl: item.imagem,
+      tamanho: item.tamanho,
+      quantidade: 1,
+      qtd: 1,
+    })),
+  );
+
+  for (const key of CART_KEYS) {
+    window.localStorage.setItem(key, payload);
+  }
+
+  window.dispatchEvent(new Event("storage"));
+}
+
+function lerSacola(): ProdutoCarrinho[] {
+  if (typeof window === "undefined") return [];
+
+  for (const key of CART_KEYS) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) continue;
+
+      return parsed
+        .map((item: any) => ({
+          id: String(item?.id ?? item?.produtoId ?? ""),
+          nome: String(item?.nome ?? item?.name ?? ""),
+          preco: Number(item?.preco ?? item?.precoVenda ?? item?.price ?? 0),
+          imagem: String(item?.imagem ?? item?.imageUrl ?? item?.image ?? "/produtos/sem-imagem.png"),
+          tamanho: String(item?.tamanho ?? "Maison Noor"),
+        }))
+        .filter((item: ProdutoCarrinho) => item.id && item.nome);
+    } catch {}
+  }
+
+  return [];
+}
 
 type CategoriaSeoProps = {
   categoria: "feminino" | "masculino" | "unissex" | "body-splash";
@@ -105,6 +183,41 @@ function getTextoApoio(categoria: CategoriaSeoProps["categoria"]) {
   return "Body splash e cuidados perfumados para rotina, pós-banho e momentos em que você deseja leveza com toque sofisticado.";
 }
 
+
+function getProdutoTime(valor: any) {
+  if (!valor) return 0;
+  if (typeof valor?.toDate === "function") return valor.toDate().getTime();
+
+  const data = new Date(valor);
+  return Number.isFinite(data.getTime()) ? data.getTime() : 0;
+}
+
+function getProdutoOrdem(produto: ProdutoFirebase) {
+  const ordem = Number(
+    produto.ordemVitrine ??
+      produto.ordem ??
+      produto.posicao ??
+      produto.position ??
+      9999,
+  );
+
+  return Number.isFinite(ordem) ? ordem : 9999;
+}
+
+function getBadgeProduto(produto: ProdutoFirebase & { disponivel?: number }) {
+  const texto = `${produto.nome || ""} ${produto.marca || ""} ${produto.tipo || ""} ${produto.observacoes || ""}`.toLowerCase();
+
+  if (produto.maisVendido || produto.bestSeller) return "🔥 Mais desejado";
+  if (produto.novidade || produto.lancamento || produto.novo) return "✨ Novo na Maison";
+  if (Number(produto.disponivel || 0) > 0 && Number(produto.disponivel || 0) <= 2) return "⏳ Últimas unidades";
+  if (produto.destaque) return "Curadoria Maison";
+  if (texto.includes("oud")) return "Oud premium";
+  if (texto.includes("body splash") || texto.includes("splash")) return "Leve e perfumado";
+  if (texto.includes("yara")) return "Favorito do momento";
+
+  return "Seleção premium";
+}
+
 export default function CategoriaSeoPage({
   categoria,
   titulo,
@@ -117,6 +230,7 @@ export default function CategoriaSeoPage({
   const [produtos, setProdutos] = useState<ProdutoFirebase[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
+  const [mensagemSacola, setMensagemSacola] = useState("");
 
   useEffect(() => {
     let cancelado = false;
@@ -148,6 +262,18 @@ export default function CategoriaSeoPage({
             familiaOlfativa: data.familiaOlfativa,
             fixacao: data.fixacao,
             descricao: data.descricao,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            destaque: data.destaque,
+            novidade: data.novidade ?? data.lancamento ?? data.novo ?? false,
+            lancamento: data.lancamento,
+            novo: data.novo,
+            maisVendido: data.maisVendido ?? data.bestSeller ?? false,
+            bestSeller: data.bestSeller,
+            ordemVitrine: data.ordemVitrine,
+            ordem: data.ordem,
+            posicao: data.posicao,
+            position: data.position,
           });
         });
 
@@ -198,6 +324,19 @@ export default function CategoriaSeoPage({
       })
       .sort((a, b) => {
         if ((a.disponivel <= 0) !== (b.disponivel <= 0)) return a.disponivel <= 0 ? 1 : -1;
+
+        const destaqueA = a.destaque || a.maisVendido || a.bestSeller ? 1 : 0;
+        const destaqueB = b.destaque || b.maisVendido || b.bestSeller ? 1 : 0;
+        if (destaqueA !== destaqueB) return destaqueB - destaqueA;
+
+        const ordemA = getProdutoOrdem(a);
+        const ordemB = getProdutoOrdem(b);
+        if (ordemA !== ordemB) return ordemA - ordemB;
+
+        const criadoA = getProdutoTime(a.createdAt);
+        const criadoB = getProdutoTime(b.createdAt);
+        if (criadoA !== criadoB) return criadoB - criadoA;
+
         return String(a.nome || "").localeCompare(String(b.nome || ""));
       });
   }, [produtos, categoria, busca]);
@@ -233,12 +372,43 @@ export default function CategoriaSeoPage({
     ];
   }, [produtosFiltrados, titulo, descricaoSeo]);
 
+
+  function adicionarProdutoSacola(
+    produto: ProdutoFirebase & {
+      precoFinal: number;
+      imagemFinal: string;
+      tamanho: string;
+      disponivel: number;
+    },
+  ) {
+    if (produto.disponivel <= 0) {
+      setMensagemSacola("Este produto está indisponível. Chame no WhatsApp para consultar reposição.");
+      window.setTimeout(() => setMensagemSacola(""), 2600);
+      return;
+    }
+
+    const item: ProdutoCarrinho = {
+      id: produto.id,
+      nome: produto.nome,
+      preco: Number(produto.precoFinal || 0),
+      imagem: produto.imagemFinal,
+      tamanho: produto.tamanho,
+    };
+
+    const sacolaAtual = lerSacola();
+    salvarSacola([...sacolaAtual, item]);
+    setMensagemSacola(`${produto.nome} foi adicionado à sacola.`);
+    window.setTimeout(() => setMensagemSacola(""), 2600);
+  }
+
   return (
     <main style={styles.page}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+
+      {mensagemSacola ? <div style={styles.toast}>{mensagemSacola}</div> : null}
 
       <header style={styles.header}>
         <Link href="/" style={styles.logoArea}>
@@ -296,6 +466,7 @@ export default function CategoriaSeoPage({
           <div>
             <p style={styles.kicker}>Seleção Maison Noor</p>
             <h2 style={styles.sectionTitle}>{titulo}</h2>
+            {!loading ? <p style={styles.productCount}>{produtosFiltrados.length} produtos encontrados nesta seleção</p> : null}
           </div>
 
           <input
@@ -315,6 +486,7 @@ export default function CategoriaSeoPage({
             {produtosFiltrados.map((produto) => (
               <article key={produto.id} style={styles.card}>
                 <Link href={getProdutoUrl(produto)} style={styles.imageWrap}>
+                  <span style={styles.productBadge}>{getBadgeProduto(produto)}</span>
                   <img
                     src={produto.imagemFinal}
                     alt={produto.nome}
@@ -343,6 +515,17 @@ export default function CategoriaSeoPage({
                     <Link href={getProdutoUrl(produto)} style={styles.viewButton}>
                       Ver detalhes
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => adicionarProdutoSacola(produto)}
+                      style={{
+                        ...styles.addButton,
+                        ...(produto.disponivel <= 0 ? styles.disabledButton : {}),
+                      }}
+                      disabled={produto.disponivel <= 0}
+                    >
+                      {produto.disponivel <= 0 ? "Indisponível" : "Adicionar à sacola"}
+                    </button>
                     <a
                       href={`https://wa.me/5512982389658?text=${encodeURIComponent(
                         `Olá! Tenho interesse no produto ${produto.nome} que vi na página ${titulo}. Pode me ajudar?`,
@@ -376,6 +559,22 @@ export default function CategoriaSeoPage({
 }
 
 const styles: Record<string, CSSProperties> = {
+  toast: {
+    position: "fixed",
+    left: "50%",
+    top: "18px",
+    transform: "translateX(-50%)",
+    zIndex: 200,
+    maxWidth: "calc(100% - 28px)",
+    borderRadius: "999px",
+    border: "1px solid rgba(216, 193, 162, 0.72)",
+    background: "linear-gradient(135deg, #1B1612, #2A211A)",
+    color: "#F6E9D6",
+    padding: "12px 18px",
+    fontSize: "13px",
+    fontWeight: 900,
+    boxShadow: "0 18px 38px rgba(28, 20, 12, 0.22)",
+  },
   page: {
     minHeight: "100vh",
     background:
@@ -661,6 +860,7 @@ const styles: Record<string, CSSProperties> = {
   },
   imageWrap: {
     height: "220px",
+    position: "relative",
     background:
       "radial-gradient(circle at center, rgba(212,175,119,0.16), transparent 42%), linear-gradient(180deg, rgba(255,253,249,0.96), rgba(244,234,220,0.72))",
     display: "flex",
@@ -771,4 +971,45 @@ const styles: Record<string, CSSProperties> = {
     background: "linear-gradient(180deg, #EFE4D6, #EBDCCD)",
     padding: "26px",
   },
+  productCount: {
+    margin: "6px 0 0",
+    color: "#8B7A6A",
+    fontSize: "13px",
+    fontWeight: 800,
+  },
+  productBadge: {
+    position: "absolute",
+    top: "12px",
+    left: "12px",
+    zIndex: 2,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "999px",
+    padding: "6px 10px",
+    background: "rgba(24, 18, 12, 0.78)",
+    color: "#F6E8D2",
+    fontSize: "10px",
+    fontWeight: 900,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    boxShadow: "0 8px 16px rgba(20,16,12,0.10)",
+  },
+  addButton: {
+    minHeight: "44px",
+    borderRadius: "14px",
+    border: "1px solid #D8C1A2",
+    background: "linear-gradient(180deg, #FFF9F1, #F5E7D4)",
+    color: "#6B523A",
+    fontSize: "13px",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.78)",
+  },
+  disabledButton: {
+    opacity: 0.65,
+    cursor: "not-allowed",
+    filter: "grayscale(0.18)",
+  },
+
 };
