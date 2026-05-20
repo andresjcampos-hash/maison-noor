@@ -79,6 +79,7 @@ type ProdutoCarrinho = {
 
 type ProdutoRelacionado = {
   id: string;
+  slug?: string;
   nome: string;
   marca?: string;
   preco: number;
@@ -470,6 +471,109 @@ function atualizarMetaTag(atributo: "name" | "property", chave: string, conteudo
   meta.setAttribute("content", conteudo);
 }
 
+
+function montarProdutoFirebase(id: string, data: any): ProdutoFirebase {
+  return {
+    id,
+    slug: data.slug,
+    nome: data.nome ?? "",
+    marca: data.marca,
+    volumeMl: data.volumeMl,
+    categoria: data.categoria,
+    precoCompra: data.precoCompra,
+    precoVenda: data.precoVenda,
+    estoque: data.estoque,
+    reservado: data.reservado ?? 0,
+    ativo: data.ativo ?? true,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+    observacoes: data.observacoes,
+
+    imagem: data.imagem,
+    imagem2: data.imagem2,
+    imagem3: data.imagem3,
+
+    imageUrl: data.imageUrl,
+    image2: data.image2,
+    image3: data.image3,
+    imageUrl2: data.imageUrl2,
+    imageUrl3: data.imageUrl3,
+
+    foto: data.foto,
+    foto2: data.foto2,
+    foto3: data.foto3,
+
+    fotos: data.fotos,
+    imagens: data.imagens,
+    galeria: data.galeria,
+
+    descricao: data.descricao,
+    tipo: data.tipo,
+
+    notasTopo: data.notasTopo,
+    notasCoracao: data.notasCoracao,
+    notasFundo: data.notasFundo,
+    familiaOlfativa: data.familiaOlfativa,
+    fixacao: data.fixacao,
+    projecao: data.projecao,
+    ocasiao: data.ocasiao,
+    climaIdeal: data.climaIdeal || data.clima || data.temperaturaIdeal,
+    intensidade: data.intensidade,
+    generoOlfativo: data.generoOlfativo || data.genero || data.publico,
+  };
+}
+
+async function buscarProdutoPorIdOuSlug(valor: string): Promise<ProdutoFirebase | null> {
+  const parametro = decodeURIComponent(String(valor || "").trim());
+  if (!parametro) return null;
+
+  const productsRef = collection(db, "products");
+
+  // 1) Compatibilidade antiga: tenta abrir pelo ID do Firestore
+  try {
+    const ref = doc(db, "products", parametro);
+    const snap = await getDoc(ref);
+
+    if (snap.exists()) {
+      return montarProdutoFirebase(snap.id, snap.data() as any);
+    }
+  } catch (error) {
+    console.error("Erro ao buscar produto por ID:", error);
+  }
+
+  // 2) Tenta abrir pelo campo slug, caso exista no Firebase
+  try {
+    const slugSnap = await getDocs(
+      query(productsRef, where("slug", "==", parametro), limit(1)),
+    );
+
+    if (!slugSnap.empty) {
+      const snap = slugSnap.docs[0];
+      return montarProdutoFirebase(snap.id, snap.data() as any);
+    }
+  } catch (error) {
+    console.error("Erro ao buscar produto por slug:", error);
+  }
+
+  // 3) Fallback: compara com slug gerado pelo nome do produto
+  try {
+    const todosSnap = await getDocs(productsRef);
+
+    for (const snap of todosSnap.docs) {
+      const data = snap.data() as any;
+      const slugDoProduto = String(data.slug || slugify(data.nome || snap.id)).trim();
+
+      if (slugDoProduto === parametro) {
+        return montarProdutoFirebase(snap.id, data);
+      }
+    }
+  } catch (error) {
+    console.error("Erro ao buscar produto por slug gerado:", error);
+  }
+
+  return null;
+}
+
 export default function ProdutoPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id as string;
@@ -514,65 +618,15 @@ export default function ProdutoPage() {
         setLoading(true);
         setErro("");
 
-        const ref = doc(db, "products", id);
-        const snap = await getDoc(ref);
+        const produtoEncontrado = await buscarProdutoPorIdOuSlug(id);
 
-        if (!snap.exists()) {
+        if (!produtoEncontrado) {
           setProduto(null);
           setErro("Produto não encontrado.");
           return;
         }
 
-        const data = snap.data() as any;
-
-        setProduto({
-          id: snap.id,
-          slug: data.slug,
-          nome: data.nome ?? "",
-          marca: data.marca,
-          volumeMl: data.volumeMl,
-          categoria: data.categoria,
-          precoCompra: data.precoCompra,
-          precoVenda: data.precoVenda,
-          estoque: data.estoque,
-          reservado: data.reservado ?? 0,
-          ativo: data.ativo ?? true,
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt,
-          observacoes: data.observacoes,
-
-          imagem: data.imagem,
-          imagem2: data.imagem2,
-          imagem3: data.imagem3,
-
-          imageUrl: data.imageUrl,
-          image2: data.image2,
-          image3: data.image3,
-          imageUrl2: data.imageUrl2,
-          imageUrl3: data.imageUrl3,
-
-          foto: data.foto,
-          foto2: data.foto2,
-          foto3: data.foto3,
-
-          fotos: data.fotos,
-          imagens: data.imagens,
-          galeria: data.galeria,
-
-          descricao: data.descricao,
-          tipo: data.tipo,
-
-          notasTopo: data.notasTopo,
-          notasCoracao: data.notasCoracao,
-          notasFundo: data.notasFundo,
-          familiaOlfativa: data.familiaOlfativa,
-          fixacao: data.fixacao,
-          projecao: data.projecao,
-          ocasiao: data.ocasiao,
-          climaIdeal: data.climaIdeal || data.clima || data.temperaturaIdeal,
-          intensidade: data.intensidade,
-          generoOlfativo: data.generoOlfativo || data.genero || data.publico,
-        });
+        setProduto(produtoEncontrado);
       } catch (e) {
         console.error(e);
         setErro("Não foi possível carregar o produto.");
@@ -622,6 +676,7 @@ export default function ProdutoPage() {
 
             acumulado.set(item.id, {
               id: item.id,
+              slug: data.slug || slugify(data.nome || item.id),
               nome: data.nome || "Perfume Maison Noor",
               marca: data.marca,
               preco: Number(data.precoVenda) || 0,
@@ -767,7 +822,7 @@ export default function ProdutoPage() {
     const categoria = produtoPronto.categoriaFinal || "perfume árabe";
     const preco = produtoPronto.precoFinal || 0;
     const imagem = urlAbsoluta(produtoPronto.imagemFinal);
-    const url = `${SITE_URL}/produto/${produtoPronto.id}`;
+    const url = `${SITE_URL}/produto/${getProdutoSlug(produtoPronto)}`;
     const titulo = `${produtoPronto.nome} | Perfume Árabe Premium | Maison Noor`;
     const descricao = limparDescricaoSeo(
       `${produtoPronto.nome} ${marca}. ${produtoPronto.descricaoFinal} ${produtoPronto.tamanho !== "—" ? `Volume ${produtoPronto.tamanho}.` : ""} Curadoria premium Maison Noor.`,
@@ -2372,7 +2427,7 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               {relacionados.map((item) => (
                 <Link
                   key={item.id}
-                  href={`/produto/${item.id}`}
+                  href={`/produto/${item.slug || slugify(item.nome)}`}
                   style={styles.relatedCard}
                 >
                   <div style={styles.relatedImageWrap}>
