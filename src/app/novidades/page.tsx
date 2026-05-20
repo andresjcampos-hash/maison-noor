@@ -343,7 +343,7 @@ export default function NovidadesPage() {
             }}
           >
             {filtrados.map((produto) => (
-              <Link key={produto.id} href={`/produto/${produto.id}`} style={styles.card}>
+              <Link key={produto.id} href={`/produto/${slugify(produto.nome)}`} style={styles.card}>
                 <div style={styles.imageWrap}>
                   <span style={styles.badge}>{getSeloProduto(produto)}</span>
                   {produto.indisponivel && <span style={styles.stockBadge}>Indisponível</span>}

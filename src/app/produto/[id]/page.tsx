@@ -47,25 +47,53 @@ function limparDescricao(valor?: string) {
 
 async function buscarProduto(id: string): Promise<ProdutoSeo | null> {
   try {
-    let snap = await adminDb.collection("products").doc(id).get();
+    const parametro = decodeURIComponent(String(id || "")).trim();
+    const parametroSlug = slugify(parametro);
 
-    if (!snap.exists) {
-      const slugSnap = await adminDb
-        .collection("products")
-        .where("slug", "==", id)
-        .limit(1)
-        .get();
+    // 1) Compatibilidade com URL antiga usando ID do Firestore:
+    // /produto/9V2sKGWV1FbQo3IBHWQj
+    let snap = await adminDb.collection("products").doc(parametro).get();
 
-      if (!slugSnap.empty) {
-        snap = slugSnap.docs[0];
-      }
+    if (snap.exists) {
+      return {
+        id: snap.id,
+        ...(snap.data() as any),
+      };
     }
 
-    if (!snap.exists) return null;
+    // 2) Compatibilidade com campo slug salvo no Firebase, caso exista:
+    // /produto/watani-intense-eau-de-parfum
+    const slugSnap = await adminDb
+      .collection("products")
+      .where("slug", "==", parametroSlug)
+      .limit(1)
+      .get();
+
+    if (!slugSnap.empty) {
+      const docProduto = slugSnap.docs[0];
+      return {
+        id: docProduto.id,
+        ...(docProduto.data() as any),
+      };
+    }
+
+    // 3) Fallback SEO: quando o produto ainda NÃO tem campo slug no Firebase,
+    // busca todos e compara com slugify(nome). Isso mantém as URLs bonitas funcionando
+    // sem precisar alterar produto por produto no CRM.
+    const todosSnap = await adminDb.collection("products").get();
+
+    const encontrado = todosSnap.docs.find((docProduto) => {
+      const data = docProduto.data() as any;
+      const nomeSlug = slugify(String(data?.nome || ""));
+      const slugSalvo = slugify(String(data?.slug || ""));
+      return nomeSlug === parametroSlug || slugSalvo === parametroSlug;
+    });
+
+    if (!encontrado) return null;
 
     return {
-      id: snap.id,
-      ...(snap.data() as any),
+      id: encontrado.id,
+      ...(encontrado.data() as any),
     };
   } catch (error) {
     console.error("Erro ao buscar produto para SEO:", error);
