@@ -382,6 +382,20 @@ function slugify(texto: string) {
     .replace(/(^-|-$)/g, "");
 }
 
+function getProdutoSlug(produto: Partial<ProdutoFirebase> & { slug?: string }) {
+  const slugExistente = String(produto.slug || "").trim();
+  if (slugExistente) return slugExistente;
+
+  const slugNome = slugify(String(produto.nome || ""));
+  if (slugNome) return slugNome;
+
+  return String(produto.id || "");
+}
+
+function getProdutoHref(produto: Partial<ProdutoFirebase> & { slug?: string }) {
+  return `/produto/${getProdutoSlug(produto)}`;
+}
+
 
 function getPagBankLink(produto: ProdutoFirebase) {
   const chavePorId = LINKS_PAGBANK[String(produto.id || "")];
@@ -951,9 +965,9 @@ export default function HomePage() {
   const canShowMoreProdutos = produtosFiltrados.length > visibleProductsCount;
 
 
-  function abrirProduto(produtoId: string) {
-    if (typeof window === "undefined" || !produtoId) return;
-    window.location.href = `/produto/${produtoId}`;
+  function abrirProduto(produto: Partial<ProdutoFirebase> & { slug?: string }) {
+    if (typeof window === "undefined" || !produto) return;
+    window.location.href = getProdutoHref(produto);
   }
 
   function scrollToSection(targetId: string) {
@@ -1948,7 +1962,7 @@ export default function HomePage() {
                     ...(produto.indisponivel ? styles.cardUnavailable : {}),
                     cursor: "pointer",
                   }}
-                  onClick={() => abrirProduto(produto.id)}
+                  onClick={() => abrirProduto(produto)}
                   onMouseEnter={(e) => {
                     if (isMobile) return;
                     e.currentTarget.style.transform = "translateY(-8px)";
@@ -1966,7 +1980,7 @@ export default function HomePage() {
                     if (img) img.style.transform = "scale(1)";
                   }}
                 >
-                  <Link href={`/produto/${produto.id}`} style={styles.productImageLink}>
+                  <Link href={getProdutoHref(produto)} style={styles.productImageLink}>
                     <div
                       style={{
                         ...styles.cardImageWrap,
@@ -1995,7 +2009,7 @@ export default function HomePage() {
                     <div style={styles.cardTopBlock}>
                       <p style={styles.cardBrand}>Seleção Romântica Maison Noor</p>
 
-                      <Link href={`/produto/${produto.id}`} style={styles.productTitleLink}>
+                      <Link href={getProdutoHref(produto)} style={styles.productTitleLink}>
                         <h3
                           style={{
                             ...styles.cardTitle,
@@ -2111,7 +2125,7 @@ Vi no site da Maison Noor e gostaria de atendimento VIP para escolher esse prese
 
             <div style={styles.mostWantedRail}>
               {produtosMaisDesejados.map((produto, index) => (
-                <Link key={`wanted-${produto.id}`} href={`/produto/${produto.id}`} style={styles.mostWantedItem}>
+                <Link key={`wanted-${produto.id}`} href={getProdutoHref(produto)} style={styles.mostWantedItem}>
                   <span style={styles.mostWantedRank}>#{index + 1}</span>
                   <div style={styles.mostWantedImageWrap}>
                     <img
@@ -2209,7 +2223,7 @@ Vi no site da Maison Noor e gostaria de atendimento VIP para escolher esse prese
                     ...(produto.indisponivel ? styles.cardUnavailable : {}),
                     cursor: "pointer",
                   }}
-                  onClick={() => abrirProduto(produto.id)}
+                  onClick={() => abrirProduto(produto)}
                   onMouseEnter={(e) => {
                     if (isMobile) return;
                     e.currentTarget.style.transform = "translateY(-10px)";
@@ -2237,7 +2251,7 @@ Vi no site da Maison Noor e gostaria de atendimento VIP para escolher esse prese
                     }
                   }}
                 >
-                  <Link href={`/produto/${produto.id}`} style={styles.productImageLink}>
+                  <Link href={getProdutoHref(produto)} style={styles.productImageLink}>
                     <div
                       style={{
                         ...styles.cardImageWrap,
@@ -2288,7 +2302,7 @@ Vi no site da Maison Noor e gostaria de atendimento VIP para escolher esse prese
                         {String((produto as any).tipo || produto.marca || "Eau de Parfum")}
                       </p>
 
-                      <Link href={`/produto/${produto.id}`} style={styles.productTitleLink}>
+                      <Link href={getProdutoHref(produto)} style={styles.productTitleLink}>
                         <h3
                           style={{
                             ...styles.cardTitle,
@@ -2497,7 +2511,7 @@ Pode me passar as opções de pagamento?`
           }}
         >
           {produtosProntos.slice(0, 3).map((produto) => (
-            <Link key={`reco-${produto.id}`} href={`/produto/${produto.id}`} style={styles.recommendCard}>
+            <Link key={`reco-${produto.id}`} href={getProdutoHref(produto)} style={styles.recommendCard}>
               <div style={styles.recommendImageWrap}>
                 <img
                   decoding="async"
