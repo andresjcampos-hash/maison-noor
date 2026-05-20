@@ -298,6 +298,434 @@ export const blogPosts: BlogPost[] = [
     ],
     relatedProductsText: "Ver perfumes Lattafa",
   },
+
+  {
+    slug: "perfumes-arabes-para-encontros",
+    title: "Perfumes árabes para encontros: fragrâncias marcantes para momentos especiais",
+    excerpt:
+      "Veja como escolher perfumes árabes para encontros, ocasiões românticas e momentos em que presença, elegância e memória olfativa fazem diferença.",
+    category: "Perfumes para ocasiões",
+    readTime: "6 min de leitura",
+    publishedAt: "2026-05-20",
+    updatedAt: "2026-05-20",
+    keywords: [
+      "perfumes árabes para encontros",
+      "perfume árabe marcante",
+      "perfume para sair à noite",
+      "perfume árabe elegante",
+      "perfume árabe sedutor",
+    ],
+    heroLabel: "Guia de ocasião",
+    cover: "/blog/perfumes-arabes-para-encontros.jpg",
+    sections: [
+      {
+        heading: "O que faz um perfume ser ideal para encontros?",
+        body: [
+          "Um perfume para encontros precisa equilibrar presença e conforto. Ele deve ser percebido, mas sem invadir o ambiente.",
+          "No universo dos perfumes árabes, notas ambaradas, doces, florais, amadeiradas e orientais costumam criar uma assinatura mais memorável.",
+          "A escolha ideal depende do local, do horário, do clima e principalmente da imagem que você quer transmitir.",
+        ],
+      },
+      {
+        heading: "Perfumes mais intensos combinam com a noite",
+        body: [
+          "Fragrâncias com oud, âmbar, baunilha, especiarias e madeiras tendem a funcionar muito bem em encontros noturnos.",
+          "Elas criam sensação de elegância, mistério e sofisticação, principalmente quando aplicadas com moderação.",
+          "Para jantares, eventos e momentos mais especiais, perfumes árabes intensos podem ser uma excelente escolha.",
+        ],
+      },
+      {
+        heading: "Perfumes doces e florais podem ser mais envolventes",
+        body: [
+          "Perfumes árabes femininos doces ou florais costumam transmitir delicadeza, cuidado e presença afetiva.",
+          "Notas cremosas, frutadas e gourmand funcionam muito bem quando a proposta é criar uma memória olfativa agradável.",
+          "A Maison Noor recomenda observar se o perfume é confortável na pele e se combina com o estilo pessoal antes de escolher.",
+        ],
+      },
+      {
+        heading: "Como aplicar perfume para encontro",
+        body: [
+          "Aplique em pontos estratégicos como pescoço, nuca e pulsos, evitando exageros.",
+          "Em ambientes fechados, menos é mais. Uma fragrância elegante precisa deixar rastro, não dominar o espaço.",
+          "Para maior duração, hidrate a pele antes da aplicação e evite esfregar o perfume após borrifar.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Qual perfume árabe usar em um encontro?",
+        answer:
+          "Perfumes árabes ambarados, doces, florais ou amadeirados costumam funcionar bem em encontros, especialmente quando têm boa fixação e projeção equilibrada.",
+      },
+      {
+        question: "Perfume forte é bom para encontro?",
+        answer:
+          "Pode ser bom, principalmente à noite, mas deve ser usado com moderação para não ficar exagerado em ambientes fechados.",
+      },
+      {
+        question: "Perfume doce combina com encontro?",
+        answer:
+          "Sim. Perfumes doces podem transmitir proximidade, conforto e sensualidade, desde que não sejam enjoativos para a ocasião.",
+      },
+    ],
+    relatedProductsText: "Ver perfumes para encontros",
+  },
+  {
+    slug: "perfumes-arabes-que-parecem-importados-caros",
+    title: "Perfumes árabes que parecem importados caros: elegância, presença e excelente custo-benefício",
+    excerpt:
+      "Entenda por que muitos perfumes árabes entregam sensação premium, ótima apresentação e desempenho comparável a fragrâncias importadas famosas.",
+    category: "Guias de compra",
+    readTime: "7 min de leitura",
+    publishedAt: "2026-05-20",
+    updatedAt: "2026-05-20",
+    keywords: [
+      "perfumes árabes que parecem importados caros",
+      "perfume árabe parecido com importado",
+      "perfume árabe custo benefício",
+      "perfume árabe premium",
+      "perfume importado árabe",
+    ],
+    heroLabel: "Guia premium",
+    cover: "/blog/perfumes-arabes-importados-caros.jpg",
+    sections: [
+      {
+        heading: "Por que perfumes árabes chamam tanta atenção?",
+        body: [
+          "Perfumes árabes ganharam espaço por combinarem frascos impactantes, fragrâncias marcantes e boa percepção de valor.",
+          "Muitos deles exploram caminhos olfativos parecidos com perfumes de luxo, mas com identidade própria e preço mais acessível.",
+          "Isso faz com que sejam escolhas interessantes para quem quer presença sem abrir mão de custo-benefício.",
+        ],
+      },
+      {
+        heading: "O segredo está na assinatura olfativa",
+        body: [
+          "Notas como âmbar, oud, especiarias, baunilha, musk, madeiras e frutas intensas ajudam a criar sensação de perfume premium.",
+          "Essas notas costumam transmitir sofisticação e deixam uma impressão mais marcante.",
+          "Por isso, muitos clientes associam perfumes árabes a fragrâncias caras, elegantes e de alta presença.",
+        ],
+      },
+      {
+        heading: "Perfume parecido não significa cópia",
+        body: [
+          "Alguns perfumes árabes lembram fragrâncias famosas, mas isso não significa que sejam idênticos.",
+          "A melhor forma de escolher é analisar proposta, ocasião de uso, intensidade, fixação e estilo pessoal.",
+          "Na Maison Noor, a curadoria ajuda o cliente a encontrar fragrâncias que combinem com sua presença e expectativa.",
+        ],
+      },
+      {
+        heading: "Como escolher sem errar",
+        body: [
+          "Se você gosta de perfumes marcantes, procure opções ambaradas, orientais ou amadeiradas.",
+          "Se prefere algo mais fácil de usar, fragrâncias frescas, frutadas ou florais podem ser melhores.",
+          "Para presentear, prefira perfumes versáteis, elegantes e com boa aceitação.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Perfumes árabes parecem perfumes importados caros?",
+        answer:
+          "Muitos perfumes árabes têm apresentação, intensidade e assinatura olfativa que lembram fragrâncias importadas de luxo, mas cada perfume possui sua própria proposta.",
+      },
+      {
+        question: "Perfume árabe vale a pena pelo preço?",
+        answer:
+          "Pode valer muito a pena quando a fragrância combina com seu estilo, ocasião de uso e expectativa de fixação.",
+      },
+      {
+        question: "Qual perfume árabe tem cheiro de perfume caro?",
+        answer:
+          "Perfumes com notas ambaradas, amadeiradas, orientais e especiadas costumam transmitir maior sensação de luxo e sofisticação.",
+      },
+    ],
+    relatedProductsText: "Ver perfumes árabes premium",
+  },
+  {
+    slug: "club-de-nuit-vs-aventus",
+    title: "Club de Nuit vs Aventus: por que essa comparação ficou tão famosa?",
+    excerpt:
+      "Entenda a comparação entre Club de Nuit e Creed Aventus, suas diferenças, proposta olfativa e para quem o Club de Nuit pode valer a pena.",
+    category: "Comparativos",
+    readTime: "7 min de leitura",
+    publishedAt: "2026-05-20",
+    updatedAt: "2026-05-20",
+    keywords: [
+      "Club de Nuit vs Aventus",
+      "Club de Nuit parece Aventus",
+      "Club de Nuit Intense Man",
+      "perfume parecido com Aventus",
+      "Armaf Club de Nuit",
+    ],
+    heroLabel: "Comparativo SEO",
+    cover: "/blog/club-de-nuit-vs-aventus.jpg",
+    sections: [
+      {
+        heading: "Por que Club de Nuit é comparado ao Aventus?",
+        body: [
+          "Club de Nuit Intense Man ficou famoso por lembrar o estilo frutado, esfumaçado e masculino associado ao Creed Aventus.",
+          "A comparação se popularizou porque muitos consumidores buscam uma fragrância impactante, elegante e com presença por um valor mais acessível.",
+          "Apesar da inspiração percebida por muitos usuários, cada perfume tem sua própria construção e evolução na pele.",
+        ],
+      },
+      {
+        heading: "Abertura, evolução e presença",
+        body: [
+          "O Club de Nuit costuma ser lembrado por uma abertura mais intensa e marcante, que depois evolui para um perfil mais elegante e amadeirado.",
+          "Essa característica agrada quem gosta de perfumes masculinos com presença, rastro e sensação de assinatura.",
+          "Para quem procura um perfume discreto e muito suave, talvez não seja a primeira escolha.",
+        ],
+      },
+      {
+        heading: "Quando usar Club de Nuit",
+        body: [
+          "É uma boa opção para encontros, eventos, trabalho em ambientes mais sofisticados e ocasiões em que você deseja ser notado.",
+          "Por ter presença marcante, a aplicação deve ser moderada, especialmente em ambientes fechados.",
+          "Ele combina bem com quem gosta de fragrâncias masculinas elegantes, modernas e confiantes.",
+        ],
+      },
+      {
+        heading: "Vale a pena comprar Club de Nuit?",
+        body: [
+          "Para quem busca um perfume masculino de alta presença e boa percepção de valor, Club de Nuit pode valer muito a pena.",
+          "A decisão ideal depende do gosto pessoal, clima, ocasião e expectativa de desempenho.",
+          "Na Maison Noor, ele pode ser apresentado dentro de uma curadoria voltada a perfumes árabes masculinos marcantes.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Club de Nuit parece Creed Aventus?",
+        answer:
+          "Muitos consumidores associam Club de Nuit ao estilo do Aventus, especialmente pelo perfil frutado, amadeirado e esfumaçado, mas eles não são idênticos.",
+      },
+      {
+        question: "Club de Nuit é bom para noite?",
+        answer:
+          "Sim. Por ter presença marcante, ele funciona muito bem à noite, em encontros e ocasiões especiais.",
+      },
+      {
+        question: "Club de Nuit tem boa fixação?",
+        answer:
+          "A linha é conhecida por boa presença, mas a fixação pode variar conforme pele, clima e quantidade aplicada.",
+      },
+    ],
+    relatedProductsText: "Ver Club de Nuit na Maison Noor",
+  },
+  {
+    slug: "asad-vs-sauvage-elixir",
+    title: "Asad vs Sauvage Elixir: entenda a comparação entre intensidade, especiarias e presença",
+    excerpt:
+      "Veja por que o Lattafa Asad é comparado ao Sauvage Elixir e entenda sua proposta intensa, especiada e marcante.",
+    category: "Comparativos",
+    readTime: "7 min de leitura",
+    publishedAt: "2026-05-20",
+    updatedAt: "2026-05-20",
+    keywords: [
+      "Asad vs Sauvage Elixir",
+      "Lattafa Asad parece Sauvage Elixir",
+      "perfume árabe masculino intenso",
+      "Lattafa Asad",
+      "perfume parecido com Sauvage Elixir",
+    ],
+    heroLabel: "Comparativo masculino",
+    cover: "/blog/asad-vs-sauvage-elixir.jpg",
+    sections: [
+      {
+        heading: "Por que o Asad é tão comentado?",
+        body: [
+          "O Lattafa Asad ganhou destaque por entregar uma fragrância intensa, especiada e masculina, com sensação de perfume poderoso.",
+          "Muitos consumidores o comparam ao Sauvage Elixir por lembrar uma proposta aromática, quente, sofisticada e de alta presença.",
+          "Essa comparação ajudou o Asad a se tornar uma das opções mais buscadas entre perfumes árabes masculinos.",
+        ],
+      },
+      {
+        heading: "Perfil olfativo do Asad",
+        body: [
+          "O Asad costuma agradar quem gosta de perfumes fortes, especiados, noturnos e com personalidade.",
+          "Ele transmite uma imagem de segurança, presença e elegância mais madura.",
+          "É o tipo de perfume que funciona melhor quando usado com intenção, e não como fragrância extremamente casual.",
+        ],
+      },
+      {
+        heading: "Quando usar",
+        body: [
+          "Por ser mais intenso, combina melhor com noite, clima ameno, eventos, encontros e ocasiões em que você quer presença.",
+          "Em dias muito quentes ou ambientes pequenos, a aplicação deve ser controlada.",
+          "Para quem gosta de perfumes marcantes, pode ser uma escolha de excelente impacto.",
+        ],
+      },
+      {
+        heading: "Asad vale a pena?",
+        body: [
+          "O Asad pode valer a pena para quem procura um perfume árabe masculino intenso, com boa presença e proposta sofisticada.",
+          "Ele é menos indicado para quem prefere perfumes extremamente leves ou muito discretos.",
+          "A escolha ideal depende do seu estilo e do tipo de presença que você deseja transmitir.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Lattafa Asad parece Sauvage Elixir?",
+        answer:
+          "Muitos consumidores percebem semelhança na proposta intensa, especiada e masculina, mas o Asad tem sua própria identidade e evolução.",
+      },
+      {
+        question: "Asad é perfume forte?",
+        answer:
+          "Sim. O Asad é geralmente percebido como um perfume intenso, marcante e de presença elevada.",
+      },
+      {
+        question: "Asad é bom para o calor?",
+        answer:
+          "Pode ser usado com moderação, mas tende a funcionar melhor em clima ameno, noite e ocasiões especiais.",
+      },
+    ],
+    relatedProductsText: "Ver perfumes Lattafa masculinos",
+  },
+  {
+    slug: "perfumes-arabes-masculinos-elegantes",
+    title: "Perfumes árabes masculinos elegantes: como escolher uma fragrância de presença refinada",
+    excerpt:
+      "Aprenda a escolher perfumes árabes masculinos elegantes para trabalho, encontros, eventos e assinatura pessoal.",
+    category: "Perfumes masculinos",
+    readTime: "6 min de leitura",
+    publishedAt: "2026-05-20",
+    updatedAt: "2026-05-20",
+    keywords: [
+      "perfumes árabes masculinos elegantes",
+      "perfume árabe masculino",
+      "perfume masculino elegante",
+      "perfume árabe para homem",
+      "perfume masculino sofisticado",
+    ],
+    heroLabel: "Guia masculino",
+    cover: "/blog/perfumes-arabes-masculinos-elegantes.jpg",
+    sections: [
+      {
+        heading: "O que torna um perfume masculino elegante?",
+        body: [
+          "Elegância em perfume não significa apenas força. Um perfume elegante precisa transmitir presença, refinamento e equilíbrio.",
+          "Nos perfumes árabes masculinos, notas amadeiradas, aromáticas, especiadas, ambaradas e frescas costumam criar essa sensação.",
+          "A escolha ideal depende do ambiente e da imagem que você quer construir.",
+        ],
+      },
+      {
+        heading: "Para trabalho e rotina",
+        body: [
+          "No ambiente profissional, prefira perfumes com projeção controlada, sensação limpa e acabamento sofisticado.",
+          "Fragrâncias muito doces ou extremamente intensas podem ser melhor reservadas para a noite.",
+          "Perfumes frescos, amadeirados e aromáticos costumam funcionar muito bem para rotina.",
+        ],
+      },
+      {
+        heading: "Para noite e eventos",
+        body: [
+          "À noite, perfumes árabes mais intensos ganham espaço.",
+          "Notas de âmbar, oud, especiarias e madeiras transmitem confiança e sofisticação.",
+          "Esse tipo de perfume cria assinatura e tende a ser mais memorável.",
+        ],
+      },
+      {
+        heading: "Como comprar com mais segurança",
+        body: [
+          "Observe família olfativa, fixação, projeção, ocasião de uso e clima ideal.",
+          "Se possível, escolha com orientação para evitar comprar apenas pelo nome ou embalagem.",
+          "A Maison Noor trabalha com curadoria para ajudar o cliente a encontrar o perfume que combina com sua presença.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Qual perfume árabe masculino é mais elegante?",
+        answer:
+          "Perfumes árabes amadeirados, aromáticos, ambarados e especiados costumam transmitir mais elegância masculina.",
+      },
+      {
+        question: "Perfume masculino elegante precisa ser forte?",
+        answer:
+          "Não necessariamente. Elegância está mais ligada ao equilíbrio entre presença, sofisticação e conforto.",
+      },
+      {
+        question: "Perfume árabe masculino serve para trabalho?",
+        answer:
+          "Sim, principalmente opções frescas, aromáticas ou amadeiradas com projeção moderada.",
+      },
+    ],
+    relatedProductsText: "Ver perfumes masculinos elegantes",
+  },
+  {
+    slug: "yara-candy-vs-yara-rosa",
+    title: "Yara Candy vs Yara Rosa: diferenças entre doçura, feminilidade e presença",
+    excerpt:
+      "Compare Yara Candy e Yara Rosa para entender qual combina mais com seu estilo, ocasião e preferência por perfumes doces femininos.",
+    category: "Comparativos",
+    readTime: "6 min de leitura",
+    publishedAt: "2026-05-20",
+    updatedAt: "2026-05-20",
+    keywords: [
+      "Yara Candy vs Yara Rosa",
+      "Yara Candy",
+      "Yara Rosa",
+      "perfume árabe feminino doce",
+      "Lattafa Yara feminino",
+    ],
+    heroLabel: "Comparativo feminino",
+    cover: "/blog/yara-candy-vs-yara-rosa.jpg",
+    sections: [
+      {
+        heading: "Por que a linha Yara faz tanto sucesso?",
+        body: [
+          "A linha Yara ficou muito conhecida por trazer perfumes femininos com sensação doce, cremosa, delicada e fácil de gostar.",
+          "Ela agrada quem busca uma fragrância feminina confortável, marcante na medida certa e com boa presença para o dia a dia.",
+          "Yara Candy e Yara Rosa podem atender públicos parecidos, mas com propostas diferentes.",
+        ],
+      },
+      {
+        heading: "Yara Candy: perfil mais divertido e gourmand",
+        body: [
+          "Yara Candy tende a agradar quem gosta de perfumes doces, alegres, frutados e com sensação gourmand.",
+          "É uma opção interessante para quem quer uma fragrância feminina mais jovem, vibrante e chamativa.",
+          "Funciona bem para rotina, momentos casuais e ocasiões em que a proposta é transmitir doçura e leveza.",
+        ],
+      },
+      {
+        heading: "Yara Rosa: perfil delicado e cremoso",
+        body: [
+          "Yara Rosa costuma ser associado a uma feminilidade mais cremosa, macia e confortável.",
+          "É uma escolha versátil para quem quer um perfume doce sem parecer pesado demais.",
+          "Pode funcionar muito bem como presente, justamente por ter uma proposta agradável e acolhedora.",
+        ],
+      },
+      {
+        heading: "Qual escolher?",
+        body: [
+          "Escolha Yara Candy se você quer algo mais divertido, doce e chamativo.",
+          "Escolha Yara Rosa se prefere uma doçura mais macia, delicada e confortável.",
+          "Para comprar com mais segurança, vale considerar ocasião de uso, clima e intensidade desejada.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Yara Candy é mais doce que Yara Rosa?",
+        answer:
+          "Yara Candy costuma passar uma impressão mais divertida e gourmand, enquanto Yara Rosa tende a ser mais cremoso e delicado.",
+      },
+      {
+        question: "Yara Rosa é bom para presente?",
+        answer:
+          "Sim. Por ter perfil feminino, doce e confortável, pode ser uma escolha segura para presente.",
+      },
+      {
+        question: "Qual Yara combina mais com o dia a dia?",
+        answer:
+          "As duas podem funcionar no dia a dia. Yara Rosa tende a ser mais confortável, enquanto Yara Candy chama mais atenção pelo lado doce e alegre.",
+      },
+    ],
+    relatedProductsText: "Ver perfumes da linha Yara",
+  },
+
 ];
 
 export function getBlogPost(slug: string) {
