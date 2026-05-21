@@ -726,6 +726,287 @@ export const blogPosts: BlogPost[] = [
     relatedProductsText: "Ver perfumes da linha Yara",
   },
 
+  {
+    slug: "melhores-perfumes-arabes-femininos-2026",
+    title: "Melhores perfumes árabes femininos de 2026: top fragrâncias elegantes e marcantes",
+    excerpt:
+      "Conheça uma seleção premium de perfumes árabes femininos para quem busca elegância, presença, doçura sofisticada e uma assinatura olfativa inesquecível.",
+    category: "Ranking feminino",
+    readTime: "8 min de leitura",
+    publishedAt: "2026-05-20",
+    updatedAt: "2026-05-20",
+    keywords: [
+      "melhores perfumes árabes femininos 2026",
+      "perfumes árabes femininos",
+      "perfume árabe feminino elegante",
+      "perfume feminino árabe doce",
+      "perfumes femininos importados árabes",
+      "perfume árabe feminino alta fixação",
+    ],
+    heroLabel: "Ranking Maison Noor",
+    sections: [
+      {
+        heading: "Por que os perfumes árabes femininos chamam tanta atenção?",
+        body: [
+          "Os perfumes árabes femininos ganharam espaço porque unem presença, sofisticação e um estilo olfativo muito marcante. Em vez de fragrâncias comuns e discretas demais, eles costumam entregar assinatura, rastro e personalidade.",
+          "Para quem busca um perfume feminino elegante, doce na medida certa e com aparência de fragrância premium, a perfumaria árabe oferece opções excelentes. A Maison Noor seleciona fragrâncias pensando em ocasião, estilo, intensidade e experiência de uso.",
+        ],
+      },
+      {
+        heading: "1. Ameerati: elegância feminina com presença refinada",
+        body: [
+          "Ameerati é uma opção para quem gosta de perfume feminino com presença elegante, sofisticada e versátil. É uma fragrância que combina com mulheres que querem transmitir cuidado, bom gosto e uma assinatura olfativa marcante.",
+          "Funciona muito bem para encontros, eventos, trabalho e ocasiões em que a intenção é ser lembrada sem exagerar. É uma escolha forte para quem procura um perfume árabe feminino elegante.",
+        ],
+      },
+      {
+        heading: "2. Fakhar Rose: floral sofisticado e feminino",
+        body: [
+          "Fakhar Rose é uma das opções mais interessantes para quem busca feminilidade com sofisticação. Ele costuma agradar quem gosta de perfume floral, elegante e com presença mais refinada.",
+          "É uma fragrância com perfil de mulher arrumada, confiante e elegante. Pode funcionar muito bem para ocasiões especiais, encontros e momentos em que a presença olfativa faz diferença.",
+        ],
+      },
+      {
+        heading: "3. Shagaf Al Ward: floral marcante com lado envolvente",
+        body: [
+          "Shagaf Al Ward aparece como uma escolha poderosa para quem gosta de perfumes femininos florais, intensos e com uma pegada mais envolvente. É uma fragrância que não passa despercebida.",
+          "Pode ser uma ótima alternativa para quem procura um perfume árabe feminino com personalidade, ideal para noites, eventos e momentos especiais.",
+        ],
+      },
+      {
+        heading: "4. Sabah Al Ward: delicadeza moderna e feminina",
+        body: [
+          "Sabah Al Ward tem uma proposta feminina mais delicada, bonita e elegante. É uma fragrância interessante para quem quer um perfume árabe agradável, sofisticado e fácil de usar.",
+          "Combina com rotina, encontros leves, ocasiões sociais e momentos em que a intenção é transmitir feminilidade com conforto.",
+        ],
+      },
+      {
+        heading: "5. Yara Rosa: doce cremoso e queridinho do público feminino",
+        body: [
+          "Yara Rosa é um dos perfumes árabes femininos mais buscados por quem gosta de fragrâncias doces, cremosas e confortáveis. Ele transmite uma sensação feminina, delicada e muito agradável.",
+          "É uma excelente escolha para quem quer um perfume fácil de gostar, com perfil jovem, elegante e versátil. Também é muito procurado como presente feminino.",
+        ],
+      },
+      {
+        heading: "Qual perfume escolher?",
+        body: [
+          "Se você quer elegância refinada, Ameerati e Fakhar Rose são ótimas escolhas. Se prefere intensidade floral, Shagaf Al Ward pode fazer mais sentido. Para uma proposta delicada e moderna, Sabah Al Ward se destaca. Já para quem busca doçura cremosa e popularidade, Yara Rosa é uma escolha muito segura.",
+          "A melhor escolha depende do seu estilo, ocasião de uso e intensidade desejada. A Maison Noor pode ajudar na escolha pelo WhatsApp com uma curadoria mais personalizada.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Qual é o melhor perfume árabe feminino de 2026?",
+        answer:
+          "Depende do estilo desejado. Para elegância, Ameerati e Fakhar Rose são ótimas opções. Para doçura cremosa, Yara Rosa se destaca. Para presença floral marcante, Shagaf Al Ward é uma boa escolha.",
+      },
+      {
+        question: "Qual perfume árabe feminino é mais doce?",
+        answer:
+          "Entre as opções citadas, Yara Rosa tende a ser a escolha mais associada ao perfil doce, cremoso e confortável.",
+      },
+      {
+        question: "Qual perfume árabe feminino é mais elegante?",
+        answer:
+          "Ameerati e Fakhar Rose são excelentes opções para quem busca um perfume feminino elegante, sofisticado e com presença refinada.",
+      },
+      {
+        question: "Perfume árabe feminino fixa bem?",
+        answer:
+          "Muitos perfumes árabes são conhecidos pela boa fixação, mas o desempenho pode variar conforme pele, clima, quantidade aplicada e família olfativa.",
+      },
+      {
+        question: "Qual perfume árabe feminino dar de presente?",
+        answer:
+          "Yara Rosa costuma ser uma opção segura para presente por ser doce, confortável e fácil de agradar. Fakhar Rose também é uma boa escolha para quem busca algo mais elegante.",
+      },
+    ],
+    relatedProductsText: "Ver perfumes femininos árabes da Maison Noor",
+  },
+  {
+    slug: "yara-rosa-vs-fakhar-rose",
+    title: "Yara Rosa vs Fakhar Rose: qual perfume árabe feminino vale mais a pena?",
+    excerpt:
+      "Compare Yara Rosa e Fakhar Rose em aroma, estilo, ocasião, feminilidade e proposta olfativa para escolher o perfume árabe feminino ideal.",
+    category: "Comparativo feminino",
+    readTime: "7 min de leitura",
+    publishedAt: "2026-05-20",
+    updatedAt: "2026-05-20",
+    keywords: [
+      "Yara Rosa vs Fakhar Rose",
+      "Yara Rosa ou Fakhar Rose",
+      "perfume árabe feminino doce",
+      "perfume árabe feminino elegante",
+      "Fakhar Rose vale a pena",
+      "Yara Rosa vale a pena",
+    ],
+    heroLabel: "Comparativo Maison Noor",
+    sections: [
+      {
+        heading: "Yara Rosa e Fakhar Rose: duas propostas femininas diferentes",
+        body: [
+          "Yara Rosa e Fakhar Rose estão entre os perfumes árabes femininos mais procurados por quem busca fragrâncias bonitas, marcantes e com boa percepção de valor. Apesar de ambos serem femininos, eles entregam sensações bem diferentes.",
+          "Yara Rosa conversa mais com quem gosta de doçura cremosa, conforto e uma feminilidade delicada. Fakhar Rose tende a ir para um lado mais floral, sofisticado e elegante.",
+        ],
+      },
+      {
+        heading: "Aroma: doce cremoso ou floral sofisticado?",
+        body: [
+          "Yara Rosa costuma agradar quem gosta de perfume doce, macio e fácil de usar. É uma fragrância confortável, feminina e muito associada a uma sensação cremosa e envolvente.",
+          "Fakhar Rose tem uma proposta mais floral e refinada. Ele transmite uma feminilidade mais adulta, elegante e com presença de perfume arrumado.",
+        ],
+      },
+      {
+        heading: "Ocasião ideal de uso",
+        body: [
+          "Yara Rosa é mais versátil para rotina, encontros leves, momentos casuais e situações em que você quer um perfume agradável e feminino sem pesar.",
+          "Fakhar Rose pode funcionar melhor quando a intenção é passar elegância, sofisticação e uma presença mais refinada. Combina com eventos, encontros e ocasiões especiais.",
+        ],
+      },
+      {
+        heading: "Qual chama mais atenção?",
+        body: [
+          "Se a intenção é chamar atenção pela doçura confortável e pelo lado delicado, Yara Rosa pode ser a melhor escolha. Ele costuma ser fácil de gostar e tem grande apelo entre quem prefere perfumes femininos doces.",
+          "Se a intenção é transmitir elegância e sofisticação floral, Fakhar Rose se destaca. Ele tende a parecer mais refinado e pode passar uma imagem mais madura e sofisticada.",
+        ],
+      },
+      {
+        heading: "Qual vale mais a pena?",
+        body: [
+          "Yara Rosa vale mais a pena para quem quer um perfume feminino doce, confortável, popular e seguro para usar no dia a dia ou presentear.",
+          "Fakhar Rose vale mais a pena para quem busca um perfume feminino mais elegante, floral e sofisticado, com uma presença mais refinada.",
+        ],
+      },
+      {
+        heading: "Resumo Maison Noor",
+        body: [
+          "Escolha Yara Rosa se você quer doçura, conforto e uma fragrância feminina fácil de agradar. Escolha Fakhar Rose se você quer uma fragrância mais elegante, floral e sofisticada.",
+          "As duas opções são fortes dentro da perfumaria árabe feminina, mas atendem momentos e estilos diferentes.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Yara Rosa é mais doce que Fakhar Rose?",
+        answer:
+          "Sim. Yara Rosa tende a ser mais associado ao perfil doce e cremoso, enquanto Fakhar Rose vai para uma proposta mais floral e elegante.",
+      },
+      {
+        question: "Fakhar Rose é mais elegante que Yara Rosa?",
+        answer:
+          "Para quem busca um perfume com perfil floral sofisticado, Fakhar Rose pode transmitir uma elegância mais refinada.",
+      },
+      {
+        question: "Qual dos dois é melhor para presente?",
+        answer:
+          "Yara Rosa costuma ser uma escolha mais segura para presente por ser doce, confortável e fácil de agradar. Fakhar Rose é melhor quando a pessoa gosta de perfumes florais elegantes.",
+      },
+      {
+        question: "Yara Rosa serve para o dia a dia?",
+        answer:
+          "Sim. Yara Rosa funciona muito bem para rotina, encontros leves e uso casual feminino.",
+      },
+      {
+        question: "Fakhar Rose combina com ocasiões especiais?",
+        answer:
+          "Sim. Fakhar Rose combina bem com encontros, eventos e momentos em que a intenção é transmitir sofisticação.",
+      },
+    ],
+    relatedProductsText: "Ver Yara Rosa e Fakhar Rose na Maison Noor",
+  },
+  {
+    slug: "sabah-al-ward-vs-shagaf-al-ward",
+    title: "Sabah Al Ward vs Shagaf Al Ward: qual perfume árabe feminino escolher?",
+    excerpt:
+      "Entenda as diferenças entre Sabah Al Ward e Shagaf Al Ward para escolher entre uma fragrância feminina delicada ou uma presença floral mais marcante.",
+    category: "Comparativo feminino",
+    readTime: "7 min de leitura",
+    publishedAt: "2026-05-20",
+    updatedAt: "2026-05-20",
+    keywords: [
+      "Sabah Al Ward vs Shagaf Al Ward",
+      "Sabah Al Ward ou Shagaf Al Ward",
+      "perfume árabe feminino floral",
+      "perfume árabe feminino marcante",
+      "Shagaf Al Ward vale a pena",
+      "Sabah Al Ward vale a pena",
+    ],
+    heroLabel: "Comparativo Maison Noor",
+    sections: [
+      {
+        heading: "Duas fragrâncias femininas com propostas diferentes",
+        body: [
+          "Sabah Al Ward e Shagaf Al Ward são opções femininas que conversam com quem gosta de perfumes árabes com presença floral. Apesar disso, cada uma transmite uma sensação diferente.",
+          "Sabah Al Ward tende a ser uma escolha mais delicada, confortável e moderna. Shagaf Al Ward costuma ser mais marcante, envolvente e intenso.",
+        ],
+      },
+      {
+        heading: "Sabah Al Ward: feminino delicado e elegante",
+        body: [
+          "Sabah Al Ward combina com quem procura um perfume feminino bonito, agradável e sofisticado sem ser exagerado. É uma opção interessante para uso social, rotina elegante e encontros leves.",
+          "Ele transmite uma feminilidade moderna, com presença equilibrada e fácil de usar.",
+        ],
+      },
+      {
+        heading: "Shagaf Al Ward: floral intenso e presença marcante",
+        body: [
+          "Shagaf Al Ward é uma escolha para quem quer uma fragrância feminina mais intensa e memorável. Ele pode ser ideal para quem gosta de perfumes que aparecem mais e deixam uma impressão forte.",
+          "É uma opção interessante para noite, eventos, encontros e ocasiões em que a fragrância faz parte da presença.",
+        ],
+      },
+      {
+        heading: "Qual combina mais com o dia a dia?",
+        body: [
+          "Sabah Al Ward tende a ser mais fácil de usar no dia a dia por ter uma proposta mais delicada e confortável.",
+          "Shagaf Al Ward pode funcionar na rotina para quem gosta de fragrâncias marcantes, mas tende a brilhar mais em momentos especiais.",
+        ],
+      },
+      {
+        heading: "Qual é mais marcante?",
+        body: [
+          "Shagaf Al Ward tende a ser a escolha mais marcante entre os dois. Ele conversa com quem quer presença, intensidade e uma assinatura olfativa mais evidente.",
+          "Sabah Al Ward é mais indicado para quem prefere uma feminilidade elegante, moderna e equilibrada.",
+        ],
+      },
+      {
+        heading: "Resumo Maison Noor",
+        body: [
+          "Escolha Sabah Al Ward se você quer delicadeza, elegância e versatilidade. Escolha Shagaf Al Ward se você quer intensidade, presença e um floral mais marcante.",
+          "As duas fragrâncias podem fazer parte de uma coleção feminina bem equilibrada: uma para momentos leves e outra para ocasiões de maior impacto.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Sabah Al Ward é mais leve que Shagaf Al Ward?",
+        answer:
+          "Sim. Sabah Al Ward tende a ter uma proposta mais delicada e confortável, enquanto Shagaf Al Ward costuma ser mais marcante.",
+      },
+      {
+        question: "Shagaf Al Ward é bom para noite?",
+        answer:
+          "Sim. Shagaf Al Ward combina muito bem com noite, eventos, encontros e ocasiões em que a intenção é deixar presença.",
+      },
+      {
+        question: "Qual dos dois é melhor para presente?",
+        answer:
+          "Sabah Al Ward pode ser mais seguro para presente por ter uma proposta mais delicada. Shagaf Al Ward é melhor para quem gosta de perfumes femininos mais intensos.",
+      },
+      {
+        question: "Sabah Al Ward combina com o dia a dia?",
+        answer:
+          "Sim. Sabah Al Ward pode funcionar muito bem para rotina, trabalho, encontros leves e uso social elegante.",
+      },
+      {
+        question: "Qual dos dois chama mais atenção?",
+        answer:
+          "Shagaf Al Ward tende a chamar mais atenção por ter uma proposta mais intensa e marcante.",
+      },
+    ],
+    relatedProductsText: "Ver Sabah Al Ward e Shagaf Al Ward na Maison Noor",
+  },
+
 ];
 
 export function getBlogPost(slug: string) {
