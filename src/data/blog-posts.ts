@@ -1007,6 +1007,292 @@ export const blogPosts: BlogPost[] = [
     relatedProductsText: "Ver Sabah Al Ward e Shagaf Al Ward na Maison Noor",
   },
 
+
+  {
+    slug: "perfumes-parecidos-com-creed-aventus",
+    title: "Perfumes parecidos com Creed Aventus: alternativas masculinas marcantes",
+    excerpt:
+      "Conheça perfumes árabes com proposta elegante, frutada, amadeirada e masculina para quem gosta do estilo Creed Aventus.",
+    category: "Perfumes parecidos",
+    readTime: "7 min de leitura",
+    publishedAt: "2026-05-21",
+    updatedAt: "2026-05-21",
+    keywords: [
+      "perfumes parecidos com Creed Aventus",
+      "perfume parecido com Aventus",
+      "Club de Nuit Intense Man",
+      "perfume masculino árabe",
+      "perfume árabe masculino elegante",
+    ],
+    heroLabel: "Perfumes parecidos",
+    cover: "/blog/perfumes-parecidos-com-creed-aventus.jpg",
+    sections: [
+      {
+        heading: "Por que o estilo Aventus é tão procurado?",
+        body: [
+          "O estilo Aventus ficou famoso por unir presença masculina, sensação frutada sofisticada, fundo amadeirado e um rastro elegante.",
+          "Por isso, muitos homens procuram perfumes com uma proposta parecida: marcante, confiante, versátil e com aparência de perfume caro.",
+          "Dentro da perfumaria árabe, existem opções que dialogam com essa assinatura olfativa, especialmente para quem busca impacto e boa percepção de valor.",
+        ],
+      },
+      {
+        heading: "Club de Nuit Intense Man: a alternativa mais comentada",
+        body: [
+          "Club de Nuit Intense Man, da Armaf, é uma das fragrâncias mais associadas ao estilo Aventus por muitos consumidores.",
+          "Ele costuma agradar quem busca um perfume masculino de presença, com saída intensa, evolução elegante e perfil marcante.",
+          "É uma escolha interessante para encontros, eventos, trabalho em ambientes mais sofisticados e ocasiões em que você deseja transmitir segurança.",
+        ],
+      },
+      {
+        heading: "Para quem esse tipo de perfume combina?",
+        body: [
+          "Combina com homens que gostam de fragrâncias com personalidade, presença e uma assinatura olfativa mais memorável.",
+          "Também funciona bem para quem procura um perfume para sair, trabalhar bem vestido, presentear ou criar uma impressão sofisticada.",
+          "Se a preferência for por perfumes extremamente leves e discretos, talvez seja melhor buscar alternativas mais frescas ou aromáticas.",
+        ],
+      },
+      {
+        heading: "Como escolher com segurança",
+        body: [
+          "Observe se você gosta de perfumes frutados, amadeirados, levemente esfumaçados e com boa projeção.",
+          "Na Maison Noor, a curadoria pode ajudar a identificar se Club de Nuit Intense Man combina com seu estilo, clima e ocasião de uso.",
+          "O ideal é não escolher apenas pela comparação, mas pela sensação que o perfume transmite em você.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Qual perfume árabe parece com Creed Aventus?",
+        answer:
+          "Club de Nuit Intense Man é uma das opções mais lembradas quando o assunto é perfume árabe com proposta parecida ao estilo Creed Aventus.",
+      },
+      {
+        question: "Club de Nuit Intense Man é igual ao Aventus?",
+        answer:
+          "Não. Muitos consumidores percebem semelhanças de estilo, mas cada perfume tem sua própria construção, evolução e identidade.",
+      },
+      {
+        question: "Perfume parecido com Aventus vale a pena?",
+        answer:
+          "Pode valer muito a pena para quem busca uma fragrância masculina marcante, elegante e com boa percepção de valor.",
+      },
+    ],
+    relatedProductsText: "Ver Club de Nuit Intense Man na Maison Noor",
+  },
+  {
+    slug: "perfumes-parecidos-com-sauvage-elixir",
+    title: "Perfumes parecidos com Sauvage Elixir: intensidade, especiarias e presença",
+    excerpt:
+      "Veja opções de perfumes árabes masculinos intensos e especiados para quem gosta do estilo Sauvage Elixir.",
+    category: "Perfumes parecidos",
+    readTime: "7 min de leitura",
+    publishedAt: "2026-05-21",
+    updatedAt: "2026-05-21",
+    keywords: [
+      "perfumes parecidos com Sauvage Elixir",
+      "Lattafa Asad parece Sauvage Elixir",
+      "perfume árabe masculino intenso",
+      "perfume masculino especiado",
+      "Asad Lattafa",
+    ],
+    heroLabel: "Perfumes parecidos",
+    cover: "/blog/perfumes-parecidos-com-sauvage-elixir.jpg",
+    sections: [
+      {
+        heading: "O que caracteriza o estilo Sauvage Elixir?",
+        body: [
+          "O estilo Sauvage Elixir é associado a perfumes masculinos intensos, especiados, aromáticos e com forte presença.",
+          "É uma proposta para quem gosta de fragrâncias mais noturnas, maduras, poderosas e com sensação de assinatura marcante.",
+          "Por isso, muitos consumidores procuram alternativas árabes com esse mesmo impacto de presença.",
+        ],
+      },
+      {
+        heading: "Lattafa Asad: uma das opções mais buscadas",
+        body: [
+          "Lattafa Asad ficou muito comentado justamente por lembrar essa proposta intensa, especiada e masculina.",
+          "Ele agrada quem busca um perfume árabe com presença, boa personalidade e sensação de perfume imponente.",
+          "É uma fragrância que tende a funcionar melhor à noite, em clima ameno e em ocasiões onde você quer ser notado.",
+        ],
+      },
+      {
+        heading: "Para quem o Asad combina?",
+        body: [
+          "Combina com quem gosta de perfumes fortes, especiados, quentes e menos óbvios.",
+          "Também pode ser uma excelente escolha para encontros, eventos, jantares, festas e ocasiões especiais.",
+          "Para uso em dias muito quentes ou ambientes pequenos, a aplicação deve ser moderada.",
+        ],
+      },
+      {
+        heading: "Como decidir se vale a pena",
+        body: [
+          "Se você gosta de perfumes leves, cítricos e discretos, talvez o Asad não seja a opção mais segura.",
+          "Mas se busca uma fragrância masculina com impacto, personalidade e presença, ele pode ser uma excelente escolha.",
+          "A Maison Noor pode ajudar na escolha comparando intensidade, ocasião e estilo olfativo.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Qual perfume árabe parece com Sauvage Elixir?",
+        answer:
+          "Lattafa Asad é uma das opções mais associadas ao estilo Sauvage Elixir por sua proposta intensa, especiada e masculina.",
+      },
+      {
+        question: "Asad é muito forte?",
+        answer:
+          "Sim, o Asad costuma ser percebido como um perfume marcante e intenso, indicado para quem gosta de presença.",
+      },
+      {
+        question: "Asad é bom para noite?",
+        answer:
+          "Sim. Ele combina muito bem com noite, clima ameno, encontros e ocasiões especiais.",
+      },
+    ],
+    relatedProductsText: "Ver Lattafa Asad na Maison Noor",
+  },
+  {
+    slug: "perfumes-parecidos-com-baccarat-rouge",
+    title: "Perfumes parecidos com Baccarat Rouge: doces, sofisticados e marcantes",
+    excerpt:
+      "Entenda o estilo Baccarat Rouge e veja como escolher perfumes árabes doces, ambarados e sofisticados com presença elegante.",
+    category: "Perfumes parecidos",
+    readTime: "7 min de leitura",
+    publishedAt: "2026-05-21",
+    updatedAt: "2026-05-21",
+    keywords: [
+      "perfumes parecidos com Baccarat Rouge",
+      "perfume parecido com Baccarat",
+      "perfume árabe doce",
+      "perfume árabe feminino sofisticado",
+      "perfume ambarado doce",
+    ],
+    heroLabel: "Perfumes parecidos",
+    cover: "/blog/perfumes-parecidos-com-baccarat-rouge.jpg",
+    sections: [
+      {
+        heading: "Por que Baccarat Rouge virou referência?",
+        body: [
+          "O estilo Baccarat Rouge ficou conhecido por transmitir uma sensação doce, ambarada, sofisticada e muito memorável.",
+          "É uma proposta que mistura presença, elegância e um rastro marcante, sem depender de um doce infantil.",
+          "Por isso, muitas pessoas procuram perfumes árabes com esse mesmo ar luxuoso, envolvente e diferenciado.",
+        ],
+      },
+      {
+        heading: "O que procurar em um perfume com esse estilo",
+        body: [
+          "Procure fragrâncias com notas doces sofisticadas, âmbar, madeiras suaves, toque floral ou nuance resinosa.",
+          "Perfumes com esse perfil costumam ser bons para encontros, eventos, noite, clima ameno e ocasiões especiais.",
+          "O ideal é buscar equilíbrio: presença marcante, mas sem ficar enjoativo.",
+        ],
+      },
+      {
+        heading: "Perfumes árabes doces podem ser elegantes?",
+        body: [
+          "Sim. A perfumaria árabe trabalha muito bem o doce com intensidade, sofisticação e fundo envolvente.",
+          "Quando bem escolhido, o perfume doce pode transmitir feminilidade, presença e luxo.",
+          "Na Maison Noor, opções como Yara Rosa, Fakhar Rose, Shagaf Al Ward e Sabah Al Ward podem entrar em uma curadoria feminina elegante, cada uma com sua proposta.",
+        ],
+      },
+      {
+        heading: "Como escolher o melhor para você",
+        body: [
+          "Se você prefere algo mais delicado e confortável, procure doces cremosos e florais suaves.",
+          "Se quer impacto, escolha perfumes mais intensos, ambarados e com maior projeção.",
+          "A melhor escolha depende do seu estilo, ocasião e intensidade desejada.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Existe perfume árabe parecido com Baccarat Rouge?",
+        answer:
+          "Existem perfumes árabes com proposta doce, ambarada e sofisticada que podem agradar quem gosta do estilo Baccarat Rouge.",
+      },
+      {
+        question: "Perfume doce árabe é enjoativo?",
+        answer:
+          "Não necessariamente. Tudo depende da composição, intensidade e forma de aplicação. Perfumes doces sofisticados podem ser elegantes e muito marcantes.",
+      },
+      {
+        question: "Qual perfume feminino árabe é mais sofisticado?",
+        answer:
+          "Depende do estilo desejado. Fakhar Rose, Shagaf Al Ward, Sabah Al Ward, Ameerati e Yara Rosa podem funcionar em diferentes propostas femininas.",
+      },
+    ],
+    relatedProductsText: "Ver perfumes árabes femininos doces",
+  },
+  {
+    slug: "perfumes-parecidos-com-good-girl",
+    title: "Perfumes parecidos com Good Girl: femininos, sedutores e elegantes",
+    excerpt:
+      "Veja como escolher perfumes árabes femininos com proposta sensual, marcante e elegante para quem gosta do estilo Good Girl.",
+    category: "Perfumes parecidos",
+    readTime: "7 min de leitura",
+    publishedAt: "2026-05-21",
+    updatedAt: "2026-05-21",
+    keywords: [
+      "perfumes parecidos com Good Girl",
+      "perfume parecido com Good Girl",
+      "perfume árabe feminino sensual",
+      "perfume feminino árabe elegante",
+      "perfume feminino para encontros",
+    ],
+    heroLabel: "Perfumes parecidos",
+    cover: "/blog/perfumes-parecidos-com-good-girl.jpg",
+    sections: [
+      {
+        heading: "O que faz o estilo Good Girl ser tão desejado?",
+        body: [
+          "O estilo Good Girl é associado a uma feminilidade marcante, sensual, doce na medida certa e com presença noturna.",
+          "É uma proposta para quem quer um perfume elegante, envolvente e com boa lembrança olfativa.",
+          "Por isso, muitas consumidoras buscam perfumes árabes femininos que transmitam essa mesma sensação de presença e sofisticação.",
+        ],
+      },
+      {
+        heading: "O que procurar em uma alternativa",
+        body: [
+          "Busque perfumes com flores marcantes, toque adocicado, fundo mais quente e sensação de presença elegante.",
+          "Fragrâncias com rosa, baunilha, âmbar, especiarias suaves ou fundo amadeirado podem funcionar muito bem dentro dessa proposta.",
+          "A escolha ideal precisa equilibrar sensualidade e sofisticação.",
+        ],
+      },
+      {
+        heading: "Opções femininas árabes dentro desse universo",
+        body: [
+          "Fakhar Rose pode agradar quem procura um floral feminino sofisticado, com presença e elegância.",
+          "Shagaf Al Ward tende a funcionar para quem gosta de um floral mais intenso, marcante e envolvente.",
+          "Yara Rosa pode ser uma escolha mais cremosa, doce, confortável e muito fácil de gostar.",
+        ],
+      },
+      {
+        heading: "Quando usar esse tipo de perfume",
+        body: [
+          "Perfumes femininos com essa proposta combinam com encontros, noite, eventos, jantares e ocasiões em que você deseja ser lembrada.",
+          "Também podem funcionar como assinatura pessoal para quem gosta de fragrâncias mais femininas e presentes.",
+          "A aplicação deve respeitar o ambiente, principalmente quando o perfume tiver maior projeção.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Existe perfume árabe parecido com Good Girl?",
+        answer:
+          "Existem perfumes árabes femininos com proposta doce, floral, sensual e elegante que podem agradar quem gosta do estilo Good Girl.",
+      },
+      {
+        question: "Qual perfume árabe feminino é mais sensual?",
+        answer:
+          "Fakhar Rose, Shagaf Al Ward, Sabah Al Ward, Ameerati e Yara Rosa podem entregar diferentes estilos de feminilidade, do delicado ao marcante.",
+      },
+      {
+        question: "Perfume feminino árabe combina com encontros?",
+        answer:
+          "Sim. Muitos perfumes árabes femininos têm presença, sofisticação e memória olfativa, funcionando muito bem para encontros e ocasiões especiais.",
+      },
+    ],
+    relatedProductsText: "Ver perfumes árabes femininos para encontros",
+  },
+
 ];
 
 export function getBlogPost(slug: string) {

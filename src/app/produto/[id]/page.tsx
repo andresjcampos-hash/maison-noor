@@ -45,6 +45,36 @@ function limparDescricao(valor?: string) {
     .slice(0, 155);
 }
 
+function getCategoriaSeo(categoria?: string) {
+  const valor = String(categoria || "").toLowerCase();
+
+  if (valor.includes("feminino")) {
+    return {
+      nome: "Perfumes Árabes Femininos",
+      url: `${SITE_URL}/perfumes-arabes-femininos`,
+    };
+  }
+
+  if (valor.includes("masculino")) {
+    return {
+      nome: "Perfumes Árabes Masculinos",
+      url: `${SITE_URL}/perfumes-arabes-masculinos`,
+    };
+  }
+
+  if (valor.includes("unissex")) {
+    return {
+      nome: "Perfumes Árabes Unissex",
+      url: `${SITE_URL}/perfumes-arabes-unissex`,
+    };
+  }
+
+  return {
+    nome: "Perfumes Árabes",
+    url: `${SITE_URL}/produtos`,
+  };
+}
+
 async function buscarProduto(id: string): Promise<ProdutoSeo | null> {
   try {
     const parametro = decodeURIComponent(String(id || "")).trim();
@@ -119,6 +149,7 @@ function montarSeoProduto(produto: ProdutoSeo, id: string) {
   );
 
   const titulo = `${nome} | ${marca} | Maison Noor Parfums`;
+  const categoriaSeo = getCategoriaSeo(produto.categoria);
 
   return {
     nome,
@@ -130,6 +161,7 @@ function montarSeoProduto(produto: ProdutoSeo, id: string) {
     disponivel,
     descricao,
     titulo,
+    categoriaSeo,
   };
 }
 
@@ -214,7 +246,13 @@ export default async function ProdutoPage({
       name: seo.nome,
       description: seo.descricao,
       image: [seo.imagem],
+      url: seo.url,
       sku: produto.id,
+      category: seo.categoriaSeo.nome,
+      mainEntityOfPage: {
+        "@type": "WebPage",
+        "@id": seo.url,
+      },
       brand: {
         "@type": "Brand",
         name: seo.marca,
@@ -256,8 +294,8 @@ export default async function ProdutoPage({
         {
           "@type": "ListItem",
           position: 2,
-          name: "Produtos",
-          item: `${SITE_URL}/produtos`,
+          name: seo.categoriaSeo.nome,
+          item: seo.categoriaSeo.url,
         },
         {
           "@type": "ListItem",
@@ -299,6 +337,18 @@ export default async function ProdutoPage({
       ],
     });
   }
+
+  schemas.push({
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Maison Noor Parfums",
+    url: SITE_URL,
+    potentialAction: {
+      "@type": "SearchAction",
+      target: `${SITE_URL}/produtos?busca={search_term_string}`,
+      "query-input": "required name=search_term_string",
+    },
+  });
 
   schemas.push({
     "@context": "https://schema.org",
