@@ -979,12 +979,24 @@ export default async function SeoProgramaticoPage({ params }: Props) {
               margin: "0 0 6px",
             }}
           >
-            FAQ SEO
+            Perguntas frequentes
           </p>
 
-          <h2 style={{ fontSize: 24, margin: "0 0 14px" }}>
-            Perguntas frequentes sobre {page.h1.toLowerCase()}
+          <h2 style={{ fontSize: 26, margin: "0 0 8px" }}>
+            Dúvidas comuns sobre {page.h1.toLowerCase()}
           </h2>
+
+          <p
+            style={{
+              margin: "0 0 16px",
+              color: "#6D5A48",
+              lineHeight: 1.55,
+              fontSize: 15,
+              maxWidth: 760,
+            }}
+          >
+            Respostas rápidas para ajudar você a escolher melhor sua fragrância árabe e reforçar a curadoria da Maison Noor.
+          </p>
 
           <div
             style={{
