@@ -65,6 +65,20 @@ type FornecedorFiscal = {
   totalCompras?: number;
 };
 
+type ProdutoFiscal = {
+  id: string;
+  nome: string;
+  slug?: string;
+  marca?: string;
+  categoria?: string;
+  estoque?: number;
+  precoCompra?: number;
+  custo?: number;
+  precoVenda?: number;
+  ativo?: boolean;
+  status?: string;
+};
+
 type EntradaFiscal = {
   id: string;
   tipo: TipoDocumento;
@@ -157,6 +171,16 @@ function toNum(v: string | number): number {
     .replace(",", ".");
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
+}
+
+function slugify(texto: string): string {
+  return String(texto || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 }
 
 function getDateOnlyTime(date: string): number {
@@ -775,6 +799,7 @@ function recalcularEntradaFiscal(next: EntradaFiscal): EntradaFiscal {
 export default function FiscalPage() {
   const [items, setItems] = useState<EntradaFiscal[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorFiscal[]>([]);
+  const [produtos, setProdutos] = useState<ProdutoFiscal[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
 
@@ -842,9 +867,41 @@ export default function FiscalPage() {
     }
   }
 
+  async function carregarProdutos() {
+    try {
+      const qRef = query(collection(db, PRODUCTS_COLLECTION), orderBy("nome", "asc"));
+      const snap = await getDocs(qRef);
+
+      const list = snap.docs
+        .map((d) => {
+          const data = d.data() as any;
+
+          return {
+            id: d.id,
+            nome: String(data?.nome || data?.produto || ""),
+            slug: data?.slug ? String(data.slug) : "",
+            marca: data?.marca ? String(data.marca) : "",
+            categoria: data?.categoria ? String(data.categoria) : "",
+            estoque: Number(data?.estoque || 0),
+            precoCompra: Number(data?.precoCompra || 0),
+            custo: Number(data?.custo || 0),
+            precoVenda: Number(data?.precoVenda || 0),
+            ativo: data?.ativo !== false,
+            status: data?.status ? String(data.status) : "ativo",
+          } as ProdutoFiscal;
+        })
+        .filter((item) => item.nome && item.ativo !== false && item.status !== "inativo");
+
+      setProdutos(list);
+    } catch (error) {
+      console.error("[Fiscal] Erro ao carregar produtos:", error);
+    }
+  }
+
   useEffect(() => {
     void carregarEntradas();
     void carregarFornecedores();
+    void carregarProdutos();
   }, []);
 
   function recalcularTotais(next: EntradaFiscal): EntradaFiscal {
@@ -907,6 +964,118 @@ export default function FiscalPage() {
         telefone: fornecedor.whatsapp || fornecedor.telefone || prev.telefone || "",
       })
     );
+  }
+
+  function produtoLabel(produto: ProdutoFiscal) {
+    const partes = [
+      produto.nome,
+      produto.marca ? `Marca: ${produto.marca}` : "",
+      produto.categoria ? `Categoria: ${produto.categoria}` : "",
+      Number.isFinite(Number(produto.estoque)) ? `Estoque: ${Number(produto.estoque || 0)}` : "",
+    ].filter(Boolean);
+
+    return partes.join(" • ");
+  }
+
+  function selecionarProdutoNoItem(itemId: string, value: string) {
+    const nomeDigitado = String(value || "").trim();
+
+    const produtoEncontrado = produtos.find((produto) => {
+      const nome = String(produto.nome || "").trim().toLowerCase();
+      const id = String(produto.id || "").trim().toLowerCase();
+      const valor = nomeDigitado.toLowerCase();
+
+      return nome === valor || id === valor || produtoLabel(produto).toLowerCase() === valor;
+    });
+
+    if (!produtoEncontrado) {
+      updateItem(itemId, {
+        produto: value,
+        produtoId: "",
+      });
+      return;
+    }
+
+    const custoProduto = Number(produtoEncontrado.precoCompra || produtoEncontrado.custo || 0);
+
+    updateItem(itemId, {
+      produto: produtoEncontrado.nome,
+      produtoId: produtoEncontrado.id,
+      custoUnitario: custoProduto > 0 ? custoProduto : form.itens.find((item) => item.id === itemId)?.custoUnitario || 0,
+    });
+  }
+
+  async function cadastrarProdutoRapido(item: ItemFiscal) {
+    const nomeProduto = String(item.produto || "").trim();
+
+    if (!nomeProduto) {
+      showToast("⚠️ Digite o nome do produto antes de cadastrar.");
+      return;
+    }
+
+    const jaExiste = produtos.find(
+      (produto) => String(produto.nome || "").trim().toLowerCase() === nomeProduto.toLowerCase()
+    );
+
+    if (jaExiste) {
+      selecionarProdutoNoItem(item.id, jaExiste.nome);
+      showToast("✅ Produto já existia e foi vinculado ao item.");
+      return;
+    }
+
+    try {
+      showToast("⏳ Cadastrando produto rápido...");
+
+      const categoria =
+        item.tipoItem === "revenda"
+          ? "perfume"
+          : item.tipoItem === "embalagem"
+            ? "embalagem"
+            : item.tipoItem === "imobilizado"
+              ? "imobilizado"
+              : "consumo";
+
+      const created = await addDoc(collection(db, PRODUCTS_COLLECTION), cleanUndefined({
+        nome: nomeProduto,
+        slug: slugify(nomeProduto),
+        categoria,
+        ativo: true,
+        status: "ativo",
+        estoque: 0,
+        precoCompra: Number(item.custoUnitario || 0),
+        custo: Number(item.custoUnitario || 0),
+        ultimoCustoCompra: Number(item.custoUnitario || 0),
+        origemCadastro: "fiscal_entrada_manual",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+
+      const novoProduto: ProdutoFiscal = {
+        id: created.id,
+        nome: nomeProduto,
+        slug: slugify(nomeProduto),
+        categoria,
+        ativo: true,
+        status: "ativo",
+        estoque: 0,
+        precoCompra: Number(item.custoUnitario || 0),
+        custo: Number(item.custoUnitario || 0),
+      };
+
+      setProdutos((prev) =>
+        [...prev, novoProduto].sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")))
+      );
+
+      updateItem(item.id, {
+        produto: nomeProduto,
+        produtoId: created.id,
+      });
+
+      showToast("✅ Produto cadastrado e vinculado ao item.");
+    } catch (error) {
+      console.error("[Fiscal] Erro ao cadastrar produto rápido:", error);
+      showToast("❌ Erro ao cadastrar produto rápido.");
+    }
   }
 
   function importarXml(file: File): void {
@@ -1006,10 +1175,12 @@ export default function FiscalPage() {
       numeroDocumento: normalized.numeroDocumento.trim(),
       serie: normalized.serie?.trim() || "",
       chaveAcesso: normalized.chaveAcesso?.trim() || "",
+      fornecedorId: normalized.fornecedorId || "",
       fornecedor: normalized.fornecedor.trim(),
       cnpj: normalized.cnpj?.trim() || "",
       telefone: normalized.telefone?.trim() || "",
       centroCusto: normalized.centroCusto || "outros",
+      tipoEntradaGeral: normalized.tipoEntradaGeral || "revenda",
       dataEmissao: normalized.dataEmissao,
       dataEntrada: normalized.dataEntrada,
       valorProdutos: normalized.valorProdutos,
@@ -1031,6 +1202,7 @@ export default function FiscalPage() {
         id: item.id,
         produtoId: item.produtoId || "",
         produto: item.produto.trim(),
+        tipoItem: item.tipoItem || "revenda",
         quantidade: Number(item.quantidade) || 0,
         custoUnitario: Number(item.custoUnitario) || 0,
         total: Number(item.total) || 0,
@@ -1081,6 +1253,7 @@ export default function FiscalPage() {
 
       await carregarEntradas();
       await carregarFornecedores();
+      await carregarProdutos();
 
       if (normalized.status === "confirmado") {
         showToast("✅ Entrada fiscal confirmada, estoque atualizado e financeiro lançado!");
@@ -1261,6 +1434,14 @@ export default function FiscalPage() {
       </header>
 
       {toast ? <div className="toast">{toast}</div> : null}
+
+      <datalist id="produtos-fiscais-lista">
+        {produtos.map((produto) => (
+          <option key={produto.id} value={produto.nome}>
+            {produtoLabel(produto)}
+          </option>
+        ))}
+      </datalist>
 
       <section className="controlPanel">
         <div className="quickFilters">
@@ -1493,7 +1674,7 @@ export default function FiscalPage() {
                 {form.itens.map((item, index) => (
                   <div className="itemRow" key={item.id}>
                     <div className="itemIndex">{index + 1}</div>
-                    <div className="field itemProduct"><label>Produto / descrição fiscal</label><input className="input" value={item.produto} onChange={(e) => updateItem(item.id, { produto: e.target.value })} placeholder="Ex: perfume, sacola, combustível, decoração..." /></div>
+                    <div className="field itemProduct"><label>Produto / descrição fiscal</label><div className="productSuggestWrap"><input className="input" list="produtos-fiscais-lista" value={item.produto} onChange={(e) => selecionarProdutoNoItem(item.id, e.target.value)} onBlur={(e) => selecionarProdutoNoItem(item.id, e.target.value)} placeholder="Digite para buscar produto cadastrado ou informar novo item..." /><button type="button" className="quickProductBtn" onClick={() => void cadastrarProdutoRapido(item)}>+ Novo</button></div><small className="itemHint">{item.produtoId ? "Produto vinculado ao cadastro e pronto para estoque." : "Produto não vinculado. Use + Novo para cadastrar rápido."}</small></div>
                     <div className="field"><label>Tipo</label><select className="input" value={item.tipoItem || "revenda"} onChange={(e) => updateItem(item.id, { tipoItem: e.target.value as TipoItemFiscal })}><option value="revenda">Revenda</option><option value="embalagem">Embalagem</option><option value="consumo">Consumo</option><option value="operacional">Operacional</option><option value="imobilizado">Imobilizado</option></select></div>
                     <div className="field"><label>Qtd</label><input className="input" value={String(item.quantidade)} onChange={(e) => updateItem(item.id, { quantidade: toNum(e.target.value) })} /></div>
                     <div className="field"><label>Custo unit.</label><input className="input" value={String(item.custoUnitario)} onChange={(e) => updateItem(item.id, { custoUnitario: toNum(e.target.value) })} /></div>
@@ -1650,6 +1831,9 @@ export default function FiscalPage() {
         }
         @media (max-width: 1100px) { .filtersGrid, .premiumPanel, .listsGrid, .modalGrid { grid-template-columns: 1fr; } .fiscalOverview { grid-template-columns: 1fr !important; } .fiscalOverviewGrid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } .entry { grid-template-columns: 42px minmax(0, 1fr); } .entryValue { grid-column: 2 / -1; text-align: left; justify-items: start; } .entryActions { grid-column: 2 / -1; justify-content: flex-start; } .itemRow { grid-template-columns: 34px minmax(0, 1fr); } .itemProduct, .itemRow .field, .removeItem { grid-column: 1 / -1; } .itemIndex { grid-column: 1; } }
         @media (max-width: 760px) { .page { padding: 12px; } .hero { align-items: flex-start; } .kpis { grid-template-columns: 1fr; } .phaseGrid, .resumeFiscal { grid-template-columns: 1fr; } .entryMeta { white-space: normal; } }
+        .productSuggestWrap { display: grid; grid-template-columns: minmax(0, 1fr) 74px; gap: 6px; align-items: center; }
+        .quickProductBtn { min-height: 34px; border-radius: 11px; border: 1px solid rgba(200,162,106,.28); background: rgba(200,162,106,.11); color: #f5f2ec; font-size: 10.5px; font-weight: 950; cursor: pointer; }
+        .itemHint { display: block; margin-top: 4px; font-size: 10px; line-height: 1.25; opacity: .62; }
         .status.atrasado { color: #ffd1d1; border-color: rgba(255,120,120,.42); background: rgba(255,80,80,.12); }
       `}</style>
     </main>
