@@ -1,58 +1,99 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { blogPosts, SITE_URL } from "@/data/blog-posts";
+import { blogPosts, getBlogPost, SITE_URL } from "@/data/blog-posts";
 
-export const metadata: Metadata = {
-  title: "Blog Maison Noor | Guias de Perfumes Árabes",
-  description:
-    "Guias da Maison Noor sobre perfumes árabes, body splash, fixação, marcas árabes e como escolher fragrâncias marcantes.",
-  alternates: {
-    canonical: `${SITE_URL}/blog`,
-  },
-  openGraph: {
-    title: "Blog Maison Noor | Guias de Perfumes Árabes",
-    description:
-      "Conteúdos para escolher perfumes árabes, fragrâncias femininas, masculinas, body splash e perfumes de alta fixação.",
-    url: `${SITE_URL}/blog`,
-    siteName: "Maison Noor Parfums",
-    locale: "pt_BR",
-    type: "website",
-    images: [
-      {
-        url: `${SITE_URL}/logo.png`,
-        width: 1200,
-        height: 630,
-        alt: "Maison Noor Parfums",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Blog Maison Noor | Guias de Perfumes Árabes",
-    description: "Guias de perfumes árabes, fixação, body splash e marcas da perfumaria árabe.",
-    images: [`${SITE_URL}/logo.png`],
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-      "max-video-preview": -1,
-    },
-  },
+type PageProps = {
+  params: {
+    slug: string;
+  };
 };
 
-export default function BlogPage() {
-  const blogJsonLd = {
+export function generateStaticParams() {
+  return blogPosts.map((post) => ({ slug: post.slug }));
+}
+
+export function generateMetadata({ params }: PageProps): Metadata {
+  const post = getBlogPost(params.slug);
+
+  if (!post) {
+    return {
+      title: "Artigo não encontrado",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const url = `${SITE_URL}/blog/${post.slug}`;
+
+  return {
+    title: post.title,
+    description: post.excerpt,
+    keywords: post.keywords,
+    alternates: {
+      canonical: url,
+    },
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      url,
+      siteName: "Maison Noor Parfums",
+      locale: "pt_BR",
+      type: "article",
+      publishedTime: post.publishedAt,
+      modifiedTime: post.updatedAt,
+      authors: ["Maison Noor Parfums"],
+      images: [
+        {
+          url: `${SITE_URL}/logo.png`,
+          width: 1200,
+          height: 630,
+          alt: post.title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: post.title,
+      description: post.excerpt,
+      images: [`${SITE_URL}/logo.png`],
+    },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
+    },
+  };
+}
+
+export default function BlogPostPage({ params }: PageProps) {
+  const post = getBlogPost(params.slug);
+
+  if (!post) notFound();
+
+  const articleUrl = `${SITE_URL}/blog/${post.slug}`;
+
+  const articleJsonLd = {
     "@context": "https://schema.org",
-    "@type": "Blog",
-    name: "Blog Maison Noor",
-    url: `${SITE_URL}/blog`,
-    description:
-      "Guias de perfumes árabes, body splash, fixação e curadoria de fragrâncias premium.",
+    "@type": "Article",
+    headline: post.title,
+    description: post.excerpt,
+    image: [`${SITE_URL}/logo.png`],
+    datePublished: post.publishedAt,
+    dateModified: post.updatedAt,
+    author: {
+      "@type": "Organization",
+      name: "Maison Noor Parfums",
+      url: SITE_URL,
+    },
     publisher: {
       "@type": "Organization",
       name: "Maison Noor Parfums",
@@ -61,94 +102,159 @@ export default function BlogPage() {
         url: `${SITE_URL}/logo.png`,
       },
     },
-    blogPost: blogPosts.map((post) => ({
-      "@type": "BlogPosting",
-      headline: post.title,
-      url: `${SITE_URL}/blog/${post.slug}`,
-      datePublished: post.publishedAt,
-      dateModified: post.updatedAt,
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": articleUrl,
+    },
+  };
+
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: post.faqs.map((faq) => ({
+      "@type": "Question",
+      name: faq.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: faq.answer,
+      },
     })),
+  };
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Início",
+        item: SITE_URL,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Blog",
+        item: `${SITE_URL}/blog`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: post.title,
+        item: articleUrl,
+      },
+    ],
   };
 
   return (
     <main style={styles.page}>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(blogJsonLd) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
 
       <header style={styles.header}>
         <Link href="/" style={styles.brandWrap}>
           <img src="/logo-maison-noor.png" alt="Maison Noor" style={styles.logo} />
           <div>
             <span style={styles.brandKicker}>Maison Noor</span>
-            <strong style={styles.brandTitle}>Blog de Perfumes</strong>
+            <strong style={styles.brandTitle}>Blog</strong>
           </div>
         </Link>
 
         <nav style={styles.nav}>
-          <Link href="/" style={styles.navLink}>Início</Link>
-          <Link href="/novidades" style={styles.navLink}>Novidades</Link>
+          <Link href="/blog" style={styles.navLink}>Blog</Link>
+          <Link href="/" style={styles.navLink}>Catálogo</Link>
           <a href="https://wa.me/5512982389658" target="_blank" rel="noreferrer" style={styles.whatsappButton}>WhatsApp</a>
         </nav>
       </header>
 
-      <section style={styles.hero}>
-        <div style={styles.heroContent}>
-          <span style={styles.badge}>Conteúdo SEO Maison Noor</span>
-          <h1 style={styles.title}>Guias para escolher perfumes árabes com mais segurança.</h1>
-          <p style={styles.subtitle}>
-            Conteúdos criados para ajudar você a entender fixação, projeção, estilos olfativos,
-            body splash, marcas árabes e escolhas ideais para presente ou assinatura pessoal.
-          </p>
-          <div style={styles.heroActions}>
-            <a href="#artigos" style={styles.primaryButton}>Ver artigos</a>
-            <Link href="/" style={styles.secondaryButton}>Voltar ao catálogo</Link>
+      <article style={styles.articleShell}>
+        <div style={styles.breadcrumb}>
+          <Link href="/" style={styles.breadcrumbLink}>Início</Link>
+          <span>/</span>
+          <Link href="/blog" style={styles.breadcrumbLink}>Blog</Link>
+          <span>/</span>
+          <span>{post.category}</span>
+        </div>
+
+        <section style={styles.hero}>
+          <span style={styles.badge}>{post.heroLabel}</span>
+          <h1 style={styles.title}>{post.title}</h1>
+          <p style={styles.subtitle}>{post.excerpt}</p>
+
+          <div style={styles.metaRow}>
+            <span>{post.category}</span>
+            <span>{post.readTime}</span>
+            <span>Atualizado em {new Date(post.updatedAt).toLocaleDateString("pt-BR")}</span>
           </div>
-        </div>
+        </section>
 
-        <aside style={styles.heroCard}>
-          <span style={styles.heroCardKicker}>Autoridade orgânica</span>
-          <strong style={styles.heroCardTitle}>Perfumes árabes, fixação e curadoria premium</strong>
-          <p style={styles.heroCardText}>
-            Um hub de conteúdo para fortalecer a Maison Noor no Google e orientar clientes antes da compra.
-          </p>
-        </aside>
-      </section>
+        <div style={styles.contentGrid}>
+          <div style={styles.contentCard}>
+            {post.sections.map((section) => (
+              <section key={section.heading} style={styles.sectionBlock}>
+                <h2 style={styles.sectionTitle}>{section.heading}</h2>
+                {section.body.map((paragraph) => (
+                  <p key={paragraph} style={styles.paragraph}>{paragraph}</p>
+                ))}
+              </section>
+            ))}
 
-      <section id="artigos" style={styles.postsSection}>
-        <div style={styles.sectionHeader}>
-          <p style={styles.kicker}>Artigos em destaque</p>
-          <h2 style={styles.sectionTitle}>Conteúdos para descobrir sua próxima fragrância</h2>
-        </div>
+            <section style={styles.faqSection}>
+              <p style={styles.kicker}>Perguntas frequentes</p>
+              <h2 style={styles.sectionTitle}>Dúvidas comuns sobre o tema</h2>
 
-        <div style={styles.grid}>
-          {blogPosts.map((post) => (
-            <article key={post.slug} style={styles.card}>
-              <div style={styles.cardTop}>
-                <span style={styles.cardCategory}>{post.category}</span>
-                <span style={styles.readTime}>{post.readTime}</span>
-              </div>
-
-              <Link href={`/blog/${post.slug}`} style={styles.cardTitleLink}>
-                <h3 style={styles.cardTitle}>{post.title}</h3>
-              </Link>
-
-              <p style={styles.cardExcerpt}>{post.excerpt}</p>
-
-              <div style={styles.keywordRow}>
-                {post.keywords.slice(0, 3).map((keyword) => (
-                  <span key={keyword} style={styles.keyword}>{keyword}</span>
+              <div style={styles.faqList}>
+                {post.faqs.map((faq, index) => (
+                  <details key={faq.question} style={styles.faqItem} open={index === 0}>
+                    <summary style={styles.faqQuestion}>{faq.question}</summary>
+                    <p style={styles.faqAnswer}>{faq.answer}</p>
+                  </details>
                 ))}
               </div>
+            </section>
+          </div>
 
-              <Link href={`/blog/${post.slug}`} style={styles.readButton}>
-                Ler artigo
-              </Link>
-            </article>
-          ))}
+          <aside style={styles.sidebar}>
+            <div style={styles.sidebarCard}>
+              <span style={styles.sidebarKicker}>Compra assistida</span>
+              <strong style={styles.sidebarTitle}>Gostou do guia?</strong>
+              <p style={styles.sidebarText}>
+                Fale com a Maison Noor para receber uma indicação de fragrância conforme seu estilo, ocasião e intensidade desejada.
+              </p>
+              <a href="https://wa.me/5512982389658" target="_blank" rel="noreferrer" style={styles.sidebarButton}>
+                Falar no WhatsApp
+              </a>
+            </div>
+
+            <div style={styles.sidebarCardLight}>
+              <span style={styles.sidebarKickerDark}>Explore a loja</span>
+              <Link href="/perfumes-arabes-femininos" style={styles.sideLink}>Perfumes femininos</Link>
+              <Link href="/perfumes-arabes-masculinos" style={styles.sideLink}>Perfumes masculinos</Link>
+              <Link href="/perfumes-arabes-unissex" style={styles.sideLink}>Perfumes unissex</Link>
+              <Link href="/body-splash" style={styles.sideLink}>Body splash</Link>
+            </div>
+          </aside>
         </div>
-      </section>
+
+        <section style={styles.relatedSection}>
+          <p style={styles.kicker}>Continue lendo</p>
+          <h2 style={styles.relatedTitle}>Mais guias Maison Noor</h2>
+
+          <div style={styles.relatedGrid}>
+            {blogPosts
+              .filter((item) => item.slug !== post.slug)
+              .slice(0, 3)
+              .map((item) => (
+                <Link key={item.slug} href={`/blog/${item.slug}`} style={styles.relatedCard}>
+                  <span style={styles.cardCategory}>{item.category}</span>
+                  <strong style={styles.relatedCardTitle}>{item.title}</strong>
+                  <span style={styles.readMore}>Ler artigo →</span>
+                </Link>
+              ))}
+          </div>
+        </section>
+      </article>
     </main>
   );
 }
@@ -231,25 +337,31 @@ const styles: Record<string, React.CSSProperties> = {
     background: "linear-gradient(135deg, #D4AF77, #BE9155)",
     border: "1px solid rgba(255, 232, 184, 0.36)",
   },
-  hero: {
+  articleShell: {
     maxWidth: "1360px",
     margin: "0 auto",
+  },
+  breadcrumb: {
+    display: "flex",
+    gap: "8px",
+    flexWrap: "wrap",
+    color: "#7B6958",
+    fontSize: "14px",
+    marginBottom: "14px",
+  },
+  breadcrumbLink: {
+    color: "#A8844C",
+    textDecoration: "none",
+    fontWeight: 800,
+  },
+  hero: {
     borderRadius: "34px",
     padding: "44px",
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.3fr) minmax(280px, 0.7fr)",
-    gap: "30px",
-    alignItems: "center",
     background:
       "radial-gradient(circle at top right, rgba(212,175,119,0.22), transparent 32%), linear-gradient(135deg, #17110C, #2B2118)",
     boxShadow: "0 28px 60px rgba(30, 21, 12, 0.18)",
     color: "#F6E9D6",
-  },
-  heroContent: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: "14px",
+    marginBottom: "24px",
   },
   badge: {
     display: "inline-flex",
@@ -262,92 +374,44 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     letterSpacing: "0.14em",
     textTransform: "uppercase",
+    marginBottom: "16px",
   },
   title: {
     margin: 0,
     color: "#FFF6EB",
-    fontSize: "clamp(36px, 5vw, 72px)",
-    lineHeight: 0.95,
+    fontSize: "clamp(36px, 5vw, 68px)",
+    lineHeight: 0.98,
     fontFamily: "Georgia, 'Times New Roman', serif",
     letterSpacing: "-0.055em",
-    maxWidth: "920px",
+    maxWidth: "980px",
   },
   subtitle: {
-    margin: 0,
     color: "rgba(246, 233, 214, 0.78)",
     fontSize: "17px",
     lineHeight: 1.75,
-    maxWidth: "760px",
+    maxWidth: "840px",
   },
-  heroActions: {
+  metaRow: {
     display: "flex",
-    gap: "12px",
     flexWrap: "wrap",
-    marginTop: "8px",
+    gap: "10px",
+    marginTop: "18px",
   },
-  primaryButton: {
-    minHeight: "52px",
-    borderRadius: "16px",
-    padding: "0 24px",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    textDecoration: "none",
-    color: "#241A12",
-    fontWeight: 900,
-    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
-    boxShadow: "0 16px 30px rgba(120, 87, 45, 0.22)",
+  contentGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 340px",
+    gap: "22px",
+    alignItems: "start",
   },
-  secondaryButton: {
-    minHeight: "52px",
-    borderRadius: "16px",
-    padding: "0 24px",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    textDecoration: "none",
-    color: "#F6E9D6",
-    fontWeight: 900,
-    background: "rgba(255,255,255,0.075)",
-    border: "1px solid rgba(216,193,162,0.18)",
-  },
-  heroCard: {
-    borderRadius: "28px",
-    padding: "30px",
-    background: "linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.045))",
-    border: "1px solid rgba(216,193,162,0.18)",
-  },
-  heroCardKicker: {
-    display: "block",
-    color: "#D8BE97",
-    fontSize: "12px",
-    fontWeight: 900,
-    letterSpacing: "0.14em",
-    textTransform: "uppercase",
-    marginBottom: "12px",
-  },
-  heroCardTitle: {
-    display: "block",
-    color: "#FFF6EB",
-    fontSize: "28px",
-    lineHeight: 1.12,
-  },
-  heroCardText: {
-    color: "rgba(246, 233, 214, 0.72)",
-    fontSize: "15px",
-    lineHeight: 1.7,
-  },
-  postsSection: {
-    maxWidth: "1360px",
-    margin: "28px auto 0",
+  contentCard: {
     borderRadius: "30px",
-    padding: "30px",
+    padding: "32px",
     background: "linear-gradient(180deg, #FFFEFC, #FCF7EF)",
     border: "1px solid #EADBC8",
     boxShadow: "0 18px 38px rgba(48,34,20,0.06)",
   },
-  sectionHeader: {
-    marginBottom: "22px",
+  sectionBlock: {
+    marginBottom: "28px",
   },
   kicker: {
     margin: 0,
@@ -358,31 +422,139 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "0.14em",
   },
   sectionTitle: {
-    margin: "8px 0 0",
+    margin: "0 0 12px",
     color: "#3A2F29",
-    fontSize: "34px",
-    lineHeight: 1.1,
+    fontSize: "32px",
+    lineHeight: 1.12,
     fontFamily: "Georgia, 'Times New Roman', serif",
   },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-    gap: "18px",
+  paragraph: {
+    color: "#5F5147",
+    fontSize: "17px",
+    lineHeight: 1.85,
+    margin: "0 0 16px",
   },
-  card: {
+  faqSection: {
+    marginTop: "30px",
+    paddingTop: "26px",
+    borderTop: "1px solid #EADBC8",
+  },
+  faqList: {
+    display: "grid",
+    gap: "12px",
+    marginTop: "16px",
+  },
+  faqItem: {
+    borderRadius: "18px",
+    border: "1px solid #E7D7C1",
+    background: "linear-gradient(180deg, #FFFDF9, #F7EBDD)",
+    overflow: "hidden",
+  },
+  faqQuestion: {
+    cursor: "pointer",
+    padding: "16px",
+    color: "#3A2F29",
+    fontSize: "15px",
+    fontWeight: 900,
+  },
+  faqAnswer: {
+    margin: 0,
+    padding: "0 16px 16px",
+    color: "#6F6258",
+    fontSize: "14px",
+    lineHeight: 1.7,
+  },
+  sidebar: {
+    display: "grid",
+    gap: "16px",
+    position: "sticky",
+    top: "20px",
+  },
+  sidebarCard: {
+    borderRadius: "26px",
+    padding: "24px",
+    background: "linear-gradient(135deg, #1F1A14, #3A2A1E)",
+    color: "#FFF7EE",
+    boxShadow: "0 18px 34px rgba(48,34,20,0.12)",
+  },
+  sidebarKicker: {
+    display: "block",
+    color: "#D8B178",
+    fontSize: "11px",
+    fontWeight: 900,
+    letterSpacing: "0.14em",
+    textTransform: "uppercase",
+    marginBottom: "10px",
+  },
+  sidebarTitle: {
+    display: "block",
+    fontSize: "26px",
+    lineHeight: 1.1,
+  },
+  sidebarText: {
+    color: "rgba(255,247,238,0.75)",
+    fontSize: "14px",
+    lineHeight: 1.7,
+  },
+  sidebarButton: {
+    minHeight: "48px",
+    borderRadius: "16px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    textDecoration: "none",
+    color: "#241A12",
+    fontWeight: 900,
+    background: "linear-gradient(135deg, #D4AF77, #BE9155)",
+  },
+  sidebarCardLight: {
     borderRadius: "24px",
     padding: "20px",
     background: "linear-gradient(180deg, #FFFDF9, #F7EBDD)",
     border: "1px solid #E7D7C1",
-    boxShadow: "0 12px 28px rgba(48,34,20,0.06)",
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
+    display: "grid",
+    gap: "10px",
   },
-  cardTop: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
+  sidebarKickerDark: {
+    color: "#A8844C",
+    fontSize: "11px",
+    fontWeight: 900,
+    letterSpacing: "0.14em",
+    textTransform: "uppercase",
+  },
+  sideLink: {
+    color: "#5E4A38",
+    textDecoration: "none",
+    fontWeight: 800,
+    borderBottom: "1px solid #EADBC8",
+    paddingBottom: "9px",
+  },
+  relatedSection: {
+    marginTop: "24px",
+    borderRadius: "30px",
+    padding: "28px",
+    background: "linear-gradient(180deg, #FFFEFC, #FCF7EF)",
+    border: "1px solid #EADBC8",
+  },
+  relatedTitle: {
+    margin: "8px 0 18px",
+    color: "#3A2F29",
+    fontSize: "32px",
+    fontFamily: "Georgia, 'Times New Roman', serif",
+  },
+  relatedGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: "16px",
+  },
+  relatedCard: {
+    borderRadius: "22px",
+    padding: "20px",
+    background: "linear-gradient(180deg, #FFFDF9, #F7EBDD)",
+    border: "1px solid #E7D7C1",
+    textDecoration: "none",
+    display: "grid",
     gap: "10px",
   },
   cardCategory: {
@@ -392,51 +564,13 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "0.1em",
     textTransform: "uppercase",
   },
-  readTime: {
-    color: "#7B6958",
-    fontSize: "12px",
-    fontWeight: 800,
-  },
-  cardTitleLink: {
-    textDecoration: "none",
-  },
-  cardTitle: {
-    margin: 0,
+  relatedCardTitle: {
     color: "#2F2721",
-    fontSize: "24px",
-    lineHeight: 1.12,
-    fontFamily: "Georgia, 'Times New Roman', serif",
+    fontSize: "20px",
+    lineHeight: 1.2,
   },
-  cardExcerpt: {
-    margin: 0,
-    color: "#6F6258",
-    fontSize: "14px",
-    lineHeight: 1.65,
-  },
-  keywordRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "8px",
-  },
-  keyword: {
-    borderRadius: "999px",
-    padding: "7px 10px",
-    background: "#F1E2CA",
-    color: "#805B2F",
-    fontSize: "11px",
+  readMore: {
+    color: "#8E6431",
     fontWeight: 900,
-  },
-  readButton: {
-    marginTop: "auto",
-    minHeight: "44px",
-    borderRadius: "14px",
-    padding: "0 16px",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    textDecoration: "none",
-    color: "#2A2018",
-    fontWeight: 900,
-    background: "linear-gradient(135deg, #D8B178, #BD9055)",
   },
 };
