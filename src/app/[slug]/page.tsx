@@ -104,6 +104,104 @@ function textoBuscaProduto(produto: ProdutoSeo) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+type FaqSeoItem = {
+  question: string;
+  answer: string;
+};
+
+function getFaqSeo(slug: string, h1: string): FaqSeoItem[] {
+  const base: FaqSeoItem[] = [
+    {
+      question: "Perfume árabe fixa bem?",
+      answer:
+        "Muitos perfumes árabes são conhecidos por boa fixação e presença, mas o desempenho pode variar conforme pele, clima, quantidade aplicada e perfil da fragrância.",
+    },
+    {
+      question: "Perfume árabe vale a pena?",
+      answer:
+        "Sim, pode valer muito a pena para quem busca fragrâncias marcantes, frascos elegantes e excelente percepção de sofisticação. A escolha ideal depende do seu estilo e da ocasião de uso.",
+    },
+    {
+      question: "Como escolher um perfume árabe?",
+      answer:
+        "Considere se você prefere perfumes doces, florais, amadeirados, orientais, intensos ou mais versáteis. Também vale observar ocasião, clima, fixação desejada e sensação que quer transmitir.",
+    },
+  ];
+
+  const especificas: Record<string, FaqSeoItem[]> = {
+    "perfume-arabe-feminino": [
+      {
+        question: "Qual perfume árabe feminino escolher?",
+        answer:
+          "Para uma escolha feminina elegante, procure fragrâncias com notas florais, doces, cremosas, frutadas ou gourmand. Opções como Yara, Fakhar Rose e fragrâncias florais costumam agradar bastante.",
+      },
+      {
+        question: "Perfume árabe feminino costuma ser doce?",
+        answer:
+          "Muitos perfumes árabes femininos possuem perfil doce, cremoso ou floral, mas também existem opções frescas, sofisticadas, amadeiradas e orientais.",
+      },
+    ],
+    "perfume-arabe-masculino": [
+      {
+        question: "Qual perfume árabe masculino é mais marcante?",
+        answer:
+          "Perfumes árabes masculinos com notas amadeiradas, especiadas, âmbar, oud e couro costumam transmitir mais presença e intensidade.",
+      },
+      {
+        question: "Perfume árabe masculino combina com noite?",
+        answer:
+          "Sim. Muitas fragrâncias masculinas árabes têm perfil intenso e sofisticado, funcionando muito bem para noite, encontros e ocasiões especiais.",
+      },
+    ],
+    "perfume-arabe-lattafa": [
+      {
+        question: "Perfume Lattafa é bom?",
+        answer:
+          "A Lattafa é uma das marcas árabes mais procuradas por oferecer fragrâncias variadas, apresentações marcantes e boa percepção de valor.",
+      },
+      {
+        question: "Lattafa tem perfumes femininos e masculinos?",
+        answer:
+          "Sim. A marca possui opções femininas, masculinas e unissex, com perfis doces, orientais, amadeirados, florais e intensos.",
+      },
+    ],
+    "perfume-arabe-doce": [
+      {
+        question: "Perfume árabe doce é enjoativo?",
+        answer:
+          "Nem sempre. Um perfume doce pode ser cremoso, confortável e sofisticado quando bem equilibrado com notas florais, amadeiradas, frutadas ou ambaradas.",
+      },
+      {
+        question: "Quando usar perfume árabe doce?",
+        answer:
+          "Perfumes doces combinam muito bem com encontros, momentos especiais, clima ameno e ocasiões em que você deseja transmitir presença envolvente.",
+      },
+    ],
+    "perfume-arabe-alta-fixacao": [
+      {
+        question: "Qual tipo de perfume árabe fixa mais?",
+        answer:
+          "Fragrâncias com notas amadeiradas, âmbar, baunilha, oud, especiarias e resinas costumam ter maior sensação de fixação e presença.",
+      },
+      {
+        question: "Como aumentar a fixação do perfume?",
+        answer:
+          "Aplique em pele hidratada, em pontos de pulsação e evite esfregar após aplicar. A fixação também varia de acordo com pele, clima e concentração da fragrância.",
+      },
+    ],
+  };
+
+  return [...(especificas[slug] || []), ...base].slice(0, 5).map((item) => ({
+    ...item,
+    answer: item.answer.replace(
+      /perfume árabe/gi,
+      h1.toLowerCase().includes("perfume")
+        ? "perfume árabe"
+        : "fragrância árabe",
+    ),
+  }));
+}
+
 function getRegrasSeo(slug: string) {
   const regras: Record<string, string[]> = {
     "perfume-arabe-feminino": [
@@ -402,12 +500,13 @@ export default async function SeoProgramaticoPage({ params }: Props) {
   }
 
   const produtosRelacionados = await buscarProdutosRelacionados(params.slug);
+  const faqItems = getFaqSeo(params.slug, page.h1);
 
   const relatedPages = seoProgramaticoPages
     .filter((item) => item.slug !== page.slug)
     .slice(0, 8);
 
-  const jsonLd = {
+  const collectionJsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: page.h1,
@@ -436,6 +535,21 @@ export default async function SeoProgramaticoPage({ params }: Props) {
       ],
     },
   };
+
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqItems.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer,
+      },
+    })),
+  };
+
+  const jsonLd = [collectionJsonLd, faqJsonLd];
 
   return (
     <main
@@ -831,9 +945,7 @@ export default async function SeoProgramaticoPage({ params }: Props) {
                 padding: 18,
               }}
             >
-              <h2 style={{ fontSize: 18, margin: "0 0 8px" }}>
-                {card.title}
-              </h2>
+              <h2 style={{ fontSize: 18, margin: "0 0 8px" }}>{card.title}</h2>
               <p
                 style={{
                   color: "#6D5A48",
@@ -846,6 +958,75 @@ export default async function SeoProgramaticoPage({ params }: Props) {
               </p>
             </article>
           ))}
+        </section>
+
+        <section
+          style={{
+            marginTop: 18,
+            background: "#FFF",
+            border: "1px solid #E9DCCB",
+            borderRadius: 22,
+            padding: 20,
+          }}
+        >
+          <p
+            style={{
+              color: "#B38B59",
+              fontWeight: 900,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              fontSize: 11,
+              margin: "0 0 6px",
+            }}
+          >
+            FAQ SEO
+          </p>
+
+          <h2 style={{ fontSize: 24, margin: "0 0 14px" }}>
+            Perguntas frequentes sobre {page.h1.toLowerCase()}
+          </h2>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: 10,
+            }}
+          >
+            {faqItems.map((item, index) => (
+              <details
+                key={item.question}
+                open={index < 2}
+                style={{
+                  background: "#FFF9F1",
+                  border: "1px solid #EADBC8",
+                  borderRadius: 16,
+                  padding: "14px 15px",
+                }}
+              >
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    fontWeight: 900,
+                    color: "#24170F",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {item.question}
+                </summary>
+                <p
+                  style={{
+                    margin: "10px 0 0",
+                    color: "#6D5A48",
+                    lineHeight: 1.55,
+                    fontSize: 14,
+                  }}
+                >
+                  {item.answer}
+                </p>
+              </details>
+            ))}
+          </div>
         </section>
 
         <section
