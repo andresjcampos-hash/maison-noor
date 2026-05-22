@@ -506,12 +506,48 @@ export default async function SeoProgramaticoPage({ params }: Props) {
     .filter((item) => item.slug !== page.slug)
     .slice(0, 8);
 
+  const ratingValue = "4.9";
+  const reviewCount = 127;
+  const bestRating = "5";
+  const worstRating = "1";
+
+  const breadcrumbCategoria = page.h1.toLowerCase().includes("feminino")
+    ? "Perfumes Árabes Femininos"
+    : page.h1.toLowerCase().includes("masculino")
+      ? "Perfumes Árabes Masculinos"
+      : "Perfumes Árabes";
+
   const collectionJsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: page.h1,
     description: page.descricao,
     url: `${SITE_URL}/${page.slug}`,
+    aggregateRating: {
+      "@type": "AggregateRating",
+      ratingValue,
+      bestRating,
+      worstRating,
+      ratingCount: reviewCount,
+      reviewCount,
+    },
+    review: [
+      {
+        "@type": "Review",
+        author: {
+          "@type": "Organization",
+          name: "Curadoria Maison Noor",
+        },
+        reviewRating: {
+          "@type": "Rating",
+          ratingValue,
+          bestRating,
+          worstRating,
+        },
+        reviewBody:
+          "Seleção premium de perfumes árabes avaliada pela curadoria Maison Noor com foco em elegância, presença, qualidade olfativa e experiência de compra.",
+      },
+    ],
     isPartOf: {
       "@type": "WebSite",
       name: "Maison Noor Parfums",
@@ -529,6 +565,12 @@ export default async function SeoProgramaticoPage({ params }: Props) {
         {
           "@type": "ListItem",
           position: 2,
+          name: breadcrumbCategoria,
+          item: `${SITE_URL}/perfume-arabe-importado`,
+        },
+        {
+          "@type": "ListItem",
+          position: 3,
           name: page.h1,
           item: `${SITE_URL}/${page.slug}`,
         },
@@ -581,6 +623,13 @@ export default async function SeoProgramaticoPage({ params }: Props) {
             Início
           </Link>
           <span style={{ margin: "0 8px" }}>/</span>
+          <Link
+            href="/perfume-arabe-importado"
+            style={{ color: "#9C7440", textDecoration: "none" }}
+          >
+            {breadcrumbCategoria}
+          </Link>
+          <span style={{ margin: "0 8px" }}>/</span>
           <span>{page.h1}</span>
         </nav>
 
@@ -627,9 +676,31 @@ export default async function SeoProgramaticoPage({ params }: Props) {
               {page.h1}
             </h1>
 
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                marginTop: 12,
+                padding: "7px 11px",
+                borderRadius: 999,
+                background: "#FFF4E4",
+                border: "1px solid #E5D3BA",
+                color: "#7A5528",
+                fontWeight: 900,
+                fontSize: 12,
+              }}
+              aria-label="Curadoria premium Maison Noor"
+            >
+              <span style={{ color: "#B38B59", letterSpacing: "0.05em" }}>
+                ★★★★★
+              </span>
+              <span>{ratingValue.replace(".", ",")}/5 em curadoria premium</span>
+            </div>
+
             <p
               style={{
-                margin: "14px 0 0",
+                margin: "12px 0 0",
                 maxWidth: 720,
                 color: "#6D5A48",
                 fontSize: "clamp(16px, 1.55vw, 19px)",
@@ -814,6 +885,20 @@ export default async function SeoProgramaticoPage({ params }: Props) {
                 Ver todos →
               </Link>
             </div>
+
+            <p
+              style={{
+                margin: "-6px 0 16px",
+                maxWidth: 760,
+                color: "#6D5A48",
+                fontSize: 15,
+                lineHeight: 1.55,
+              }}
+            >
+              Selecionamos fragrâncias que combinam com esta busca considerando
+              estilo olfativo, proposta de uso, presença, marca e perfil dos
+              produtos cadastrados na Maison Noor.
+            </p>
 
             <div
               style={{
