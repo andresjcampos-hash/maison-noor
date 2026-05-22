@@ -365,44 +365,44 @@ export default async function SeoProgramaticoPage({ params }: Props) {
     return (
       <main
         style={{
-          minHeight: "70vh",
+          minHeight: "60vh",
           display: "grid",
           placeItems: "center",
-          padding: "40px 20px",
+          padding: "28px 16px",
           background: "#FBF6EF",
           color: "#24170F",
         }}
       >
         <section
           style={{
-            maxWidth: 720,
+            maxWidth: 680,
             width: "100%",
             textAlign: "center",
             background: "#FFF",
             border: "1px solid #E9DCCB",
-            borderRadius: 28,
-            padding: "42px 28px",
-            boxShadow: "0 18px 60px rgba(60, 38, 18, 0.08)",
+            borderRadius: 22,
+            padding: "30px 22px",
+            boxShadow: "0 14px 44px rgba(60, 38, 18, 0.08)",
           }}
         >
           <p
             style={{
               color: "#B38B59",
               fontWeight: 800,
-              letterSpacing: "0.16em",
+              letterSpacing: "0.14em",
               textTransform: "uppercase",
-              fontSize: 12,
-              marginBottom: 12,
+              fontSize: 11,
+              marginBottom: 10,
             }}
           >
             Maison Noor
           </p>
 
-          <h1 style={{ fontSize: 34, marginBottom: 12 }}>
+          <h1 style={{ fontSize: 30, marginBottom: 10 }}>
             Página não encontrada
           </h1>
 
-          <p style={{ color: "#6D5A48", marginBottom: 24 }}>
+          <p style={{ color: "#6D5A48", marginBottom: 20 }}>
             A página que você tentou acessar não está disponível.
           </p>
 
@@ -410,7 +410,7 @@ export default async function SeoProgramaticoPage({ params }: Props) {
             href="/"
             style={{
               display: "inline-flex",
-              padding: "14px 22px",
+              padding: "12px 18px",
               borderRadius: 999,
               background: "#B38B59",
               color: "#FFF",
@@ -466,9 +466,9 @@ export default async function SeoProgramaticoPage({ params }: Props) {
       style={{
         minHeight: "100vh",
         background:
-          "radial-gradient(circle at top left, rgba(179,139,89,0.18), transparent 35%), linear-gradient(180deg, #FFF9F1 0%, #FBF6EF 55%, #FFFFFF 100%)",
+          "radial-gradient(circle at top left, rgba(179,139,89,0.14), transparent 30%), linear-gradient(180deg, #FFF9F1 0%, #FBF6EF 55%, #FFFFFF 100%)",
         color: "#24170F",
-        padding: "48px 20px 70px",
+        padding: "22px 16px 46px",
       }}
     >
       <script
@@ -480,32 +480,32 @@ export default async function SeoProgramaticoPage({ params }: Props) {
 
       <section
         style={{
-          maxWidth: 1180,
+          maxWidth: 1120,
           margin: "0 auto",
         }}
       >
         <nav
           aria-label="Breadcrumb"
           style={{
-            marginBottom: 28,
-            fontSize: 14,
+            marginBottom: 14,
+            fontSize: 13,
             color: "#7C6957",
           }}
         >
           <Link href="/" style={{ color: "#9C7440", textDecoration: "none" }}>
             Início
           </Link>
-          <span style={{ margin: "0 10px" }}>/</span>
+          <span style={{ margin: "0 8px" }}>/</span>
           <span>{page.h1}</span>
         </nav>
 
         <section
           style={{
-            background: "rgba(255,255,255,0.88)",
+            background: "rgba(255,255,255,0.92)",
             border: "1px solid #E9DCCB",
-            borderRadius: 34,
-            padding: "clamp(32px, 6vw, 72px)",
-            boxShadow: "0 24px 80px rgba(60, 38, 18, 0.10)",
+            borderRadius: 24,
+            padding: "clamp(24px, 4vw, 42px)",
+            boxShadow: "0 18px 58px rgba(60, 38, 18, 0.08)",
             overflow: "hidden",
           }}
         >
@@ -513,10 +513,10 @@ export default async function SeoProgramaticoPage({ params }: Props) {
             style={{
               color: "#B38B59",
               fontWeight: 900,
-              letterSpacing: "0.18em",
+              letterSpacing: "0.16em",
               textTransform: "uppercase",
-              fontSize: 12,
-              marginBottom: 16,
+              fontSize: 11,
+              marginBottom: 10,
             }}
           >
             Curadoria Maison Noor
@@ -524,11 +524,11 @@ export default async function SeoProgramaticoPage({ params }: Props) {
 
           <h1
             style={{
-              fontSize: "clamp(38px, 7vw, 72px)",
-              lineHeight: 1,
-              letterSpacing: "-0.05em",
+              fontSize: "clamp(34px, 5.2vw, 56px)",
+              lineHeight: 1.04,
+              letterSpacing: "-0.045em",
               margin: 0,
-              maxWidth: 900,
+              maxWidth: 820,
             }}
           >
             {page.h1}
@@ -536,11 +536,11 @@ export default async function SeoProgramaticoPage({ params }: Props) {
 
           <p
             style={{
-              marginTop: 22,
-              maxWidth: 780,
+              marginTop: 14,
+              maxWidth: 720,
               color: "#6D5A48",
-              fontSize: "clamp(18px, 2.2vw, 24px)",
-              lineHeight: 1.55,
+              fontSize: "clamp(16px, 1.6vw, 20px)",
+              lineHeight: 1.45,
             }}
           >
             {page.subtitulo}
@@ -550,8 +550,8 @@ export default async function SeoProgramaticoPage({ params }: Props) {
             style={{
               display: "flex",
               flexWrap: "wrap",
-              gap: 12,
-              marginTop: 30,
+              gap: 8,
+              marginTop: 18,
             }}
           >
             {[
@@ -563,13 +563,13 @@ export default async function SeoProgramaticoPage({ params }: Props) {
               <span
                 key={item}
                 style={{
-                  padding: "12px 16px",
+                  padding: "8px 12px",
                   borderRadius: 999,
                   background: "#FFF4E4",
                   border: "1px solid #E5D3BA",
                   color: "#7A5528",
                   fontWeight: 800,
-                  fontSize: 14,
+                  fontSize: 12,
                 }}
               >
                 {item}
@@ -577,20 +577,21 @@ export default async function SeoProgramaticoPage({ params }: Props) {
             ))}
           </div>
 
-          <div style={{ marginTop: 34 }}>
+          <div style={{ marginTop: 20 }}>
             <Link
               href="/"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                padding: "16px 24px",
+                padding: "12px 18px",
                 borderRadius: 999,
                 background: "#24170F",
                 color: "#FFF",
                 textDecoration: "none",
                 fontWeight: 900,
-                boxShadow: "0 14px 34px rgba(36,23,15,0.20)",
+                fontSize: 14,
+                boxShadow: "0 10px 24px rgba(36,23,15,0.18)",
               }}
             >
               Ver perfumes disponíveis
@@ -598,12 +599,151 @@ export default async function SeoProgramaticoPage({ params }: Props) {
           </div>
         </section>
 
+        {produtosRelacionados.length > 0 && (
+          <section
+            style={{
+              marginTop: 20,
+              background: "#FFF",
+              border: "1px solid #E9DCCB",
+              borderRadius: 22,
+              padding: "20px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+                marginBottom: 14,
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    color: "#B38B59",
+                    fontWeight: 900,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    fontSize: 11,
+                    marginBottom: 6,
+                  }}
+                >
+                  Seleção Maison Noor
+                </p>
+
+                <h2 style={{ fontSize: 26, margin: 0 }}>
+                  Produtos relacionados
+                </h2>
+              </div>
+
+              <Link
+                href="/"
+                style={{
+                  color: "#9C7440",
+                  fontWeight: 800,
+                  textDecoration: "none",
+                  fontSize: 14,
+                }}
+              >
+                Ver catálogo completo
+              </Link>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: 12,
+              }}
+            >
+              {produtosRelacionados.map((produto) => {
+                const produtoSlug =
+                  produto.slug || produto.id || slugify(produto.nome || "");
+                const imagem = getImagemProduto(produto);
+
+                return (
+                  <Link
+                    key={produto.id}
+                    href={`/produto/${produtoSlug}`}
+                    style={{
+                      textDecoration: "none",
+                      color: "#24170F",
+                      background: "#FFF9F1",
+                      border: "1px solid #EADBC8",
+                      borderRadius: 18,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: 150,
+                        background: "#FFF",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: 12,
+                      }}
+                    >
+                      <img
+                        src={imagem}
+                        alt={produto.nome || "Perfume Maison Noor"}
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          objectFit: "contain",
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ padding: 12 }}>
+                      <p
+                        style={{
+                          color: "#B38B59",
+                          fontWeight: 800,
+                          fontSize: 10,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                          marginBottom: 6,
+                        }}
+                      >
+                        {produto.marca || "Maison Noor"}
+                      </p>
+
+                      <h3
+                        style={{
+                          fontSize: 15,
+                          lineHeight: 1.25,
+                          margin: 0,
+                        }}
+                      >
+                        {produto.nome || "Perfume Maison Noor"}
+                      </h3>
+
+                      <p
+                        style={{
+                          marginTop: 8,
+                          fontWeight: 900,
+                          fontSize: 17,
+                        }}
+                      >
+                        {formatarMoeda(produto.precoVenda || produto.preco)}
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         <section
           style={{
-            marginTop: 28,
+            marginTop: 18,
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: 18,
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 14,
           }}
         >
           {[
@@ -625,155 +765,57 @@ export default async function SeoProgramaticoPage({ params }: Props) {
               style={{
                 background: "#FFFFFF",
                 border: "1px solid #E9DCCB",
-                borderRadius: 24,
-                padding: 24,
-                boxShadow: "0 14px 40px rgba(60,38,18,0.06)",
+                borderRadius: 18,
+                padding: 18,
+                boxShadow: "0 10px 28px rgba(60,38,18,0.05)",
               }}
             >
-              <h2 style={{ fontSize: 22, marginBottom: 10 }}>{card.title}</h2>
-              <p style={{ color: "#6D5A48", lineHeight: 1.65 }}>{card.text}</p>
+              <h2 style={{ fontSize: 19, marginBottom: 8 }}>{card.title}</h2>
+              <p
+                style={{
+                  color: "#6D5A48",
+                  lineHeight: 1.55,
+                  fontSize: 14,
+                  margin: 0,
+                }}
+              >
+                {card.text}
+              </p>
             </article>
           ))}
         </section>
 
-        {produtosRelacionados.length > 0 && (
-          <section
-            style={{
-              marginTop: 34,
-              background: "#FFF",
-              border: "1px solid #E9DCCB",
-              borderRadius: 28,
-              padding: 28,
-            }}
-          >
-            <p
-              style={{
-                color: "#B38B59",
-                fontWeight: 900,
-                letterSpacing: "0.16em",
-                textTransform: "uppercase",
-                fontSize: 12,
-                marginBottom: 12,
-              }}
-            >
-              Seleção Maison Noor
-            </p>
-
-            <h2 style={{ fontSize: 30, marginBottom: 18 }}>
-              Produtos relacionados
-            </h2>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: 16,
-              }}
-            >
-              {produtosRelacionados.map((produto) => {
-                const produtoSlug = produto.slug || produto.id || slugify(produto.nome || "");
-                const imagem = getImagemProduto(produto);
-
-                return (
-                  <Link
-                    key={produto.id}
-                    href={`/produto/${produtoSlug}`}
-                    style={{
-                      textDecoration: "none",
-                      color: "#24170F",
-                      background: "#FFF9F1",
-                      border: "1px solid #EADBC8",
-                      borderRadius: 22,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: 230,
-                        background: "#FFF",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: 18,
-                      }}
-                    >
-                      <img
-                        src={imagem}
-                        alt={produto.nome || "Perfume Maison Noor"}
-                        style={{
-                          maxWidth: "100%",
-                          maxHeight: "100%",
-                          objectFit: "contain",
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ padding: 16 }}>
-                      <p
-                        style={{
-                          color: "#B38B59",
-                          fontWeight: 800,
-                          fontSize: 12,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.08em",
-                          marginBottom: 8,
-                        }}
-                      >
-                        {produto.marca || "Maison Noor"}
-                      </p>
-
-                      <h3 style={{ fontSize: 18, lineHeight: 1.3, margin: 0 }}>
-                        {produto.nome || "Perfume Maison Noor"}
-                      </h3>
-
-                      <p
-                        style={{
-                          marginTop: 12,
-                          fontWeight: 900,
-                          fontSize: 20,
-                        }}
-                      >
-                        {formatarMoeda(produto.precoVenda || produto.preco)}
-                      </p>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
         <section
           style={{
-            marginTop: 34,
+            marginTop: 18,
             background: "#FFF",
             border: "1px solid #E9DCCB",
-            borderRadius: 28,
-            padding: 28,
+            borderRadius: 22,
+            padding: 20,
           }}
         >
           <p
             style={{
               color: "#B38B59",
               fontWeight: 900,
-              letterSpacing: "0.16em",
+              letterSpacing: "0.14em",
               textTransform: "uppercase",
-              fontSize: 12,
-              marginBottom: 12,
+              fontSize: 11,
+              marginBottom: 8,
             }}
           >
             Continue explorando
           </p>
 
-          <h2 style={{ fontSize: 30, marginBottom: 18 }}>
+          <h2 style={{ fontSize: 24, marginBottom: 14 }}>
             Outras seleções Maison Noor
           </h2>
 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-              gap: 12,
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: 10,
             }}
           >
             {relatedPages.map((item) => (
@@ -781,13 +823,14 @@ export default async function SeoProgramaticoPage({ params }: Props) {
                 key={item.slug}
                 href={`/${item.slug}`}
                 style={{
-                  padding: 16,
-                  borderRadius: 18,
+                  padding: "12px 14px",
+                  borderRadius: 14,
                   background: "#FFF9F1",
                   border: "1px solid #EADBC8",
                   color: "#24170F",
                   textDecoration: "none",
                   fontWeight: 800,
+                  fontSize: 14,
                 }}
               >
                 {item.h1}
