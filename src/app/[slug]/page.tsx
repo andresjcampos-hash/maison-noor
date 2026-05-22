@@ -23,18 +23,25 @@ type ProdutoSeo = {
   observacoes?: string;
   familiaOlfativa?: string;
   notasSaida?: string;
+  notasTopo?: string;
   notasCoracao?: string;
   notasFundo?: string;
-  genero?: string;
-  tags?: string[] | string;
   fixacao?: string;
+  projecao?: string;
   intensidade?: string;
+  genero?: string;
+  generoOlfativo?: string;
+  publico?: string;
+  tags?: string[] | string;
   precoVenda?: number;
   imagem?: string;
   imageUrl?: string;
   foto?: string;
   categoria?: string;
   ativo?: boolean;
+  estoque?: number;
+  reservado?: number;
+  volumeMl?: number;
 };
 
 function slugify(texto: string) {
@@ -45,6 +52,11 @@ function slugify(texto: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+function normalizarTexto(valor: unknown) {
+  if (Array.isArray(valor)) return valor.join(" ");
+  return String(valor || "");
 }
 
 function formatarMoeda(valor?: number) {
@@ -65,73 +77,229 @@ function getImagemProduto(produto: ProdutoSeo) {
   );
 }
 
-function normalizarTexto(valor: unknown) {
-  if (Array.isArray(valor)) return valor.join(" ");
-  return String(valor || "");
-}
-
-function produtoCombinaComSlug(slug: string, produto: ProdutoSeo) {
-  const texto = [
+function textoBuscaProduto(produto: ProdutoSeo) {
+  return [
     produto.nome,
     produto.marca,
     produto.descricao,
     produto.observacoes,
     produto.familiaOlfativa,
     produto.notasSaida,
+    produto.notasTopo,
     produto.notasCoracao,
     produto.notasFundo,
-    produto.genero,
-    produto.categoria,
     produto.fixacao,
+    produto.projecao,
     produto.intensidade,
+    produto.genero,
+    produto.generoOlfativo,
+    produto.publico,
+    produto.categoria,
     normalizarTexto(produto.tags),
   ]
+    .filter(Boolean)
     .join(" ")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
 
+function getRegrasSeo(slug: string) {
   const regras: Record<string, string[]> = {
-    "perfume-arabe-feminino": ["feminino", "female", "yara", "rose", "ward", "mulher"],
-    "perfume-arabe-masculino": ["masculino", "male", "asad", "club", "homem"],
+    "perfume-arabe-feminino": [
+      "feminino",
+      "mulher",
+      "yara",
+      "rose",
+      "ward",
+      "floral",
+      "gourmand",
+    ],
+    "perfume-arabe-masculino": [
+      "masculino",
+      "homem",
+      "asad",
+      "club",
+      "oud",
+      "intense",
+    ],
+    "perfume-arabe-importado": [
+      "lattafa",
+      "armaf",
+      "al wataniah",
+      "french avenue",
+      "maison alhambra",
+    ],
     "perfume-arabe-lattafa": ["lattafa", "yara", "asad", "fakhar", "bade"],
-    "perfume-arabe-armaf": ["armaf", "club"],
-    "perfume-arabe-al-wataniah": ["al wataniah", "wataniah", "ameerati", "watani"],
-    "perfume-arabe-doce": ["doce", "baunilha", "vanilla", "caramelo", "gourmand", "yara", "candy"],
-    "perfume-arabe-gourmand": ["gourmand", "baunilha", "vanilla", "caramelo", "doce"],
+    "perfume-arabe-armaf": ["armaf", "club de nuit", "club"],
+    "perfume-arabe-al-wataniah": [
+      "al wataniah",
+      "wataniah",
+      "ameerati",
+      "watani",
+      "durrat",
+    ],
+    "perfume-arabe-doce": [
+      "doce",
+      "gourmand",
+      "baunilha",
+      "caramelo",
+      "candy",
+      "yara",
+      "chocolate",
+      "cremoso",
+    ],
+    "perfume-arabe-gourmand": [
+      "gourmand",
+      "baunilha",
+      "caramelo",
+      "praline",
+      "doce",
+      "cremoso",
+    ],
     "perfume-arabe-baunilha": ["baunilha", "vanilla", "yara"],
-    "perfume-arabe-floral": ["floral", "rosa", "rose", "jasmim", "ward"],
-    "perfume-arabe-oriental": ["oriental", "ambar", "oud", "especiado"],
-    "perfume-arabe-oud": ["oud", "al oud"],
-    "perfume-arabe-amadeirado": ["amadeirado", "madeira", "sandal", "sandalo", "oud"],
-    "perfume-arabe-ambar": ["ambar", "amber"],
-    "perfume-arabe-alta-fixacao": ["alta fixacao", "intense", "elixir", "oud", "extrato"],
-    "perfume-arabe-feminino-doce": ["feminino", "female", "doce", "yara", "candy", "rose"],
-    "perfume-arabe-masculino-noite": ["masculino", "male", "noite", "asad", "club", "intense"],
-    "perfume-arabe-para-presentear": ["presente", "yara", "fakhar", "ameerati", "layaan"],
-    "perfume-arabe-para-encontros": ["encontro", "noite", "rose", "yara", "asad", "intense"],
-    "perfume-arabe-para-trabalho": ["elegante", "fresh", "fresco", "suave", "clean"],
-    "perfume-arabe-para-noite": ["noite", "intense", "asad", "oud", "elixir"],
-    "perfume-arabe-feminino-elegante": ["feminino", "female", "elegante", "rose", "ward", "yara", "layaan"],
-    "perfume-arabe-masculino-marcante": ["masculino", "male", "marcante", "asad", "club", "oud"],
-    "perfume-arabe-unissex": ["unissex", "unisex", "watani", "vulcan"],
-    "perfume-arabe-importado": ["lattafa", "armaf", "al wataniah", "maison", "french avenue"],
+    "perfume-arabe-floral": [
+      "floral",
+      "rosa",
+      "rose",
+      "jasmim",
+      "ward",
+      "flor",
+      "flores",
+    ],
+    "perfume-arabe-oriental": [
+      "oriental",
+      "ambar",
+      "oud",
+      "especiado",
+      "quente",
+    ],
+    "perfume-arabe-oud": ["oud", "al oud", "agarwood"],
+    "perfume-arabe-amadeirado": [
+      "amadeirado",
+      "madeira",
+      "sandal",
+      "cedro",
+      "oud",
+    ],
+    "perfume-arabe-ambar": ["ambar", "amber", "ambrado"],
+    "perfume-arabe-alta-fixacao": [
+      "intense",
+      "elixir",
+      "oud",
+      "fixacao",
+      "marcante",
+      "extrato",
+    ],
+    "perfume-arabe-feminino-doce": [
+      "feminino",
+      "doce",
+      "yara",
+      "candy",
+      "rose",
+      "gourmand",
+    ],
+    "perfume-arabe-masculino-noite": [
+      "masculino",
+      "noite",
+      "asad",
+      "club",
+      "intense",
+      "oud",
+    ],
+    "perfume-arabe-para-presentear": [
+      "presente",
+      "yara",
+      "fakhar",
+      "ameerati",
+      "elegante",
+      "versatil",
+    ],
+    "perfume-arabe-para-encontros": [
+      "encontro",
+      "noite",
+      "sedutor",
+      "rose",
+      "yara",
+      "asad",
+      "marcante",
+    ],
+    "perfume-arabe-para-trabalho": [
+      "trabalho",
+      "elegante",
+      "fresh",
+      "fresco",
+      "suave",
+      "versatil",
+    ],
+    "perfume-arabe-para-noite": [
+      "noite",
+      "intense",
+      "asad",
+      "oud",
+      "elixir",
+      "marcante",
+    ],
+    "perfume-arabe-feminino-elegante": [
+      "feminino",
+      "elegante",
+      "rose",
+      "ward",
+      "yara",
+      "sofisticado",
+    ],
+    "perfume-arabe-masculino-marcante": [
+      "masculino",
+      "marcante",
+      "asad",
+      "club",
+      "oud",
+      "intense",
+    ],
+    "perfume-arabe-unissex": ["unissex", "watani", "vulcan", "unisex"],
   };
 
-  const palavras = regras[slug] || [];
+  return regras[slug] || slug.split("-").filter((item) => item.length > 3);
+}
 
-  if (!palavras.length) return true;
+function calcularScoreProduto(slug: string, produto: ProdutoSeo) {
+  const texto = textoBuscaProduto(produto);
+  const palavras = getRegrasSeo(slug);
+  const categoria = String(produto.categoria || "").toLowerCase();
 
-  return palavras.some((palavra) => texto.includes(palavra));
+  let score = 0;
+
+  palavras.forEach((palavra) => {
+    const termo = palavra
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    if (texto.includes(termo)) score += 2;
+    if (categoria.includes(termo)) score += 3;
+  });
+
+  if (slug.includes("feminino") && texto.includes("feminino")) score += 4;
+  if (slug.includes("masculino") && texto.includes("masculino")) score += 4;
+  if (slug.includes("lattafa") && texto.includes("lattafa")) score += 5;
+  if (slug.includes("armaf") && texto.includes("armaf")) score += 5;
+  if (slug.includes("alta-fixacao") && texto.includes("intense")) score += 3;
+
+  const estoque = Number(produto.estoque || 0);
+  const reservado = Number(produto.reservado || 0);
+  if (estoque - reservado > 0) score += 1;
+
+  return score;
 }
 
 async function buscarProdutosRelacionados(slug: string) {
   try {
-    const snapshot = await adminDb.collection("products").limit(90).get();
+    const snapshot = await adminDb.collection("products").limit(120).get();
 
     const produtos = snapshot.docs
       .map((doc) => {
         const data = doc.data() as ProdutoSeo;
+
         return {
           ...data,
           id: doc.id,
@@ -140,12 +308,18 @@ async function buscarProdutosRelacionados(slug: string) {
       .filter((produto) => produto.ativo !== false);
 
     const relacionados = produtos
-      .filter((produto) => produtoCombinaComSlug(slug, produto))
+      .map((produto) => ({
+        produto,
+        score: calcularScoreProduto(slug, produto),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((item) => item.produto)
       .slice(0, 8);
 
     return relacionados.length > 0 ? relacionados : produtos.slice(0, 8);
   } catch (error) {
-    console.error("Erro ao buscar produtos:", error);
+    console.error("Erro ao buscar produtos relacionados:", error);
     return [];
   }
 }
@@ -190,27 +364,36 @@ export default async function SeoProgramaticoPage({ params }: Props) {
     return (
       <main
         style={{
-          minHeight: "60vh",
+          minHeight: "70vh",
           display: "grid",
           placeItems: "center",
+          padding: "40px 20px",
           background: "#FBF6EF",
           color: "#24170F",
-          padding: "28px 16px",
         }}
       >
         <section
           style={{
-            maxWidth: 620,
             width: "100%",
+            maxWidth: 640,
             textAlign: "center",
             background: "#FFF",
             border: "1px solid #E9DCCB",
-            borderRadius: 22,
-            padding: "28px 20px",
+            borderRadius: 24,
+            padding: "34px 24px",
           }}
         >
-          <h1 style={{ margin: 0, fontSize: 28 }}>Página não encontrada</h1>
-          <Link href="/" style={{ color: "#9C7440", fontWeight: 800 }}>
+          <h1 style={{ margin: 0, fontSize: 32 }}>Página não encontrada</h1>
+          <Link
+            href="/"
+            style={{
+              display: "inline-flex",
+              marginTop: 18,
+              color: "#9C7440",
+              fontWeight: 800,
+              textDecoration: "none",
+            }}
+          >
             Voltar para a Maison Noor
           </Link>
         </section>
@@ -258,9 +441,10 @@ export default async function SeoProgramaticoPage({ params }: Props) {
     <main
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(180deg, #FFF9F1 0%, #FBF6EF 42%, #FFFFFF 100%)",
+        background:
+          "linear-gradient(180deg, #FFF9F1 0%, #FBF6EF 48%, #FFFFFF 100%)",
         color: "#24170F",
-        padding: "22px 18px 38px",
+        padding: "22px 16px 46px",
       }}
     >
       <script
@@ -272,79 +456,93 @@ export default async function SeoProgramaticoPage({ params }: Props) {
 
       <section style={{ maxWidth: 1180, margin: "0 auto" }}>
         <nav
+          aria-label="Breadcrumb"
           style={{
-            marginBottom: 14,
-            fontSize: 14,
+            marginBottom: 12,
+            fontSize: 13,
             color: "#7C6957",
           }}
         >
           <Link href="/" style={{ color: "#9C7440", textDecoration: "none" }}>
             Início
           </Link>
-          <span style={{ margin: "0 9px" }}>/</span>
+          <span style={{ margin: "0 8px" }}>/</span>
           <span>{page.h1}</span>
         </nav>
 
         <section
           style={{
-            background: "rgba(255,255,255,0.92)",
-            border: "1px solid #E9DCCB",
-            borderRadius: 26,
-            padding: "30px 38px",
-            boxShadow: "0 14px 42px rgba(60, 38, 18, 0.07)",
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1.1fr) minmax(320px, 0.9fr)",
+            gap: 18,
+            alignItems: "stretch",
           }}
         >
-          <p
-            style={{
-              color: "#B38B59",
-              fontWeight: 900,
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
-              fontSize: 11,
-              margin: "0 0 10px",
-            }}
-          >
-            Curadoria Maison Noor
-          </p>
-
-          <h1
-            style={{
-              fontSize: "clamp(34px, 4.6vw, 56px)",
-              lineHeight: 1.02,
-              letterSpacing: "-0.045em",
-              margin: 0,
-              maxWidth: 820,
-            }}
-          >
-            {page.h1}
-          </h1>
-
-          <p
-            style={{
-              margin: "14px 0 0",
-              maxWidth: 720,
-              color: "#6D5A48",
-              fontSize: "clamp(17px, 1.7vw, 21px)",
-              lineHeight: 1.45,
-            }}
-          >
-            {page.subtitulo}
-          </p>
-
           <div
             style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 9,
-              marginTop: 18,
+              background:
+                "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(255,248,238,0.94))",
+              border: "1px solid #E9DCCB",
+              borderRadius: 24,
+              padding: "28px clamp(22px, 4vw, 42px)",
+              boxShadow: "0 18px 50px rgba(60,38,18,0.08)",
             }}
           >
-            {["Perfumes árabes originais", "Curadoria premium", "Alta fixação", "Envio para o Brasil"].map(
-              (item) => (
+            <p
+              style={{
+                color: "#B38B59",
+                fontWeight: 900,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                fontSize: 11,
+                margin: "0 0 10px",
+              }}
+            >
+              Curadoria Maison Noor
+            </p>
+
+            <h1
+              style={{
+                fontSize: "clamp(34px, 5vw, 56px)",
+                lineHeight: 0.98,
+                letterSpacing: "-0.045em",
+                margin: 0,
+                maxWidth: 760,
+              }}
+            >
+              {page.h1}
+            </h1>
+
+            <p
+              style={{
+                margin: "14px 0 0",
+                maxWidth: 720,
+                color: "#6D5A48",
+                fontSize: "clamp(16px, 1.55vw, 19px)",
+                lineHeight: 1.5,
+              }}
+            >
+              {page.subtitulo}
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 18,
+              }}
+            >
+              {[
+                "Perfumes árabes originais",
+                "Curadoria premium",
+                "Alta fixação",
+                "Entrega Brasil",
+              ].map((item) => (
                 <span
                   key={item}
                   style={{
-                    padding: "8px 12px",
+                    padding: "8px 11px",
                     borderRadius: 999,
                     background: "#FFF4E4",
                     border: "1px solid #E5D3BA",
@@ -355,30 +553,100 @@ export default async function SeoProgramaticoPage({ params }: Props) {
                 >
                   {item}
                 </span>
-              )
-            )}
-          </div>
+              ))}
+            </div>
 
-          <div style={{ marginTop: 18 }}>
-            <Link
-              href="/"
+            <div
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "12px 18px",
-                borderRadius: 999,
-                background: "#24170F",
-                color: "#FFF",
-                textDecoration: "none",
-                fontWeight: 900,
-                fontSize: 14,
-                boxShadow: "0 10px 24px rgba(36,23,15,0.16)",
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                marginTop: 20,
               }}
             >
-              Ver perfumes disponíveis
-            </Link>
+              <Link
+                href="/"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "12px 18px",
+                  borderRadius: 999,
+                  background: "#24170F",
+                  color: "#FFF",
+                  textDecoration: "none",
+                  fontWeight: 900,
+                  fontSize: 14,
+                }}
+              >
+                Ver perfumes disponíveis
+              </Link>
+
+              <Link
+                href="/blog"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "12px 18px",
+                  borderRadius: 999,
+                  background: "#FFF",
+                  color: "#7A5528",
+                  border: "1px solid #E5D3BA",
+                  textDecoration: "none",
+                  fontWeight: 900,
+                  fontSize: 14,
+                }}
+              >
+                Ler guias de perfumes
+              </Link>
+            </div>
           </div>
+
+          <aside
+            style={{
+              background: "#24170F",
+              color: "#FFF",
+              borderRadius: 24,
+              padding: "24px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              minHeight: 240,
+              boxShadow: "0 18px 50px rgba(36,23,15,0.16)",
+            }}
+          >
+            <div>
+              <p
+                style={{
+                  color: "#D8B47A",
+                  fontWeight: 900,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  fontSize: 11,
+                  margin: "0 0 10px",
+                }}
+              >
+                Guia rápido
+              </p>
+              <h2 style={{ margin: 0, fontSize: 27, lineHeight: 1.08 }}>
+                Escolha pela sensação que deseja transmitir.
+              </h2>
+            </div>
+
+            <p
+              style={{
+                margin: "18px 0 0",
+                color: "rgba(255,255,255,0.78)",
+                lineHeight: 1.55,
+                fontSize: 15,
+              }}
+            >
+              Perfumes árabes se destacam por presença, personalidade e
+              combinações olfativas marcantes. Use esta seleção como ponto de
+              partida para encontrar sua assinatura.
+            </p>
+          </aside>
         </section>
 
         {produtosRelacionados.length > 0 && (
@@ -388,17 +656,17 @@ export default async function SeoProgramaticoPage({ params }: Props) {
               background: "#FFF",
               border: "1px solid #E9DCCB",
               borderRadius: 24,
-              padding: 22,
-              boxShadow: "0 10px 30px rgba(60,38,18,0.05)",
+              padding: "22px",
+              boxShadow: "0 14px 44px rgba(60,38,18,0.06)",
             }}
           >
             <div
               style={{
                 display: "flex",
-                alignItems: "flex-end",
+                alignItems: "end",
                 justifyContent: "space-between",
                 gap: 12,
-                marginBottom: 16,
+                marginBottom: 18,
                 flexWrap: "wrap",
               }}
             >
@@ -413,19 +681,24 @@ export default async function SeoProgramaticoPage({ params }: Props) {
                     margin: "0 0 6px",
                   }}
                 >
-                  Seleção Maison Noor
+                  Seleção relacionada
                 </p>
-
-                <h2
-                  style={{
-                    fontSize: "clamp(24px, 3vw, 34px)",
-                    margin: 0,
-                    letterSpacing: "-0.03em",
-                  }}
-                >
-                  Produtos relacionados
+                <h2 style={{ fontSize: 28, margin: 0 }}>
+                  Perfumes que combinam com esta busca
                 </h2>
               </div>
+
+              <Link
+                href="/"
+                style={{
+                  color: "#9C7440",
+                  fontWeight: 900,
+                  textDecoration: "none",
+                  fontSize: 14,
+                }}
+              >
+                Ver todos →
+              </Link>
             </div>
 
             <div
@@ -435,9 +708,10 @@ export default async function SeoProgramaticoPage({ params }: Props) {
                 gap: 14,
               }}
             >
-              {produtosRelacionados.map((produto) => {
+              {produtosRelacionados.slice(0, 8).map((produto) => {
                 const produtoSlug =
-                  produto.slug || slugify(produto.nome || produto.id || "produto");
+                  produto.slug ||
+                  slugify(produto.nome || produto.id || "produto");
 
                 return (
                   <Link
@@ -450,6 +724,7 @@ export default async function SeoProgramaticoPage({ params }: Props) {
                       border: "1px solid #EADBC8",
                       borderRadius: 18,
                       overflow: "hidden",
+                      minWidth: 0,
                     }}
                   >
                     <div
@@ -465,6 +740,7 @@ export default async function SeoProgramaticoPage({ params }: Props) {
                       <img
                         src={getImagemProduto(produto)}
                         alt={produto.nome || "Perfume Maison Noor"}
+                        loading="lazy"
                         style={{
                           maxWidth: "100%",
                           maxHeight: "100%",
@@ -477,11 +753,14 @@ export default async function SeoProgramaticoPage({ params }: Props) {
                       <p
                         style={{
                           color: "#B38B59",
-                          fontWeight: 800,
+                          fontWeight: 900,
                           fontSize: 11,
                           margin: "0 0 6px",
                           textTransform: "uppercase",
-                          letterSpacing: "0.07em",
+                          letterSpacing: "0.08em",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
                         }}
                       >
                         {produto.marca || "Maison Noor"}
@@ -493,6 +772,10 @@ export default async function SeoProgramaticoPage({ params }: Props) {
                           lineHeight: 1.25,
                           margin: 0,
                           minHeight: 38,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
                         }}
                       >
                         {produto.nome || "Perfume Maison Noor"}
@@ -500,7 +783,7 @@ export default async function SeoProgramaticoPage({ params }: Props) {
 
                       <p
                         style={{
-                          margin: "10px 0 0",
+                          margin: "9px 0 0",
                           fontWeight: 900,
                           fontSize: 17,
                         }}
@@ -522,21 +805,21 @@ export default async function SeoProgramaticoPage({ params }: Props) {
             marginTop: 18,
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 14,
+            gap: 12,
           }}
         >
           {[
             {
               title: "Como escolher",
-              text: "Considere ocasião, intensidade, notas olfativas e a presença desejada.",
+              text: "Considere ocasião, intensidade, notas olfativas e a presença que você deseja transmitir.",
             },
             {
               title: "Por que perfume árabe?",
-              text: "Fragrâncias marcantes, frascos elegantes e combinações olfativas envolventes.",
+              text: "São fragrâncias marcantes, envolventes e com excelente percepção de sofisticação.",
             },
             {
               title: "Curadoria Maison Noor",
-              text: "Selecionamos fragrâncias por estilo, sofisticação, fixação e experiência.",
+              text: "A seleção combina estilo, experiência de uso, fixação e proposta olfativa.",
             },
           ].map((card) => (
             <article
@@ -544,13 +827,21 @@ export default async function SeoProgramaticoPage({ params }: Props) {
               style={{
                 background: "#FFFFFF",
                 border: "1px solid #E9DCCB",
-                borderRadius: 20,
+                borderRadius: 18,
                 padding: 18,
-                boxShadow: "0 10px 28px rgba(60,38,18,0.05)",
               }}
             >
-              <h2 style={{ fontSize: 19, margin: "0 0 8px" }}>{card.title}</h2>
-              <p style={{ color: "#6D5A48", lineHeight: 1.55, margin: 0 }}>
+              <h2 style={{ fontSize: 18, margin: "0 0 8px" }}>
+                {card.title}
+              </h2>
+              <p
+                style={{
+                  color: "#6D5A48",
+                  lineHeight: 1.5,
+                  margin: 0,
+                  fontSize: 14,
+                }}
+              >
                 {card.text}
               </p>
             </article>
@@ -561,32 +852,19 @@ export default async function SeoProgramaticoPage({ params }: Props) {
           style={{
             marginTop: 18,
             background: "#FFF",
-            border: "1px solid #E9DCCB",
+            border: "1px solid #EADBC8",
             borderRadius: 22,
-            padding: 22,
+            padding: 20,
           }}
         >
-          <p
-            style={{
-              color: "#B38B59",
-              fontWeight: 900,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              fontSize: 11,
-              margin: "0 0 8px",
-            }}
-          >
+          <h2 style={{ fontSize: 24, margin: "0 0 14px" }}>
             Continue explorando
-          </p>
-
-          <h2 style={{ fontSize: 26, margin: "0 0 14px" }}>
-            Outras seleções Maison Noor
           </h2>
 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
               gap: 10,
             }}
           >
@@ -603,7 +881,6 @@ export default async function SeoProgramaticoPage({ params }: Props) {
                   textDecoration: "none",
                   fontWeight: 800,
                   fontSize: 14,
-                  lineHeight: 1.35,
                 }}
               >
                 {item.h1}
