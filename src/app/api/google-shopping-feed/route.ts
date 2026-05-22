@@ -8,9 +8,11 @@ const SITE_URL = "https://www.maisonnoor.com.br";
 
 type ProdutoFirestore = {
   nome?: string;
+  slug?: string;
   marca?: string;
   categoria?: string;
   descricao?: string;
+  observacoes?: string;
   estoque?: number;
   reservado?: number;
   ativo?: boolean;
@@ -25,6 +27,10 @@ type ProdutoFirestore = {
   notasTopo?: string;
   notasCoracao?: string;
   notasFundo?: string;
+  fixacao?: string;
+  projecao?: string;
+  ocasiao?: string;
+  tipo?: string;
 };
 
 function escaparXml(valor: unknown) {
@@ -64,7 +70,12 @@ function urlAbsoluta(valor?: string) {
 }
 
 function imagemPrincipal(produto: ProdutoFirestore) {
-  const imagem = produto.imagem || produto.imageUrl || produto.foto || produto.imagem2 || produto.imagem3;
+  const imagem =
+    produto.imagem ||
+    produto.imageUrl ||
+    produto.foto ||
+    produto.imagem2 ||
+    produto.imagem3;
 
   if (imagem) return urlAbsoluta(imagem);
 
@@ -75,8 +86,13 @@ function imagemPrincipal(produto: ProdutoFirestore) {
 function categoriaGoogle(categoria?: string) {
   const valor = String(categoria || "").toLowerCase();
 
-  if (valor.includes("feminino")) return "Health & Beauty > Personal Care > Cosmetics > Perfume & Cologne";
-  if (valor.includes("masculino")) return "Health & Beauty > Personal Care > Cosmetics > Perfume & Cologne";
+  if (valor.includes("feminino")) {
+    return "Health & Beauty > Personal Care > Cosmetics > Perfume & Cologne";
+  }
+
+  if (valor.includes("masculino")) {
+    return "Health & Beauty > Personal Care > Cosmetics > Perfume & Cologne";
+  }
 
   return "Health & Beauty > Personal Care > Cosmetics > Perfume & Cologne";
 }
@@ -90,27 +106,138 @@ function generoGoogle(categoria?: string) {
   return "unisex";
 }
 
+function categoriaTexto(categoria?: string) {
+  const valor = String(categoria || "").toLowerCase();
+
+  if (valor.includes("feminino")) return "Feminino";
+  if (valor.includes("masculino")) return "Masculino";
+  if (valor.includes("unissex")) return "Unissex";
+
+  return "Unissex";
+}
+
 function disponibilidade(estoque: number, reservado: number) {
   const disponivel = Math.max(0, estoque - reservado);
   return disponivel > 0 ? "in_stock" : "out_of_stock";
 }
 
-function montarDescricao(produto: ProdutoFirestore) {
+function normalizar(valor?: string) {
+  return String(valor || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function marcaNormalizada(produto: ProdutoFirestore) {
+  const marca = limparTexto(produto.marca || "", 70);
+
+  if (marca) return marca;
+
+  const nome = normalizar(produto.nome);
+
+  if (nome.includes("yara") || nome.includes("asad") || nome.includes("fakhar")) {
+    return "Lattafa";
+  }
+
+  if (nome.includes("club de nuit") || nome.includes("armaf")) {
+    return "Armaf";
+  }
+
+  if (nome.includes("shagaf")) {
+    return "Swiss Arabian";
+  }
+
+  return "Maison Noor";
+}
+
+function temVolumeNoNome(nome: string) {
+  return /\b\d{2,3}\s?ml\b/i.test(nome);
+}
+
+function montarTituloShopping(produto: ProdutoFirestore) {
+  const nome = limparTexto(produto.nome || "", 90);
+  const marca = marcaNormalizada(produto);
+  const categoria = categoriaTexto(produto.categoria);
+  const volume = produto.volumeMl && !temVolumeNoNome(nome) ? `${produto.volumeMl}ml` : "";
+  const tipo = limparTexto(produto.tipo || "Eau de Parfum", 40);
+  const fixacao = normalizar(produto.fixacao).includes("alta") ? "Alta Fixação" : "Alta Fixação";
+
+  const nomeLower = normalizar(nome);
+  const marcaJaNoNome = normalizar(marca) && nomeLower.includes(normalizar(marca));
+
   const partes = [
-    produto.descricao,
-    produto.familiaOlfativa ? `Família olfativa: ${produto.familiaOlfativa}.` : "",
+    "Perfume Árabe",
+    categoria !== "Unissex" ? categoria : "Unissex",
+    nome,
+    !marcaJaNoNome && marca !== "Maison Noor" ? marca : "",
+    volume,
+    tipo && !nomeLower.includes(normalizar(tipo)) ? tipo : "",
+    fixacao,
+  ];
+
+  return limparTexto(
+    partes
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " "),
+    150,
+  );
+}
+
+function montarDescricao(produto: ProdutoFirestore) {
+  const nome = limparTexto(produto.nome || "Perfume árabe", 90);
+  const marca = marcaNormalizada(produto);
+  const categoria = categoriaTexto(produto.categoria);
+  const volume = produto.volumeMl ? `${produto.volumeMl}ml` : "";
+  const familia = limparTexto(produto.familiaOlfativa || "", 120);
+  const fixacao = limparTexto(produto.fixacao || "boa fixação", 80);
+  const projecao = limparTexto(produto.projecao || "", 80);
+  const ocasiao = limparTexto(produto.ocasiao || "uso diário, encontros e ocasiões especiais", 160);
+
+  const descricaoBase =
+    produto.descricao ||
+    produto.observacoes ||
+    `${nome} é um perfume árabe ${categoria.toLowerCase()} com curadoria premium Maison Noor.`;
+
+  const partes = [
+    `${nome}${marca ? ` ${marca}` : ""}.`,
+    `Perfume árabe ${categoria.toLowerCase()} original com curadoria Maison Noor.`,
+    volume ? `Volume: ${volume}.` : "",
+    familia ? `Família olfativa: ${familia}.` : "",
     produto.notasTopo ? `Notas de saída: ${produto.notasTopo}.` : "",
     produto.notasCoracao ? `Notas de coração: ${produto.notasCoracao}.` : "",
     produto.notasFundo ? `Notas de fundo: ${produto.notasFundo}.` : "",
-    produto.volumeMl ? `Volume: ${produto.volumeMl}ml.` : "",
+    `Fixação: ${fixacao}.`,
+    projecao ? `Projeção: ${projecao}.` : "",
+    `Indicado para ${ocasiao.toLowerCase()}.`,
+    limparTexto(descricaoBase, 900),
+    "Compre na Maison Noor Parfums com atendimento consultivo, seleção premium e envio para todo o Brasil.",
   ];
 
-  const descricao = limparTexto(partes.filter(Boolean).join(" "), 5000);
+  return limparTexto(partes.filter(Boolean).join(" "), 5000);
+}
 
-  return (
-    descricao ||
-    "Perfume árabe importado com curadoria premium Maison Noor, fragrância sofisticada e atendimento consultivo."
-  );
+function montarProductType(produto: ProdutoFirestore) {
+  const categoria = categoriaTexto(produto.categoria);
+  const marca = marcaNormalizada(produto);
+
+  return limparTexto(`Perfumes Árabes > ${categoria} > ${marca}`, 750);
+}
+
+function montarLinkProduto(docId: string, produto: ProdutoFirestore) {
+  const slug = limparTexto(produto.slug || "", 120) || slugify(produto.nome || docId);
+  return `${SITE_URL}/produto/${slug || docId}`;
+}
+
+function montarAdditionalImageLinks(produto: ProdutoFirestore) {
+  const imagens = [produto.imagem2, produto.imagem3]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .map(urlAbsoluta);
+
+  return imagens
+    .map((imagem) => `<g:additional_image_link>${escaparXml(imagem)}</g:additional_image_link>`)
+    .join("\n      ");
 }
 
 export async function GET() {
@@ -130,13 +257,13 @@ export async function GET() {
         if (!nome) return null;
         if (!preco || preco <= 0) return null;
 
-        const link = `${SITE_URL}/produto/${doc.id}`;
+        const link = montarLinkProduto(doc.id, produto);
         const imagem = imagemPrincipal(produto);
         const descricao = montarDescricao(produto);
-        const marca = limparTexto(produto.marca || "Maison Noor", 70);
-        const categoria = limparTexto(produto.categoria || "unissex", 80);
-        const titulo = limparTexto(`${nome}${produto.volumeMl ? ` ${produto.volumeMl}ml` : ""}`, 150);
+        const marca = limparTexto(marcaNormalizada(produto), 70);
+        const titulo = montarTituloShopping(produto);
         const disponibilidadeProduto = disponibilidade(estoque, reservado);
+        const additionalImages = montarAdditionalImageLinks(produto);
 
         return `
     <item>
@@ -145,11 +272,12 @@ export async function GET() {
       <g:description>${escaparXml(descricao)}</g:description>
       <g:link>${escaparXml(link)}</g:link>
       <g:image_link>${escaparXml(imagem)}</g:image_link>
+      ${additionalImages}
       <g:availability>${disponibilidadeProduto}</g:availability>
       <g:price>${preco.toFixed(2)} BRL</g:price>
       <g:condition>new</g:condition>
       <g:brand>${escaparXml(marca)}</g:brand>
-      <g:product_type>${escaparXml(`Perfumes Árabes > ${categoria}`)}</g:product_type>
+      <g:product_type>${escaparXml(montarProductType(produto))}</g:product_type>
       <g:google_product_category>${escaparXml(categoriaGoogle(produto.categoria))}</g:google_product_category>
       <g:gender>${generoGoogle(produto.categoria)}</g:gender>
       <g:age_group>adult</g:age_group>
