@@ -62,7 +62,6 @@ async function checkPage(name: string, path: string): Promise<CheckResult> {
   try {
     const response = await fetchWithTimeout(url);
     const timeMs = Date.now() - start;
-
     const isSlow = timeMs > SLOW_LIMIT_MS;
 
     return {
@@ -98,7 +97,6 @@ async function checkApi(name: string, path: string): Promise<CheckResult> {
   try {
     const response = await fetchWithTimeout(url);
     const timeMs = Date.now() - start;
-
     const isSlow = timeMs > SLOW_LIMIT_MS;
 
     return {
@@ -211,7 +209,6 @@ function montarHtml(results: CheckResult[], failures: CheckResult[]) {
   return `
     <div style="font-family:Arial,sans-serif;color:#2b2118">
       <h2>🚨 Alerta Maison Noor</h2>
-
       <p>O robô encontrou problema em uma ou mais verificações do site.</p>
 
       <h3>Problemas encontrados:</h3>
