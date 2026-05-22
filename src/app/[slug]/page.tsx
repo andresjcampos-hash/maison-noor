@@ -1,11 +1,28 @@
+# Atualização completa — src/app/[slug]/page.tsx
+
+```tsx
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
   getSeoProgramaticoBySlug,
   seoProgramaticoPages,
 } from "@/data/seo-programatico";
+import { adminDb } from "@/lib/firebase-admin";
 
 const SITE_URL = "https://www.maisonnoor.com.br";
+
+interface Produto {
+  id: string;
+  nome?: string;
+  slug?: string;
+  marca?: string;
+  descricao?: string;
+  precoVenda?: number;
+  imagem?: string;
+  imageUrl?: string;
+  foto?: string;
+  categoria?: string;
+}
 
 type Props = {
   params: {
@@ -46,7 +63,55 @@ export function generateMetadata({ params }: Props): Metadata {
   };
 }
 
-export default function SeoProgramaticoPage({ params }: Props) {
+function matchProduto(slug: string, produto: Produto) {
+  const texto = `${produto.nome || ""} ${produto.marca || ""} ${produto.descricao || ""} ${produto.categoria || ""}`.toLowerCase();
+
+  const regras: Record<string, string[]> = {
+    "perfume-arabe-feminino": ["feminino", "yara", "rose", "ward"],
+    "perfume-arabe-masculino": ["masculino", "asad", "club", "intense"],
+    "perfume-arabe-lattafa": ["lattafa", "yara", "asad", "fakhar"],
+    "perfume-arabe-armaf": ["armaf", "club de nuit"],
+    "perfume-arabe-doce": ["doce", "baunilha", "caramelo", "gourmand", "yara"],
+    "perfume-arabe-baunilha": ["baunilha", "vanilla", "yara"],
+    "perfume-arabe-amadeirado": ["madeira", "amadeirado", "oud"],
+    "perfume-arabe-oud": ["oud"],
+    "perfume-arabe-feminino-doce": ["feminino", "doce", "yara", "rose"],
+    "perfume-arabe-alta-fixacao": ["intense", "extrato", "alta fixação"],
+  };
+
+  const keywords = regras[slug] || [];
+
+  return keywords.some((keyword) => texto.includes(keyword));
+}
+
+async function getProdutosRelacionados(slug: string) {
+  try {
+    const snapshot = await adminDb
+      .collection("products")
+      .where("ativo", "==", true)
+      .limit(40)
+      .get();
+
+    const produtos = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Produto),
+    }));
+
+    const relacionados = produtos
+      .filter((produto) => matchProduto(slug, produto))
+      .slice(0, 8);
+
+    if (relacionados.length > 0) {
+      return relacionados;
+    }
+
+    return produtos.slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
+export default async function SeoProgramaticoPage({ params }: Props) {
   const page = getSeoProgramaticoBySlug(params.slug);
 
   if (!page) {
@@ -73,42 +138,13 @@ export default function SeoProgramaticoPage({ params }: Props) {
             boxShadow: "0 18px 60px rgba(60, 38, 18, 0.08)",
           }}
         >
-          <p
-            style={{
-              color: "#B38B59",
-              fontWeight: 800,
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
-              fontSize: 12,
-              marginBottom: 12,
-            }}
-          >
-            Maison Noor
-          </p>
-          <h1 style={{ fontSize: 34, marginBottom: 12 }}>
-            Página não encontrada
-          </h1>
-          <p style={{ color: "#6D5A48", marginBottom: 24 }}>
-            A página que você tentou acessar não está disponível.
-          </p>
-          <Link
-            href="/"
-            style={{
-              display: "inline-flex",
-              padding: "14px 22px",
-              borderRadius: 999,
-              background: "#B38B59",
-              color: "#FFF",
-              textDecoration: "none",
-              fontWeight: 800,
-            }}
-          >
-            Voltar para a Maison Noor
-          </Link>
+          <h1>Página não encontrada</h1>
         </section>
       </main>
     );
   }
+
+  const produtosRelacionados = await getProdutosRelacionados(params.slug);
 
   const relatedPages = seoProgramaticoPages
     .filter((item) => item.slug !== page.slug)
@@ -120,28 +156,6 @@ export default function SeoProgramaticoPage({ params }: Props) {
     name: page.h1,
     description: page.descricao,
     url: `${SITE_URL}/${page.slug}`,
-    isPartOf: {
-      "@type": "WebSite",
-      name: "Maison Noor Parfums",
-      url: SITE_URL,
-    },
-    breadcrumb: {
-      "@type": "BreadcrumbList",
-      itemListElement: [
-        {
-          "@type": "ListItem",
-          position: 1,
-          name: "Início",
-          item: SITE_URL,
-        },
-        {
-          "@type": "ListItem",
-          position: 2,
-          name: page.h1,
-          item: `${SITE_URL}/${page.slug}`,
-        },
-      ],
-    },
   };
 
   return (
@@ -167,21 +181,6 @@ export default function SeoProgramaticoPage({ params }: Props) {
           margin: "0 auto",
         }}
       >
-        <nav
-          aria-label="Breadcrumb"
-          style={{
-            marginBottom: 28,
-            fontSize: 14,
-            color: "#7C6957",
-          }}
-        >
-          <Link href="/" style={{ color: "#9C7440", textDecoration: "none" }}>
-            Início
-          </Link>
-          <span style={{ margin: "0 10px" }}>/</span>
-          <span>{page.h1}</span>
-        </nav>
-
         <section
           style={{
             background: "rgba(255,255,255,0.88)",
@@ -228,92 +227,144 @@ export default function SeoProgramaticoPage({ params }: Props) {
           >
             {page.subtitulo}
           </p>
+        </section>
 
+        <section style={{ marginTop: 40 }}>
           <div
             style={{
               display: "flex",
-              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 20,
               gap: 12,
-              marginTop: 30,
+              flexWrap: "wrap",
             }}
           >
-            {["Perfumes árabes originais", "Curadoria premium", "Alta fixação", "Envio para o Brasil"].map(
-              (item) => (
-                <span
-                  key={item}
+            <div>
+              <p
+                style={{
+                  color: "#B38B59",
+                  fontWeight: 900,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  fontSize: 12,
+                  marginBottom: 8,
+                }}
+              >
+                Seleção Maison Noor
+              </p>
+
+              <h2
+                style={{
+                  fontSize: "clamp(28px, 5vw, 44px)",
+                  margin: 0,
+                }}
+              >
+                Produtos relacionados
+              </h2>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+              gap: 20,
+            }}
+          >
+            {produtosRelacionados.map((produto) => {
+              const imagem =
+                produto.imagem ||
+                produto.imageUrl ||
+                produto.foto ||
+                "/logo-maison-noor.png";
+
+              const slugProduto =
+                produto.slug ||
+                produto.nome
+                  ?.toLowerCase()
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .replace(/[^a-z0-9]+/g, "-")
+                  .replace(/^-|-$/g, "");
+
+              return (
+                <Link
+                  key={produto.id}
+                  href={`/produto/${slugProduto}`}
                   style={{
-                    padding: "12px 16px",
-                    borderRadius: 999,
-                    background: "#FFF4E4",
-                    border: "1px solid #E5D3BA",
-                    color: "#7A5528",
-                    fontWeight: 800,
-                    fontSize: 14,
+                    textDecoration: "none",
+                    color: "inherit",
+                    background: "#FFF",
+                    border: "1px solid #E9DCCB",
+                    borderRadius: 24,
+                    overflow: "hidden",
+                    boxShadow: "0 12px 32px rgba(60,38,18,0.06)",
+                    transition: "0.25s ease",
                   }}
                 >
-                  {item}
-                </span>
-              )
-            )}
-          </div>
+                  <div
+                    style={{
+                      aspectRatio: "1 / 1",
+                      background: "#FFF9F1",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: 20,
+                    }}
+                  >
+                    <img
+                      src={imagem}
+                      alt={produto.nome || "Perfume Maison Noor"}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                      }}
+                    />
+                  </div>
 
-          <div style={{ marginTop: 34 }}>
-            <Link
-              href="/"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "16px 24px",
-                borderRadius: 999,
-                background: "#24170F",
-                color: "#FFF",
-                textDecoration: "none",
-                fontWeight: 900,
-                boxShadow: "0 14px 34px rgba(36,23,15,0.20)",
-              }}
-            >
-              Ver perfumes disponíveis
-            </Link>
-          </div>
-        </section>
+                  <div style={{ padding: 20 }}>
+                    <p
+                      style={{
+                        color: "#B38B59",
+                        fontWeight: 800,
+                        marginBottom: 8,
+                        fontSize: 13,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                      }}
+                    >
+                      {produto.marca || "Maison Noor"}
+                    </p>
 
-        <section
-          style={{
-            marginTop: 28,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: 18,
-          }}
-        >
-          {[
-            {
-              title: "Como escolher",
-              text: "Escolha considerando ocasião, intensidade, notas olfativas e o tipo de presença que você deseja transmitir.",
-            },
-            {
-              title: "Por que perfume árabe?",
-              text: "Perfumes árabes são conhecidos por propostas marcantes, frascos elegantes e combinações olfativas envolventes.",
-            },
-            {
-              title: "Curadoria Maison Noor",
-              text: "Selecionamos fragrâncias pensando em estilo, sofisticação, fixação e experiência de uso.",
-            },
-          ].map((card) => (
-            <article
-              key={card.title}
-              style={{
-                background: "#FFFFFF",
-                border: "1px solid #E9DCCB",
-                borderRadius: 24,
-                padding: 24,
-                boxShadow: "0 14px 40px rgba(60,38,18,0.06)",
-              }}
-            >
-              <h2 style={{ fontSize: 22, marginBottom: 10 }}>{card.title}</h2>
-              <p style={{ color: "#6D5A48", lineHeight: 1.65 }}>{card.text}</p>
-            </article>
-          ))}
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontSize: 20,
+                        lineHeight: 1.3,
+                        minHeight: 54,
+                      }}
+                    >
+                      {produto.nome}
+                    </h3>
+
+                    <p
+                      style={{
+                        marginTop: 14,
+                        fontWeight: 900,
+                        fontSize: 22,
+                      }}
+                    >
+                      {produto.precoVenda
+                        ? `R$ ${produto.precoVenda.toFixed(2).replace(".", ",")}`
+                        : "Consultar"}
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </section>
 
         <section
@@ -337,6 +388,7 @@ export default function SeoProgramaticoPage({ params }: Props) {
           >
             Continue explorando
           </p>
+
           <h2 style={{ fontSize: 30, marginBottom: 18 }}>
             Outras seleções Maison Noor
           </h2>
@@ -371,3 +423,4 @@ export default function SeoProgramaticoPage({ params }: Props) {
     </main>
   );
 }
+```
