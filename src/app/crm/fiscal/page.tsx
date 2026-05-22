@@ -800,6 +800,7 @@ export default function FiscalPage() {
   const [items, setItems] = useState<EntradaFiscal[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorFiscal[]>([]);
   const [produtos, setProdutos] = useState<ProdutoFiscal[]>([]);
+  const [activeProdutoItemId, setActiveProdutoItemId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
 
@@ -975,6 +976,45 @@ export default function FiscalPage() {
     ].filter(Boolean);
 
     return partes.join(" • ");
+  }
+
+  function normalizarBuscaProduto(texto: string) {
+    return String(texto || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function produtosSugeridos(termo: string) {
+    const busca = normalizarBuscaProduto(termo);
+
+    if (!busca) {
+      return produtos.slice(0, 8);
+    }
+
+    return produtos
+      .filter((produto) => {
+        const hay = normalizarBuscaProduto(
+          `${produto.nome || ""} ${produto.marca || ""} ${produto.categoria || ""} ${produto.slug || ""}`
+        );
+
+        return hay.includes(busca);
+      })
+      .slice(0, 8);
+  }
+
+  function selecionarProdutoFiscalDireto(itemId: string, produto: ProdutoFiscal) {
+    const custoProduto = Number(produto.precoCompra || produto.custo || 0);
+    const itemAtual = form.itens.find((item) => item.id === itemId);
+
+    updateItem(itemId, {
+      produto: produto.nome,
+      produtoId: produto.id,
+      custoUnitario: custoProduto > 0 ? custoProduto : itemAtual?.custoUnitario || 0,
+    });
+
+    setActiveProdutoItemId(null);
   }
 
   function selecionarProdutoNoItem(itemId: string, value: string) {
@@ -1435,14 +1475,6 @@ export default function FiscalPage() {
 
       {toast ? <div className="toast">{toast}</div> : null}
 
-      <datalist id="produtos-fiscais-lista">
-        {produtos.map((produto) => (
-          <option key={produto.id} value={produto.nome}>
-            {produtoLabel(produto)}
-          </option>
-        ))}
-      </datalist>
-
       <section className="controlPanel">
         <div className="quickFilters">
           <button type="button" onClick={() => setQuickRange("hoje")}>Hoje</button>
@@ -1674,7 +1706,74 @@ export default function FiscalPage() {
                 {form.itens.map((item, index) => (
                   <div className="itemRow" key={item.id}>
                     <div className="itemIndex">{index + 1}</div>
-                    <div className="field itemProduct"><label>Produto / descrição fiscal</label><div className="productSuggestWrap"><input className="input" list="produtos-fiscais-lista" value={item.produto} onChange={(e) => selecionarProdutoNoItem(item.id, e.target.value)} onBlur={(e) => selecionarProdutoNoItem(item.id, e.target.value)} placeholder="Digite para buscar produto cadastrado ou informar novo item..." /><button type="button" className="quickProductBtn" onClick={() => void cadastrarProdutoRapido(item)}>+ Novo</button></div><small className="itemHint">{item.produtoId ? "Produto vinculado ao cadastro e pronto para estoque." : "Produto não vinculado. Use + Novo para cadastrar rápido."}</small></div>
+                    <div className="field itemProduct">
+                      <label>Produto / descrição fiscal</label>
+
+                      <div className="productSuggestWrap">
+                        <div className="productInputBox">
+                          <input
+                            className="input"
+                            value={item.produto}
+                            onFocus={() => setActiveProdutoItemId(item.id)}
+                            onChange={(e) => {
+                              setActiveProdutoItemId(item.id);
+                              selecionarProdutoNoItem(item.id, e.target.value);
+                            }}
+                            placeholder="Digite para buscar produto cadastrado ou informar novo item..."
+                          />
+
+                          {activeProdutoItemId === item.id ? (
+                            <div className="productSuggestions">
+                              {produtosSugeridos(item.produto).length ? (
+                                produtosSugeridos(item.produto).map((produto) => (
+                                  <button
+                                    key={produto.id}
+                                    type="button"
+                                    className="productSuggestion"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      selecionarProdutoFiscalDireto(item.id, produto);
+                                    }}
+                                  >
+                                    <strong>{produto.nome}</strong>
+                                    <span>
+                                      {[
+                                        produto.marca ? produto.marca : "",
+                                        produto.categoria ? produto.categoria : "",
+                                        `Estoque: ${Number(produto.estoque || 0)}`,
+                                        produto.precoCompra || produto.custo
+                                          ? `Custo: ${formatBRL(Number(produto.precoCompra || produto.custo || 0))}`
+                                          : "",
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" • ")}
+                                    </span>
+                                  </button>
+                                ))
+                              ) : (
+                                <div className="productSuggestionEmpty">
+                                  Nenhum produto encontrado. Clique em <strong>+ Novo</strong> para cadastrar rápido.
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <button
+                          type="button"
+                          className="quickProductBtn"
+                          onClick={() => void cadastrarProdutoRapido(item)}
+                        >
+                          + Novo
+                        </button>
+                      </div>
+
+                      <small className="itemHint">
+                        {item.produtoId
+                          ? "Produto vinculado ao cadastro e pronto para estoque."
+                          : "Produto não vinculado. Use + Novo para cadastrar rápido."}
+                      </small>
+                    </div>
                     <div className="field"><label>Tipo</label><select className="input" value={item.tipoItem || "revenda"} onChange={(e) => updateItem(item.id, { tipoItem: e.target.value as TipoItemFiscal })}><option value="revenda">Revenda</option><option value="embalagem">Embalagem</option><option value="consumo">Consumo</option><option value="operacional">Operacional</option><option value="imobilizado">Imobilizado</option></select></div>
                     <div className="field"><label>Qtd</label><input className="input" value={String(item.quantidade)} onChange={(e) => updateItem(item.id, { quantidade: toNum(e.target.value) })} /></div>
                     <div className="field"><label>Custo unit.</label><input className="input" value={String(item.custoUnitario)} onChange={(e) => updateItem(item.id, { custoUnitario: toNum(e.target.value) })} /></div>
@@ -1831,7 +1930,14 @@ export default function FiscalPage() {
         }
         @media (max-width: 1100px) { .filtersGrid, .premiumPanel, .listsGrid, .modalGrid { grid-template-columns: 1fr; } .fiscalOverview { grid-template-columns: 1fr !important; } .fiscalOverviewGrid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } .entry { grid-template-columns: 42px minmax(0, 1fr); } .entryValue { grid-column: 2 / -1; text-align: left; justify-items: start; } .entryActions { grid-column: 2 / -1; justify-content: flex-start; } .itemRow { grid-template-columns: 34px minmax(0, 1fr); } .itemProduct, .itemRow .field, .removeItem { grid-column: 1 / -1; } .itemIndex { grid-column: 1; } }
         @media (max-width: 760px) { .page { padding: 12px; } .hero { align-items: flex-start; } .kpis { grid-template-columns: 1fr; } .phaseGrid, .resumeFiscal { grid-template-columns: 1fr; } .entryMeta { white-space: normal; } }
-        .productSuggestWrap { display: grid; grid-template-columns: minmax(0, 1fr) 74px; gap: 6px; align-items: center; }
+        .productSuggestWrap { display: grid; grid-template-columns: minmax(0, 1fr) 74px; gap: 6px; align-items: start; }
+        .productInputBox { position: relative; min-width: 0; }
+        .productSuggestions { position: absolute; z-index: 9999; left: 0; right: 0; top: calc(100% + 6px); max-height: 260px; overflow: auto; border-radius: 14px; border: 1px solid rgba(200,162,106,.28); background: rgba(12,12,18,.98); box-shadow: 0 22px 55px rgba(0,0,0,.48); padding: 6px; }
+        .productSuggestion { width: 100%; text-align: left; border: 0; border-radius: 11px; padding: 9px 10px; background: transparent; color: #f5f2ec; cursor: pointer; display: grid; gap: 3px; }
+        .productSuggestion:hover { background: rgba(200,162,106,.12); }
+        .productSuggestion strong { font-size: 12px; line-height: 1.2; }
+        .productSuggestion span { font-size: 10px; opacity: .68; line-height: 1.25; }
+        .productSuggestionEmpty { padding: 10px; font-size: 11px; line-height: 1.35; opacity: .75; }
         .quickProductBtn { min-height: 34px; border-radius: 11px; border: 1px solid rgba(200,162,106,.28); background: rgba(200,162,106,.11); color: #f5f2ec; font-size: 10.5px; font-weight: 950; cursor: pointer; }
         .itemHint { display: block; margin-top: 4px; font-size: 10px; line-height: 1.25; opacity: .62; }
         .status.atrasado { color: #ffd1d1; border-color: rgba(255,120,120,.42); background: rgba(255,80,80,.12); }
