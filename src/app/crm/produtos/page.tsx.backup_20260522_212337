@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -30,8 +30,8 @@ type Produto = {
   estoque?: number; // estoque físico
   reservado?: number; // reservado para pedidos (ainda não faturados)
   ativo?: boolean;
-  createdAt: any;
-  updatedAt: any;
+  createdAt: string;
+  updatedAt: string;
   observacoes?: string;
 };
 
@@ -41,51 +41,15 @@ function nowISO(): string {
   return new Date().toISOString();
 }
 
+function uid(): string {
+  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
 function formatBRL(n: number): string {
   return Number(n || 0).toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
   });
-}
-
-function normalizeDateValue(value: any, fallback = nowISO()): string {
-  try {
-    if (!value) return fallback;
-
-    if (typeof value?.toDate === "function") {
-      return value.toDate().toISOString();
-    }
-
-    if (typeof value?.seconds === "number") {
-      return new Date(value.seconds * 1000).toISOString();
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) return fallback;
-
-    return date.toISOString();
-  } catch {
-    return fallback;
-  }
-}
-
-function formatDateTime(value: any): string {
-  try {
-    const normalized = normalizeDateValue(value, "");
-    if (!normalized) return "â€”";
-
-    const date = new Date(normalized);
-
-    if (Number.isNaN(date.getTime())) return "â€”";
-
-    return date.toLocaleString("pt-BR");
-  } catch {
-    return "â€”";
-  }
-}
-function uid(): string {
-  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 function canUseStorage(): boolean {
@@ -190,8 +154,8 @@ export default function ProdutosPage() {
           estoque: data.estoque,
           reservado: data.reservado ?? 0,
           ativo: data.ativo ?? true,
-          createdAt: normalizeDateValue(data.createdAt),
-          updatedAt: normalizeDateValue(data.updatedAt),
+          createdAt: data.createdAt ?? nowISO(),
+          updatedAt: data.updatedAt ?? nowISO(),
           observacoes: data.observacoes,
         });
       });
@@ -453,8 +417,8 @@ export default function ProdutosPage() {
             estoque: Math.max(0, Math.floor(Number(x.estoque) || 0)),
             reservado: Math.max(0, Math.floor(Number(x.reservado) || 0)),
             ativo: x.ativo !== false,
-            createdAt: normalizeDateValue(x.createdAt),
-            updatedAt: normalizeDateValue(x.updatedAt),
+            createdAt: x.createdAt ? String(x.createdAt) : nowISO(),
+            updatedAt: x.updatedAt ? String(x.updatedAt) : nowISO(),
             observacoes: x.observacoes ? String(x.observacoes) : undefined,
           }))
           .filter((p) => p.nome);
@@ -535,7 +499,7 @@ export default function ProdutosPage() {
       );
     }
     return base.sort((a, b) =>
-      normalizeDateValue(b.updatedAt, "").localeCompare(normalizeDateValue(a.updatedAt, ""))
+      (b.updatedAt || "").localeCompare(a.updatedAt || "")
     );
   }, [items, q, cat, onlyActive, onlySemEstoque, sortBy]);
 
@@ -1100,9 +1064,9 @@ export default function ProdutosPage() {
             {openId !== "NEW" && openItem ? (
               <div className="modalFoot">
                 Criado:{" "}
-                {formatDateTime(openItem.createdAt)} •
+                {new Date(openItem.createdAt).toLocaleString("pt-BR")} •
                 Atualizado:{" "}
-                {formatDateTime(openItem.updatedAt)}
+                {new Date(openItem.updatedAt).toLocaleString("pt-BR")}
               </div>
             ) : null}
           </div>
@@ -2530,5 +2494,3 @@ export default function ProdutosPage() {
     </main>
   );
 }
-
-

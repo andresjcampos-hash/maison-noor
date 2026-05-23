@@ -88,6 +88,13 @@ function uid(): string {
   return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
+function formatBRL(n: number): string {
+  return Number(n || 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
 function canUseStorage(): boolean {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
@@ -2530,5 +2537,4 @@ export default function ProdutosPage() {
     </main>
   );
 }
-
 
