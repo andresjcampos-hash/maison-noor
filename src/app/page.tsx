@@ -39,6 +39,8 @@ type ProdutoFirebase = {
   updatedAt?: string;
   observacoes?: string;
   imagem?: string;
+  imagem2?: string;
+  imagem3?: string;
   imageUrl?: string;
   ordemVitrine?: number;
   ordem?: number;
@@ -424,12 +426,37 @@ function categoriaSite(categoria?: CategoriaCRM): string {
   return "Unissex";
 }
 
+function normalizarCaminhoImagem(valor?: string): string {
+  const caminho = String(valor || "")
+    .trim()
+    .replace(/^["']|["']$/g, "");
+
+  if (!caminho) return "";
+
+  if (
+    caminho.startsWith("http://") ||
+    caminho.startsWith("https://") ||
+    caminho.startsWith("data:")
+  ) {
+    return caminho;
+  }
+
+  if (caminho.startsWith("/")) return caminho;
+
+  return `/${caminho}`;
+}
+
 function getImagemProduto(produto: ProdutoFirebase): string {
-  if (produto.imagem) return produto.imagem;
-  if (produto.imageUrl) return produto.imageUrl;
+  const imagemPrincipal = normalizarCaminhoImagem(produto.imagem);
+  if (imagemPrincipal) return imagemPrincipal;
+
+  const imageUrl = normalizarCaminhoImagem(produto.imageUrl);
+  if (imageUrl) return imageUrl;
 
   const slug = slugify(produto.nome);
-  return `/produtos/${slug}.png`;
+  if (slug) return `/produtos/${slug}.png`;
+
+  return "/produtos/sem-imagem.png";
 }
 
 function ehKit(produto: ProdutoFirebase) {
@@ -748,6 +775,8 @@ export default function HomePage() {
             updatedAt: data.updatedAt,
             observacoes: data.observacoes,
             imagem: data.imagem,
+            imagem2: data.imagem2,
+            imagem3: data.imagem3,
             imageUrl: data.imageUrl,
             ordemVitrine: data.ordemVitrine,
             ordem: data.ordem,

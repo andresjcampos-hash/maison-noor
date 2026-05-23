@@ -17,7 +17,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 
-type Categoria = "masculino" | "feminino" | "unissex" | "kits-presente";
+type Categoria = "masculino" | "feminino" | "unissex";
 
 type Produto = {
   id: string;
@@ -33,19 +33,6 @@ type Produto = {
   createdAt: any;
   updatedAt: any;
   observacoes?: string;
-
-  // Campos pÃºblicos do site / pÃ¡gina de produto
-  imagem?: string;
-  imagem2?: string;
-  imagem3?: string;
-  descricao?: string;
-  familiaOlfativa?: string;
-  projecao?: string;
-  fixacao?: string;
-  ocasiao?: string;
-  notasTopo?: string;
-  notasCoracao?: string;
-  notasFundo?: string;
 };
 
 const STORAGE_KEY = "maison_noor_crm_produtos_v1";
@@ -173,19 +160,6 @@ export default function ProdutosPage() {
   const [fAtivo, setFAtivo] = useState<boolean>(true);
   const [fObs, setFObs] = useState("");
 
-  // campos pÃºblicos do produto no site
-  const [fImagem, setFImagem] = useState("");
-  const [fImagem2, setFImagem2] = useState("");
-  const [fImagem3, setFImagem3] = useState("");
-  const [fDescricao, setFDescricao] = useState("");
-  const [fFamiliaOlfativa, setFFamiliaOlfativa] = useState("");
-  const [fProjecao, setFProjecao] = useState("");
-  const [fFixacao, setFFixacao] = useState("");
-  const [fOcasiao, setFOcasiao] = useState("");
-  const [fNotasTopo, setFNotasTopo] = useState("");
-  const [fNotasCoracao, setFNotasCoracao] = useState("");
-  const [fNotasFundo, setFNotasFundo] = useState("");
-
   // import/export
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -219,17 +193,6 @@ export default function ProdutosPage() {
           createdAt: normalizeDateValue(data.createdAt),
           updatedAt: normalizeDateValue(data.updatedAt),
           observacoes: data.observacoes,
-          imagem: data.imagem,
-          imagem2: data.imagem2,
-          imagem3: data.imagem3,
-          descricao: data.descricao,
-          familiaOlfativa: data.familiaOlfativa,
-          projecao: data.projecao,
-          fixacao: data.fixacao,
-          ocasiao: data.ocasiao,
-          notasTopo: data.notasTopo,
-          notasCoracao: data.notasCoracao,
-          notasFundo: data.notasFundo,
         });
       });
       setItems(arr);
@@ -267,17 +230,6 @@ export default function ProdutosPage() {
     setFEstoque("0");
     setFAtivo(true);
     setFObs("");
-    setFImagem("");
-    setFImagem2("");
-    setFImagem3("");
-    setFDescricao("");
-    setFFamiliaOlfativa("");
-    setFProjecao("");
-    setFFixacao("");
-    setFOcasiao("");
-    setFNotasTopo("");
-    setFNotasCoracao("");
-    setFNotasFundo("");
   }
 
   function openEtiqueta(id: string): void {
@@ -299,17 +251,6 @@ export default function ProdutosPage() {
     setFEstoque(String(p.estoque ?? 0));
     setFAtivo(p.ativo !== false);
     setFObs(p.observacoes || "");
-    setFImagem(p.imagem || "");
-    setFImagem2(p.imagem2 || "");
-    setFImagem3(p.imagem3 || "");
-    setFDescricao(p.descricao || "");
-    setFFamiliaOlfativa(p.familiaOlfativa || "");
-    setFProjecao(p.projecao || "");
-    setFFixacao(p.fixacao || "");
-    setFOcasiao(p.ocasiao || "");
-    setFNotasTopo(p.notasTopo || "");
-    setFNotasCoracao(p.notasCoracao || "");
-    setFNotasFundo(p.notasFundo || "");
   }
 
   function closeModal(): void {
@@ -353,19 +294,6 @@ export default function ProdutosPage() {
       ativo: fAtivo,
       // 🔑 nunca manda undefined
       observacoes: fObs?.trim() ? fObs.trim() : undefined,
-
-      // campos pÃºblicos do site / pÃ¡gina de produto
-      imagem: fImagem.trim() || undefined,
-      imagem2: fImagem2.trim() || undefined,
-      imagem3: fImagem3.trim() || undefined,
-      descricao: fDescricao.trim() || undefined,
-      familiaOlfativa: fFamiliaOlfativa.trim() || undefined,
-      projecao: fProjecao.trim() || undefined,
-      fixacao: fFixacao.trim() || undefined,
-      ocasiao: fOcasiao.trim() || undefined,
-      notasTopo: fNotasTopo.trim() || undefined,
-      notasCoracao: fNotasCoracao.trim() || undefined,
-      notasFundo: fNotasFundo.trim() || undefined,
       reservado: openId === "NEW" ? 0 : openItem?.reservado ?? 0,
       createdAt: openId === "NEW" ? nowISO() : openItem?.createdAt ?? nowISO(),
       updatedAt: nowISO(),
@@ -528,17 +456,6 @@ export default function ProdutosPage() {
             createdAt: normalizeDateValue(x.createdAt),
             updatedAt: normalizeDateValue(x.updatedAt),
             observacoes: x.observacoes ? String(x.observacoes) : undefined,
-            imagem: x.imagem ? String(x.imagem) : undefined,
-            imagem2: x.imagem2 ? String(x.imagem2) : undefined,
-            imagem3: x.imagem3 ? String(x.imagem3) : undefined,
-            descricao: x.descricao ? String(x.descricao) : undefined,
-            familiaOlfativa: x.familiaOlfativa ? String(x.familiaOlfativa) : undefined,
-            projecao: x.projecao ? String(x.projecao) : undefined,
-            fixacao: x.fixacao ? String(x.fixacao) : undefined,
-            ocasiao: x.ocasiao ? String(x.ocasiao) : undefined,
-            notasTopo: x.notasTopo ? String(x.notasTopo) : undefined,
-            notasCoracao: x.notasCoracao ? String(x.notasCoracao) : undefined,
-            notasFundo: x.notasFundo ? String(x.notasFundo) : undefined,
           }))
           .filter((p) => p.nome);
 
@@ -2098,25 +2015,6 @@ export default function ProdutosPage() {
         .wide {
           grid-column: 1 / -1;
         }
-                .fieldGroupTitle {
-          padding: 10px 12px;
-          border-radius: 14px;
-          border: 1px solid rgba(200, 162, 106, 0.20);
-          background: rgba(200, 162, 106, 0.07);
-        }
-        .fieldGroupTitle strong {
-          color: rgba(200, 162, 106, 0.98);
-          font-size: 13px;
-          font-weight: 950;
-        }
-        .fieldGroupTitle span {
-          color: rgba(255, 255, 255, 0.62);
-          font-size: 11px;
-          line-height: 1.35;
-        }
-        .textareaLarge {
-          min-height: 132px !important;
-        }
         .textarea {
           min-height: 110px;
           padding: 12px 12px;
@@ -2249,26 +2147,7 @@ export default function ProdutosPage() {
           }
 
           .input,
-                  .fieldGroupTitle {
-          padding: 10px 12px;
-          border-radius: 14px;
-          border: 1px solid rgba(200, 162, 106, 0.20);
-          background: rgba(200, 162, 106, 0.07);
-        }
-        .fieldGroupTitle strong {
-          color: rgba(200, 162, 106, 0.98);
-          font-size: 13px;
-          font-weight: 950;
-        }
-        .fieldGroupTitle span {
-          color: rgba(255, 255, 255, 0.62);
-          font-size: 11px;
-          line-height: 1.35;
-        }
-        .textareaLarge {
-          min-height: 132px !important;
-        }
-        .textarea {
+          .textarea {
             font-size: 16px;
           }
 
@@ -2606,25 +2485,6 @@ export default function ProdutosPage() {
           gap: 10px !important;
           padding: 10px 6px 6px !important;
         }
-                .fieldGroupTitle {
-          padding: 10px 12px;
-          border-radius: 14px;
-          border: 1px solid rgba(200, 162, 106, 0.20);
-          background: rgba(200, 162, 106, 0.07);
-        }
-        .fieldGroupTitle strong {
-          color: rgba(200, 162, 106, 0.98);
-          font-size: 13px;
-          font-weight: 950;
-        }
-        .fieldGroupTitle span {
-          color: rgba(255, 255, 255, 0.62);
-          font-size: 11px;
-          line-height: 1.35;
-        }
-        .textareaLarge {
-          min-height: 132px !important;
-        }
         .textarea {
           min-height: 82px !important;
           padding: 10px 11px !important;
@@ -2670,7 +2530,6 @@ export default function ProdutosPage() {
     </main>
   );
 }
-
 
 
 
