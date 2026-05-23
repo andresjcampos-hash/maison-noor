@@ -79,7 +79,6 @@ type ProdutoCarrinho = {
 
 type ProdutoRelacionado = {
   id: string;
-  slug?: string;
   nome: string;
   marca?: string;
   preco: number;
@@ -104,6 +103,178 @@ type FaqProduto = {
   pergunta: string;
   resposta: string;
 };
+
+type SeoLinkProduto = {
+  titulo: string;
+  descricao: string;
+  href: string;
+  etiqueta: string;
+};
+
+const seoLinksProduto: Record<string, SeoLinkProduto[]> = {
+  yara: [
+    {
+      titulo: "Yara Rosa vs Fakhar Rose: qual perfume feminino vale mais a pena?",
+      descricao: "Comparativo Maison Noor para escolher entre doçura cremosa, floral sofisticado e presença feminina.",
+      href: "/blog/yara-rosa-vs-fakhar-rose",
+      etiqueta: "Comparativo feminino",
+    },
+    {
+      titulo: "Melhores perfumes árabes femininos de 2026",
+      descricao: "Ranking premium com fragrâncias femininas elegantes, marcantes e muito elogiadas.",
+      href: "/blog/melhores-perfumes-arabes-femininos-2026",
+      etiqueta: "Ranking SEO",
+    },
+  ],
+  fakhar: [
+    {
+      titulo: "Yara Rosa vs Fakhar Rose: veja as diferenças",
+      descricao: "Entenda qual combina mais com seu estilo: doce confortável ou floral elegante e sofisticado.",
+      href: "/blog/yara-rosa-vs-fakhar-rose",
+      etiqueta: "Comparativo",
+    },
+    {
+      titulo: "Melhores perfumes árabes femininos de 2026",
+      descricao: "Uma seleção Maison Noor para quem busca perfumes femininos com presença premium.",
+      href: "/blog/melhores-perfumes-arabes-femininos-2026",
+      etiqueta: "Guia feminino",
+    },
+  ],
+  sabah: [
+    {
+      titulo: "Sabah Al Ward vs Shagaf Al Ward",
+      descricao: "Compare dois perfumes femininos árabes florais, marcantes e sofisticados.",
+      href: "/blog/sabah-al-ward-vs-shagaf-al-ward",
+      etiqueta: "Comparativo floral",
+    },
+    {
+      titulo: "Perfumes árabes para encontros",
+      descricao: "Fragrâncias com presença elegante para momentos especiais e memoráveis.",
+      href: "/blog/perfumes-arabes-para-encontros",
+      etiqueta: "Ocasiões",
+    },
+  ],
+  shagaf: [
+    {
+      titulo: "Sabah Al Ward vs Shagaf Al Ward",
+      descricao: "Veja qual combina mais com seu gosto: floral moderno, intensidade ou assinatura marcante.",
+      href: "/blog/sabah-al-ward-vs-shagaf-al-ward",
+      etiqueta: "Comparativo",
+    },
+    {
+      titulo: "Melhores perfumes árabes femininos de 2026",
+      descricao: "Conheça opções femininas árabes com elegância, presença e alto potencial de elogios.",
+      href: "/blog/melhores-perfumes-arabes-femininos-2026",
+      etiqueta: "Ranking",
+    },
+  ],
+  club: [
+    {
+      titulo: "Club de Nuit vs Aventus: por que essa comparação ficou famosa?",
+      descricao: "Entenda o perfil frutado, esfumaçado e masculino que tornou o Club de Nuit tão buscado.",
+      href: "/blog/club-de-nuit-vs-aventus",
+      etiqueta: "Comparativo masculino",
+    },
+    {
+      titulo: "Perfumes árabes para encontros",
+      descricao: "Escolhas marcantes para quem quer presença, elegância e memória olfativa.",
+      href: "/blog/perfumes-arabes-para-encontros",
+      etiqueta: "Guia de uso",
+    },
+  ],
+  asad: [
+    {
+      titulo: "Asad vs Sauvage Elixir: intensidade, especiarias e presença",
+      descricao: "Veja por que o Lattafa Asad é tão comentado entre perfumes masculinos intensos.",
+      href: "/blog/asad-vs-sauvage-elixir",
+      etiqueta: "Comparativo masculino",
+    },
+    {
+      titulo: "Perfumes árabes para encontros",
+      descricao: "Sugestões para ocasiões marcantes, encontros e momentos de destaque.",
+      href: "/blog/perfumes-arabes-para-encontros",
+      etiqueta: "Ocasião",
+    },
+  ],
+  lattafa: [
+    {
+      titulo: "Lattafa vale a pena?",
+      descricao: "Entenda por que a Lattafa se tornou uma das marcas árabes mais procuradas.",
+      href: "/blog/lattafa-vale-a-pena",
+      etiqueta: "Marca árabe",
+    },
+    {
+      titulo: "Melhores perfumes árabes femininos de 2026",
+      descricao: "Veja fragrâncias femininas árabes selecionadas pela curadoria Maison Noor.",
+      href: "/blog/melhores-perfumes-arabes-femininos-2026",
+      etiqueta: "Curadoria",
+    },
+  ],
+  feminino: [
+    {
+      titulo: "Melhores perfumes árabes femininos de 2026",
+      descricao: "Ranking Maison Noor com perfumes femininos elegantes, doces, florais e marcantes.",
+      href: "/blog/melhores-perfumes-arabes-femininos-2026",
+      etiqueta: "Guia feminino",
+    },
+    {
+      titulo: "Perfumes árabes para encontros",
+      descricao: "Fragrâncias para presença elegante, feminilidade e momentos especiais.",
+      href: "/blog/perfumes-arabes-para-encontros",
+      etiqueta: "Ocasiões",
+    },
+  ],
+  masculino: [
+    {
+      titulo: "Club de Nuit vs Aventus",
+      descricao: "Comparativo para quem busca perfume masculino marcante, moderno e sofisticado.",
+      href: "/blog/club-de-nuit-vs-aventus",
+      etiqueta: "Comparativo",
+    },
+    {
+      titulo: "Asad vs Sauvage Elixir",
+      descricao: "Entenda a proposta intensa, especiada e poderosa do Lattafa Asad.",
+      href: "/blog/asad-vs-sauvage-elixir",
+      etiqueta: "Masculino intenso",
+    },
+  ],
+};
+
+function getSeoLinksProduto(produto: ProdutoFirebase & { categoriaFinal?: string }): SeoLinkProduto[] {
+  const texto = normalizarTextoAroma(
+    `${produto.nome || ""} ${produto.marca || ""} ${produto.categoria || ""} ${produto.categoriaFinal || ""} ${produto.tipo || ""}`,
+  );
+
+  let links: SeoLinkProduto[] = [];
+
+  if (texto.includes("yara")) links = [...links, ...seoLinksProduto.yara];
+  if (texto.includes("fakhar")) links = [...links, ...seoLinksProduto.fakhar];
+  if (texto.includes("sabah")) links = [...links, ...seoLinksProduto.sabah];
+  if (texto.includes("shagaf")) links = [...links, ...seoLinksProduto.shagaf];
+  if (texto.includes("club") || texto.includes("nuit")) links = [...links, ...seoLinksProduto.club];
+  if (texto.includes("asad")) links = [...links, ...seoLinksProduto.asad];
+  if (texto.includes("lattafa")) links = [...links, ...seoLinksProduto.lattafa];
+
+  if (!links.length && (texto.includes("feminino") || produto.categoria === "feminino")) {
+    links = [...seoLinksProduto.feminino];
+  }
+
+  if (!links.length && (texto.includes("masculino") || produto.categoria === "masculino")) {
+    links = [...seoLinksProduto.masculino];
+  }
+
+  if (!links.length) {
+    links = [
+      ...seoLinksProduto.feminino.slice(0, 1),
+      ...seoLinksProduto.masculino.slice(0, 1),
+    ];
+  }
+
+  const unicos = new Map<string, SeoLinkProduto>();
+  links.forEach((item) => unicos.set(item.href, item));
+
+  return Array.from(unicos.values()).slice(0, 3);
+}
 
 function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", {
@@ -471,109 +642,6 @@ function atualizarMetaTag(atributo: "name" | "property", chave: string, conteudo
   meta.setAttribute("content", conteudo);
 }
 
-
-function montarProdutoFirebase(id: string, data: any): ProdutoFirebase {
-  return {
-    id,
-    slug: data.slug,
-    nome: data.nome ?? "",
-    marca: data.marca,
-    volumeMl: data.volumeMl,
-    categoria: data.categoria,
-    precoCompra: data.precoCompra,
-    precoVenda: data.precoVenda,
-    estoque: data.estoque,
-    reservado: data.reservado ?? 0,
-    ativo: data.ativo ?? true,
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-    observacoes: data.observacoes,
-
-    imagem: data.imagem,
-    imagem2: data.imagem2,
-    imagem3: data.imagem3,
-
-    imageUrl: data.imageUrl,
-    image2: data.image2,
-    image3: data.image3,
-    imageUrl2: data.imageUrl2,
-    imageUrl3: data.imageUrl3,
-
-    foto: data.foto,
-    foto2: data.foto2,
-    foto3: data.foto3,
-
-    fotos: data.fotos,
-    imagens: data.imagens,
-    galeria: data.galeria,
-
-    descricao: data.descricao,
-    tipo: data.tipo,
-
-    notasTopo: data.notasTopo,
-    notasCoracao: data.notasCoracao,
-    notasFundo: data.notasFundo,
-    familiaOlfativa: data.familiaOlfativa,
-    fixacao: data.fixacao,
-    projecao: data.projecao,
-    ocasiao: data.ocasiao,
-    climaIdeal: data.climaIdeal || data.clima || data.temperaturaIdeal,
-    intensidade: data.intensidade,
-    generoOlfativo: data.generoOlfativo || data.genero || data.publico,
-  };
-}
-
-async function buscarProdutoPorIdOuSlug(valor: string): Promise<ProdutoFirebase | null> {
-  const parametro = decodeURIComponent(String(valor || "").trim());
-  if (!parametro) return null;
-
-  const productsRef = collection(db, "products");
-
-  // 1) Compatibilidade antiga: tenta abrir pelo ID do Firestore
-  try {
-    const ref = doc(db, "products", parametro);
-    const snap = await getDoc(ref);
-
-    if (snap.exists()) {
-      return montarProdutoFirebase(snap.id, snap.data() as any);
-    }
-  } catch (error) {
-    console.error("Erro ao buscar produto por ID:", error);
-  }
-
-  // 2) Tenta abrir pelo campo slug, caso exista no Firebase
-  try {
-    const slugSnap = await getDocs(
-      query(productsRef, where("slug", "==", parametro), limit(1)),
-    );
-
-    if (!slugSnap.empty) {
-      const snap = slugSnap.docs[0];
-      return montarProdutoFirebase(snap.id, snap.data() as any);
-    }
-  } catch (error) {
-    console.error("Erro ao buscar produto por slug:", error);
-  }
-
-  // 3) Fallback: compara com slug gerado pelo nome do produto
-  try {
-    const todosSnap = await getDocs(productsRef);
-
-    for (const snap of todosSnap.docs) {
-      const data = snap.data() as any;
-      const slugDoProduto = String(data.slug || slugify(data.nome || snap.id)).trim();
-
-      if (slugDoProduto === parametro) {
-        return montarProdutoFirebase(snap.id, data);
-      }
-    }
-  } catch (error) {
-    console.error("Erro ao buscar produto por slug gerado:", error);
-  }
-
-  return null;
-}
-
 export default function ProdutoPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id as string;
@@ -618,15 +686,65 @@ export default function ProdutoPage() {
         setLoading(true);
         setErro("");
 
-        const produtoEncontrado = await buscarProdutoPorIdOuSlug(id);
+        const ref = doc(db, "products", id);
+        const snap = await getDoc(ref);
 
-        if (!produtoEncontrado) {
+        if (!snap.exists()) {
           setProduto(null);
           setErro("Produto não encontrado.");
           return;
         }
 
-        setProduto(produtoEncontrado);
+        const data = snap.data() as any;
+
+        setProduto({
+          id: snap.id,
+          slug: data.slug,
+          nome: data.nome ?? "",
+          marca: data.marca,
+          volumeMl: data.volumeMl,
+          categoria: data.categoria,
+          precoCompra: data.precoCompra,
+          precoVenda: data.precoVenda,
+          estoque: data.estoque,
+          reservado: data.reservado ?? 0,
+          ativo: data.ativo ?? true,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          observacoes: data.observacoes,
+
+          imagem: data.imagem,
+          imagem2: data.imagem2,
+          imagem3: data.imagem3,
+
+          imageUrl: data.imageUrl,
+          image2: data.image2,
+          image3: data.image3,
+          imageUrl2: data.imageUrl2,
+          imageUrl3: data.imageUrl3,
+
+          foto: data.foto,
+          foto2: data.foto2,
+          foto3: data.foto3,
+
+          fotos: data.fotos,
+          imagens: data.imagens,
+          galeria: data.galeria,
+
+          descricao: data.descricao,
+          tipo: data.tipo,
+
+          notasTopo: data.notasTopo,
+          notasCoracao: data.notasCoracao,
+          notasFundo: data.notasFundo,
+          familiaOlfativa: data.familiaOlfativa,
+          fixacao: data.fixacao,
+          projecao: data.projecao,
+          ocasiao: data.ocasiao,
+          climaIdeal: data.climaIdeal || data.clima || data.temperaturaIdeal,
+          intensidade: data.intensidade,
+          generoOlfativo: data.generoOlfativo || data.genero || data.publico,
+        });
       } catch (e) {
         console.error(e);
         setErro("Não foi possível carregar o produto.");
@@ -676,7 +794,6 @@ export default function ProdutoPage() {
 
             acumulado.set(item.id, {
               id: item.id,
-              slug: data.slug || slugify(data.nome || item.id),
               nome: data.nome || "Perfume Maison Noor",
               marca: data.marca,
               preco: Number(data.precoVenda) || 0,
@@ -822,7 +939,7 @@ export default function ProdutoPage() {
     const categoria = produtoPronto.categoriaFinal || "perfume árabe";
     const preco = produtoPronto.precoFinal || 0;
     const imagem = urlAbsoluta(produtoPronto.imagemFinal);
-    const url = `${SITE_URL}/produto/${getProdutoSlug(produtoPronto)}`;
+    const url = `${SITE_URL}/produto/${produtoPronto.id}`;
     const titulo = `${produtoPronto.nome} | Perfume Árabe Premium | Maison Noor`;
     const descricao = limparDescricaoSeo(
       `${produtoPronto.nome} ${marca}. ${produtoPronto.descricaoFinal} ${produtoPronto.tamanho !== "—" ? `Volume ${produtoPronto.tamanho}.` : ""} Curadoria premium Maison Noor.`,
@@ -1508,6 +1625,12 @@ export default function ProdutoPage() {
       })),
     };
   }, [faqProduto]);
+
+  const seoRelacionadosProduto = useMemo(() => {
+    if (!produtoPronto) return [];
+
+    return getSeoLinksProduto(produtoPronto);
+  }, [produtoPronto]);
 
   if (loading) {
     return (
@@ -2403,6 +2526,34 @@ Pode me passar mais detalhes e as opções de pagamento?`;
           </section>
         )}
 
+        {seoRelacionadosProduto.length > 0 && (
+          <section style={styles.seoRelatedSection}>
+            <div style={styles.seoRelatedHeader}>
+              <div>
+                <p style={styles.seoRelatedKicker}>Conteúdo relacionado</p>
+                <h2 style={styles.seoRelatedTitle}>Leia também no Maison Noor Journal</h2>
+              </div>
+              <span style={styles.seoRelatedSeal}>SEO</span>
+            </div>
+
+            <div
+              style={{
+                ...styles.seoRelatedGrid,
+                gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+              }}
+            >
+              {seoRelacionadosProduto.map((item) => (
+                <Link key={item.href} href={item.href} style={styles.seoRelatedCard}>
+                  <span style={styles.seoRelatedBadge}>{item.etiqueta}</span>
+                  <strong style={styles.seoRelatedCardTitle}>{item.titulo}</strong>
+                  <p style={styles.seoRelatedCardText}>{item.descricao}</p>
+                  <span style={styles.seoRelatedCta}>Ler conteúdo →</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
         {relacionados.length > 0 && (
           <section style={styles.relatedSection}>
             <div style={styles.relatedHeader}>
@@ -2427,7 +2578,7 @@ Pode me passar mais detalhes e as opções de pagamento?`;
               {relacionados.map((item) => (
                 <Link
                   key={item.id}
-                  href={`/produto/${item.slug || slugify(item.nome)}`}
+                  href={`/produto/${item.id}`}
                   style={styles.relatedCard}
                 >
                   <div style={styles.relatedImageWrap}>
@@ -3882,6 +4033,111 @@ const styles: Record<string, CSSProperties> = {
     color: "#2F2721",
     fontSize: "14px",
     lineHeight: 1.5,
+  },
+
+  seoRelatedSection: {
+    marginTop: "22px",
+    background:
+      "radial-gradient(circle at top left, rgba(212,175,119,0.14), transparent 34%), linear-gradient(180deg, #FFFEFC, #FCF7EF)",
+    border: "1px solid #EADBC8",
+    borderRadius: "28px",
+    padding: "18px",
+    boxShadow: "0 18px 38px rgba(48,34,20,0.06)",
+  },
+
+  seoRelatedHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "14px",
+    marginBottom: "14px",
+  },
+
+  seoRelatedKicker: {
+    margin: "0 0 6px",
+    color: "#A8844C",
+    fontSize: "12px",
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
+  },
+
+  seoRelatedTitle: {
+    margin: 0,
+    color: "#2F2721",
+    fontSize: "22px",
+    lineHeight: 1.15,
+    fontFamily: "Georgia, 'Times New Roman', serif",
+  },
+
+  seoRelatedSeal: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "32px",
+    padding: "0 12px",
+    borderRadius: "999px",
+    border: "1px solid rgba(190, 145, 85, 0.35)",
+    background: "linear-gradient(135deg, #1B1612, #2A211A)",
+    color: "#F6E9D6",
+    fontSize: "10px",
+    fontWeight: 900,
+    letterSpacing: "0.1em",
+    textTransform: "uppercase",
+    whiteSpace: "nowrap",
+  },
+
+  seoRelatedGrid: {
+    display: "grid",
+    gap: "12px",
+  },
+
+  seoRelatedCard: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    minHeight: "164px",
+    textDecoration: "none",
+    border: "1px solid #E9DCCB",
+    borderRadius: "20px",
+    padding: "16px",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.82), rgba(248,240,228,0.92))",
+    boxShadow: "0 10px 22px rgba(48,34,20,0.045)",
+  },
+
+  seoRelatedBadge: {
+    display: "inline-flex",
+    width: "fit-content",
+    borderRadius: "999px",
+    padding: "6px 10px",
+    border: "1px solid #E3CDAF",
+    background: "linear-gradient(180deg, #FFF9F1, #F2DFC3)",
+    color: "#805B2F",
+    fontSize: "10px",
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  seoRelatedCardTitle: {
+    color: "#2F2721",
+    fontSize: "15px",
+    lineHeight: 1.35,
+  },
+
+  seoRelatedCardText: {
+    margin: 0,
+    color: "#6F6258",
+    fontSize: "13px",
+    lineHeight: 1.55,
+    flex: 1,
+  },
+
+  seoRelatedCta: {
+    color: "#9B7441",
+    fontSize: "12px",
+    fontWeight: 900,
   },
 
   relatedSection: {
